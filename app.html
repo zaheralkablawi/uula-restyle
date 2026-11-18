@@ -1364,6 +1364,9 @@ function gapBefore(prev, it) {
   const pr = prev.role, r = it.role;
   if ((r === 'answer' || r === 'choice') && (pr === 'question' || pr === 'answer' || pr === 'choice')) return 0;
   if (r === 'question' && (pr === 'answer' || pr === 'choice' || pr === 'question')) return 1;
+  // the skill: 3 lines between unrelated parts — a new topic, or a question (group) after an explanation
+  if (r === 'topic' && pr !== 'lesson' && pr !== 'chapter') return 3;
+  if ((r === 'question' || r === 'qhead') && (pr === 'body' || pr === 'bullets' || pr === 'source')) return 3;
   return 1;
 }
 // heights: map idx -> real height (EMU) from PowerPoint; null = estimate
@@ -1505,7 +1508,7 @@ function layoutPass(plan, heights, mode) {
         prevR = r;
       }
       if (!b.rows.length) iy = cTop + ROW;
-      const cBot = snapUp(iy) + ROW;
+      const cBot = snapUp(iy) + (mode === 'tight' ? 1 : 2) * ROW;   // the skill: 1 line above the first item, 2 lines under the last (1 only to save a page)
       pos[b.idx] = { x: 0, y: Math.round(cTop), w: W, h: Math.round(cBot - cTop), box: true };
       if (b.icon >= 0) pos[b.icon] = { x: W - 47 * PT, y: Math.round(cTop + ROW - 2 * PT), keep: true };
       if (b.line >= 0) {
@@ -1519,7 +1522,7 @@ function layoutPass(plan, heights, mode) {
     const its = allOf(b.cols), f = firstOf(its);
     let top;
     if (first) top = afterHeader != null ? snapUp(afterHeader) + ROW : Y0;
-    else if (prevBox) top = snapUp(y) + ROW;
+    else if (prevBox) top = snapUp(y) + (f && ['topic', 'question', 'qhead'].includes(f.role) && mode !== 'tight' ? 3 : 1) * ROW;
     else top = snapUp(y) + gapRows(lastOf(prevItems), f, top0(its) - bot0(prevItems)) * ROW;
     const rb = b.unit ? placeUnit(b, top) : placeRow(b.cols, top, M, W - M);
     rowsInfo.push({ bi, top, bottom: rb, role: b.unit ? 'question' : f && f.role });

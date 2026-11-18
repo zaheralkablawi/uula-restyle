@@ -438,7 +438,35 @@ async function spaceSlide(id) {
     return { moved, over: low > (H - 54) * PT + PT };
   });
 }
-$('spBtn').addEventListener('click', async () => {
+// horizontal: to the right / left margin (selected objects only, if any are selected on the current slide)
+let hMode = load('ur-halign', 'auto');
+function setH(v) { hMode = v; save('ur-halign', v); $('hAlign').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v))); }
+$('hAlign').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setH(b.dataset.v); });
+setH(hMode);
+async function alignSlide(id, mode, useSel) {
+  const { W, H } = await getSize();
+  return run(async ctx => {
+    const sh = ctx.presentation.slides.getItem(id).shapes;
+    sh.load('items/id,items/name,items/type,items/left,items/top,items/width,items/height');
+    let selIds = [];
+    if (useSel) { const ss = ctx.presentation.getSelectedShapes(); ss.load('items/id'); await ctx.sync(); selIds = ss.items.map(s => s.id); }
+    await ctx.sync();
+    const fills = sh.items.map(s => { try { s.fill.load('type'); return s.fill; } catch (e) { return null; } });
+    await ctx.sync();
+    const rects = sh.items.map((s, k) => {
+      const nm = s.name || '';
+      const fixed = /^UULA (Footer|Watermark)|^CustomPageNumber_/.test(nm) || s.top >= H - 54 || s.left + s.width <= 0 || s.left >= W || (s.width > W * 0.85 && s.height > H * 0.6);
+      let solid = false; try { solid = fills[k] && (fills[k].type === 'Solid' || fills[k].type === 'Gradient'); } catch (e) {}
+      return { key: k, x: s.left * PT, y: s.top * PT, w: s.width * PT, h: s.height * PT, fixed, box: (s.type === 'GeometricShape' && solid && s.width > W * 0.5) || /Container$/.test(nm), kind: s.type === 'Line' ? 'line' : '' };
+    });
+    const only = selIds.length ? sh.items.map((s, k) => selIds.includes(s.id) ? k : -1).filter(k => k >= 0) : null;
+    const mv = UR.align(rects, W * PT, mode, only);
+    for (const [k, m] of Object.entries(mv)) sh.items[+k].left = m.x / PT;
+    await ctx.sync();
+    return Object.keys(mv).length;
+  });
+}
+async function spacingRun(kind) {
   if (busy || !supported) return;
   busy = true; lock(); res.innerHTML = '';
   try {
@@ -447,20 +475,24 @@ $('spBtn').addEventListener('click', async () => {
     const over = [];
     for (let k = 0; k < ids.length; k++) {
       prog(k / ids.length); say('تنسيق المسافات ' + (k + 1) + ' من ' + ids.length + '…');
-      try { const r = await spaceSlide(ids[k]); if (r.over) over.push(ids[k]); }
-      catch (e) { line('err', '✗ ' + esc(errText(e))); }
+      try {
+        if (kind === 'v') { const r = await spaceSlide(ids[k]); if (r.over) over.push(ids[k]); }
+        else await alignSlide(ids[k], hMode, scope === 'cur');
+      } catch (e) { line('err', '✗ ' + esc(errText(e))); }
     }
     prog(null);
     if (over.length) { const all = await allIds(); line('warn', '• المحتوى أطول من الصفحة: ' + slideLinks(over, i => all.indexOf(i) + 1)); }
     say('تم تنسيق المسافات.');
   } catch (e) { prog(null); say('حدث خطأ: ' + errText(e)); }
   finally { busy = false; lock(); }
-});
+}
+$('spV').addEventListener('click', () => spacingRun('v'));
+$('spH').addEventListener('click', () => spacingRun('h'));
 
 // ---------- main button ----------
 function lock() {
   $('goBtn').disabled = busy || !supported;
-  $('spBtn').disabled = busy || !supported;
+  $('spV').disabled = busy || !supported; $('spH').disabled = busy || !supported;
   document.querySelectorAll('.tbtn').forEach(b => { b.disabled = busy || !supported; });
 }
 $('goBtn').addEventListener('click', async () => {

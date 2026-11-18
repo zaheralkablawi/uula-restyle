@@ -1528,6 +1528,66 @@ function spacing(rects, W, H) {
   level(top, first <= 2 * PT ? first : Math.max(Y0, snapNear(first)), first <= 2 * PT);
   return out;
 }
+// ---------- horizontal alignment only ----------
+// mode: 'auto' (an object on the right half goes to the right margin, on the left half to the left margin),
+// 'right' or 'left' (all to that side). Objects side by side move as one group, so they never overlap.
+// Inside a container with an icon, the right margin is the 488.8 guide.
+function align(rects, W, mode, only) {
+  const insideR = (o, b) => { const cx = o.x + o.w / 2, cy = o.y + o.h / 2; return cx >= b.x && cx <= b.x + b.w && cy >= b.y && cy <= b.y + b.h; };
+  const boxes = rects.filter(r => r.box && r.w > W * 0.9);
+  const L = M, R0 = W - M;
+  const rightOf = o => {
+    const b = boxes.find(bx => insideR(o, bx));
+    if (!b) return R0;
+    const icon = rects.some(r => r !== o && r.w < 20 * PT && r.h < 20 * PT && r.x > W - 60 * PT && insideR(r, b));
+    return icon ? Math.round(488.8 * PT) : R0;
+  };
+  // QR codes (small squares at the left margin) stay where they are
+  const isQr = r => r.w < 60 * PT && r.h < 60 * PT && r.x < 80 * PT && r.kind !== 'line';
+  let items = rects.filter(r => !r.fixed && !(r.box && r.w > W * 0.9) && r.kind !== 'line' && !isQr(r) && !(r.w < 20 * PT && r.h < 20 * PT));
+  // a QR in the same band: the left margin is the guide after it (85.98)
+  const qrs = rects.filter(r => !r.fixed && isQr(r));
+  const leftOf = o => qrs.some(q => Math.min(q.y + q.h, o.y + o.h) - Math.max(q.y, o.y) > 2 * PT) ? Math.round(85.98 * PT) : L;
+  if (only && only.length) items = items.filter(r => only.includes(r.key));
+  const out = {};
+  const cur = new Map(rects.map(r => [r.key, { x: r.x, y: r.y, w: r.w, h: r.h }]));
+  const hits = (k, x) => { const a = cur.get(k); for (const [kk, b] of cur) { if (kk === k) continue; const o = rects.find(r => r.key === kk); if (o.fixed || (o.box && o.w > W * 0.9) || o.kind === 'line' || insideR(rects.find(r => r.key === k), o) && o.box) continue;
+      if (x < b.x + b.w - PT && b.x < x + a.w - PT && a.y < b.y + b.h - PT && b.y < a.y + a.h - PT) return true; } return false; };
+  const place = (o, x) => {
+    const RR = rightOf(o), LL = leftOf(o);
+    if (o.w > RR - LL) x = o.w > RR - L ? RR - o.w : Math.max(L, RR - o.w); else x = Math.max(LL, Math.min(x, RR - o.w));
+    if (Math.abs(x - o.x) <= 0.2 * PT) return;
+    if (hits(o.key, x)) return;
+    out[o.key] = { x: Math.round(x) }; cur.get(o.key).x = x;
+  };
+  if (mode === 'auto') {
+    // each object goes to the margin it is closer to (right for Arabic when equal)
+    for (const o of items) {
+      const RR = rightOf(o), LL = leftOf(o), dl = o.x - LL, dr = RR - (o.x + o.w);
+      place(o, dr <= dl ? RR - o.w : LL);
+    }
+    return out;
+  }
+  // right / left: objects side by side move as one group
+  const rows = [];
+  for (const u of [...items].sort((a, b) => a.y - b.y)) {
+    const r = rows.find(rw => rw.items.some(o => Math.min(o.y + o.h, u.y + u.h) - Math.max(o.y, u.y) > Math.min(o.h, u.h) * 0.3));
+    if (r) r.items.push(u); else rows.push({ items: [u] });
+  }
+  for (const r of rows) {
+    const s = r.items.sort((a, b) => mode === 'right' ? (b.x + b.w) - (a.x + a.w) : a.x - b.x);
+    const RR = Math.min(...s.map(rightOf));
+    const LL = Math.max(...s.map(leftOf));
+    const d = mode === 'right' ? RR - Math.max(...s.map(o => o.x + o.w)) : LL - Math.min(...s.map(o => o.x));
+    for (const o of s) {
+      let x = o.x + d;
+      const lo = leftOf(o);
+      if (o.w > RR - lo) x = o.w > RR - L ? RR - o.w : Math.max(L, RR - o.w); else x = Math.max(lo, Math.min(x, RR - o.w));
+      if (Math.abs(x - o.x) > 0.2 * PT) { out[o.key] = { x: Math.round(x) }; cur.get(o.key).x = x; }
+    }
+  }
+  return out;
+}
 // ---------- splitting ----------
 // two slides from one: blocks [0, k) stay (with the header), blocks [k, …) move to a new slide.
 // returns [{ xml, plan }, { xml, plan }] with item indexes renumbered for each part
@@ -1587,7 +1647,7 @@ function splitPoint(plan, lay) {
 }
 
 return {
-  NS, PT, ROW, M, FOOT, C, STY, BOX, openPackage, buildPackage, parseXml, serialize, restyle, layout, applyLayout, splitParts, splitPoint, markNames, MARK, applyRole, reflow, spacing, TEXT_ROLES, BOX_ROLES, G, Y0, snapUp, snapX,
+  NS, PT, ROW, M, FOOT, C, STY, BOX, openPackage, buildPackage, parseXml, serialize, restyle, layout, applyLayout, splitParts, splitPoint, markNames, MARK, applyRole, reflow, spacing, align, TEXT_ROLES, BOX_ROLES, G, Y0, snapUp, snapX,
   // used by the templates module
   util: { pX, txX, boxX, gradBoxX, picX, pillX, pillW, lineX, tableX, makeRels, frag, topItems, core, cnvOf, maxId, spTreeOf, kid, kids, desc, xfrmOf, geomOf, setNext: n => { NEXT = n; }, yearText, pageNumX, estimateText }
 };

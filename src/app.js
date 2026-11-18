@@ -109,59 +109,89 @@ async function unmark(slideId) {
 }
 
 // ---------- convert ----------
+// The converted slide replaces the original in place (same number of slides).
+// A slide longer than the page is NOT split on its own: the pane asks first.
 const MAX_PARTS = 6;
+const pendingSplit = new Map();      // slide id -> { pkg, rels, xml, plan }
 async function convertOne(id, opts, rep) {
   const b64 = await exportSlide(id);
   const pkg = await UR.openPackage(b64);
   let r;
   try { r = UR.restyle(pkg, { watermark: opts.watermark }); }
   catch (e) { throw new Error('تحليل الشريحة: ' + errText(e)); }
-  const queue = [{ xml: r.xml, plan: r.plan }];
+  let newId;
+  try { newId = await insertAfter(await UR.buildPackage(pkg, r.xml, r.rels), id); }
+  catch (e) { throw new Error('إدراج الشريحة: ' + errText(e)); }
+  const lay = await refine(newId, r.plan);
+  await unmark(newId);
+  await deleteSlide(id);
+  if (lay.overflow >= 0 && UR.splitPoint(r.plan, lay) > 0) { pendingSplit.set(newId, { pkg, rels: r.rels, xml: r.xml, plan: r.plan }); rep.full.push(newId); }
+  else if (lay.overflow >= 0) rep.tooLong.push(newId);
+  rep.boxes += r.report.boxes; rep.tables += r.report.tables;
+  r.report.links.forEach(u => rep.links.push(u)); r.report.linkFail.forEach(u => rep.linkFail.push(u));
+  if (r.report.qr) rep.qr += r.report.qr;
+  return newId;
+}
+// split a long slide into as many slides as needed (only after the user agrees)
+async function splitSlide(id) {
+  const st = pendingSplit.get(id); if (!st) return [id];
+  const queue = [{ xml: st.xml, plan: st.plan }];
   let prev = id, made = [], parts = 0;
   while (queue.length) {
     const part = queue.shift();
-    const pb = await UR.buildPackage(pkg, part.xml, r.rels);
-    let newId;
-    try { newId = await insertAfter(pb, prev); }
-    catch (e) { throw new Error('إدراج الشريحة: ' + errText(e)); }
+    const newId = await insertAfter(await UR.buildPackage(st.pkg, part.xml, st.rels), prev);
     const lay = await refine(newId, part.plan);
     if (lay.overflow >= 0 && parts < MAX_PARTS) {
       const k = UR.splitPoint(part.plan, lay);
-      if (k > 0) {
-        await deleteSlide(newId);
-        const [A, B] = UR.splitParts(part.xml, part.plan, k);
-        queue.unshift(A, B); parts++;
-        continue;
-      }
-      rep.full.push(newId);
+      if (k > 0) { await deleteSlide(newId); const [A, B] = UR.splitParts(part.xml, part.plan, k); queue.unshift(A, B); parts++; continue; }
     }
     await unmark(newId);
     made.push(newId); prev = newId;
   }
   await deleteSlide(id);
-  if (made.length > 1) rep.split.push(made[0]);
-  rep.boxes += r.report.boxes; rep.tables += r.report.tables;
-  r.report.links.forEach(u => rep.links.push(u)); r.report.linkFail.forEach(u => rep.linkFail.push(u));
-  if (r.report.qr) rep.qr += r.report.qr;
+  pendingSplit.delete(id);
   return made;
+}
+async function askSplit(ids) {
+  if (busy) return;
+  busy = true; lock();
+  try {
+    let added = 0;
+    for (let k = 0; k < ids.length; k++) {
+      say('تقسيم الشريحة ' + (k + 1) + ' من ' + ids.length + '…');
+      const made = await splitSlide(ids[k]); added += made.length - 1;
+    }
+    if ($('numChk').checked) await renumber();
+    const box = res.querySelector('.splitask'); if (box) box.remove();
+    say(added ? 'تم التقسيم، وأُضيفت ' + cnt(added) + '.' : 'تم.');
+  } catch (e) { say('تعذّر التقسيم: ' + errText(e)); }
+  finally { busy = false; lock(); }
 }
 async function doConvert() {
   const ids = await targetIds();
   if (!ids.length) { say('حدّد شريحة أولًا.'); return; }
-  const rep = { done: [], split: [], full: [], errs: [], boxes: 0, tables: 0, links: [], linkFail: [], qr: 0 };
+  pendingSplit.clear();
+  const rep = { done: [], full: [], tooLong: [], errs: [], boxes: 0, tables: 0, links: [], linkFail: [], qr: 0 };
   const opts = { watermark: $('wmChk').checked };
   for (let k = 0; k < ids.length; k++) {
     prog(k / ids.length); say('تحويل الشريحة ' + (k + 1) + ' من ' + ids.length + '…');
-    try { const made = await convertOne(ids[k], opts, rep); rep.done.push(...made); }
+    try { rep.done.push(await convertOne(ids[k], opts, rep)); }
     catch (e) { rep.errs.push(errText(e)); }
   }
   prog(null);
   if ($('numChk').checked && rep.done.length) { say('ترقيم الصفحات…'); try { await renumber(); } catch (e) { rep.errs.push('الترقيم: ' + errText(e)); } }
   const all = await allIds(), num = i => all.indexOf(i) + 1;
   res.innerHTML = '';
-  if (rep.done.length) line('ok', '✓ ' + cnt(ids.length - rep.errs.length) + ' ← ' + cnt(rep.done.length) + ': ' + slideLinks(rep.done, num));
-  if (rep.split.length) line('warn', '• قُسّمت لأن المحتوى أطول من الصفحة: ' + slideLinks(rep.split, num));
-  if (rep.full.length) line('err', '• ما زالت ممتلئة، راجعها: ' + slideLinks(rep.full, num));
+  if (rep.done.length) line('ok', '✓ تم تحويل ' + cnt(rep.done.length) + ': ' + slideLinks(rep.done, num));
+  if (rep.full.length) {
+    const d = line('warn splitask', '• أطول من الصفحة: ' + slideLinks(rep.full, num)
+      + '<br><span style="display:flex;gap:6px;margin-top:4px"><button type="button" class="mini" data-split="yes">قسّمها إلى شرائح جديدة</button><button type="button" class="mini" data-split="no">لا، اتركها</button></span>');
+    d.style.display = 'block';
+    const list = rep.full.slice();
+    d.querySelector('[data-split="yes"]').addEventListener('click', () => askSplit(list));
+    d.querySelector('[data-split="no"]').addEventListener('click', () => { d.remove(); list.forEach(i => pendingSplit.delete(i)); });
+  }
+  if (rep.tooLong.length) line('err', '• أطول من الصفحة ولا يمكن تقسيمها، راجعها: ' + slideLinks(rep.tooLong, num));
   if (rep.qr) line('ok', '• استُبدل QR جديد: ' + rep.qr + (rep.links.length ? ' (رُبط الرابط)' : ''));
   rep.linkFail.forEach(u => line('warn', '• أضف هذا الرابط للـQR يدويًا: <span dir="ltr">' + esc(u) + '</span>'));
   rep.errs.forEach(m => line('err', '✗ ' + esc(m)));

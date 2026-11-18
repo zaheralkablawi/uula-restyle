@@ -512,7 +512,8 @@ function snapColor(hex, role) {
   if (isMagenta(c)) return C.formula;
   if (isGreen(c)) return C.givens;
   if (isOrange(c) && role !== 'qhead') return C.otherform;
-  if (isRed(c) && (role === 'body' || role === 'answer' || role === 'label')) return 'FF0000';
+  if (isRed(c) && role === 'answer') return C.answer;              // a solution is always blue (old red answers too)
+  if (isRed(c) && (role === 'body' || role === 'label')) return 'FF0000';
   if (isBlue(c) && (role === 'body' || role === 'question' || role === 'label' || role === 'choice' || role === 'qcont')) return C.answer;
   return null;
 }

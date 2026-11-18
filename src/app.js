@@ -725,6 +725,7 @@ function styleCC(cc, type) {
   const t = wtype(type);
   cc.tag = 'UULA:' + type; cc.title = L(t.ar, t.en); cc.color = '#' + t.col; cc.appearance = 'BoundingBox';
 }
+const isRedHex = h => { const m = /^#?([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})$/i.exec(h || ''); if (!m) return false; const [r, g, b] = m.slice(1).map(x => parseInt(x, 16)); return r > 170 && g < 90 && b < 90; };
 const isUula = cc => cc && !cc.isNullObject && /^UULA:/.test(cc.tag || '');
 // an empty line between two tagged parts that touch (so their frames do not stick together)
 function spacer(par, where) {
@@ -829,6 +830,23 @@ async function autoTag() {
     }
     let n = 0;
     for (const pl of plans) { const cc = pl.range.insertContentControl(); styleCC(cc, pl.g.type); n++; if (n % 40 === 0) await ctx.sync(); }
+    await ctx.sync();
+    // answers of a word or two written inside a question in another colour (red / blue): an inline «حل» frame
+    const qpars = [];
+    for (const pl of plans) if (['question', 'choice'].includes(pl.g.type)) for (let i = pl.g.from; i <= pl.g.to; i++) if (paras[i].text.trim()) qpars.push(ps.items[i]);
+    const words = qpars.map(p => { const w = p.getTextRanges([' '], false); w.load('items/text,items/font/color'); return w; });
+    await ctx.sync();
+    for (const w of words) {
+      const it = w.items; if (it.length < 2) continue;
+      const base = (it[0].font.color || '').toUpperCase();
+      const odd = x => { const c = (x.font.color || '').toUpperCase(); return c && c !== base && (UW.isBlue(c) || isRedHex(c)); };
+      for (let a = 0; a < it.length; a++) {
+        if (!odd(it[a])) continue;
+        let b = a; while (b + 1 < it.length && odd(it[b + 1])) b++;
+        const cc = it[a].expandTo(it[b]).insertContentControl(); styleCC(cc, 'answer'); n++;
+        a = b;
+      }
+    }
     await ctx.sync();
     return n;
   });

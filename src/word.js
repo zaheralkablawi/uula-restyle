@@ -29,6 +29,8 @@ const TYPES = [
 const TYPE = {};
 TYPES.forEach(g => g.items.forEach(([id, ar, en, col]) => { TYPE[id] = { id, ar, en, col }; }));
 const TAG = /^UULA:([a-z]+)$/;
+// an answer of a word or two written inside a question (a blank to fill) stays in its line
+const INLINE = ['answer', 'correct'];
 
 // ---------- guessing a type from a paragraph (auto-tag in Word) ----------
 const RX = {
@@ -43,7 +45,8 @@ const RX = {
   mars: /^\s*(إثراء|اثراء|تحدي|تحدٍّ|فكّر|سؤال ذكاء|من المريخ|Challenge)/i,
   quote: /^\s*(قال تعالى|قال رسول الله|قال الشاعر|﴿)/,
   choice: /^\s*([Ⓐ-ⓩ]|[(]?[a-dA-Dأبجد]\s*[)]\s)/,
-  other: /^\s*(صيغة أخرى|طريقة أخرى|حل آخر)/
+  other: /^\s*(صيغة أخرى|طريقة أخرى|حل آخر)/,
+  qord: /^\s*(أولاً|أولا|ثانياً|ثانيا|ثالثاً|ثالثا|رابعاً|رابعا|خامساً|خامسا)\s*[:：-]/
 };
 // p: { text, style, color (hex or ''), table, pic, bold, size }
 function guess(p) {
@@ -64,7 +67,7 @@ function guess(p) {
   if (RX.quote.test(t)) return 'quote';
   if (RX.other.test(t)) return 'other';
   if (RX.choice.test(t)) return 'choice';
-  if (RX.q.test(t) || RX.qnum.test(t)) return 'question';
+  if (RX.q.test(t) || RX.qnum.test(t) || RX.qord.test(t) || /(المطلوب|ما يلي|يأتي)\s*[:：]\s*$/.test(t)) return 'question';
   const c = (p.color || '').toUpperCase();
   if (c && isBlue(c)) return 'answer';
   if (c && isRed(c) && t.length < 60) return 'qhead';
@@ -84,6 +87,8 @@ function group(paras) {
     const g = p.type;
     if (!g) { if (cur && cur.type !== 'answer') cur = null; return; }   // an empty line ends a group (an answer may hold empty lines)
     if (cur && i === cur.to + 1 && g === cur.type && !['question', 'lesson', 'topic', 'chapter', 'qhead', 'table', 'figure'].includes(g)) { cur.to = i; return; }
+    // "- …" lines under a question are its parts
+    if (cur && cur.type === 'question' && i <= cur.to + 1 && g === 'body' && /^\s*[-–•▪]/.test(p.text || '')) { cur.to = i; return; }
     if (cur && i <= cur.to + 2 && (CONT[cur.type] || []).includes(g) && !(cur.type === 'question' && g === 'figure' && p.big)) { cur.to = i; if (g === 'choice' && cur.type === 'question') cur.choices = true; return; }
     cur = { type: g, from: i, to: i };
     out.push(cur);
@@ -186,7 +191,7 @@ async function read(data, opts) {
         const ln = c.localName, ns = c.namespaceURI;
         if (ns === W_NS && ln === 'r') {
           const rPr = wk(c, 'rPr');
-          const st = runStyle(rPr);
+          const st = Object.assign(runStyle(rPr), inherit || {});
           for (let k = c.firstElementChild; k; k = k.nextElementSibling) {
             if (k.namespaceURI !== W_NS && k.localName !== 'AlternateContent') continue;
             const kn = k.localName;
@@ -206,7 +211,8 @@ async function read(data, opts) {
           // an inline content control: a tagged part splits the paragraph
           const tag = sdtTag(c);
           const body = wk(c, 'sdtContent');
-          if (tag && body && opts.splitInline !== false) { inlineSplits.push({ at: out.length, tag, body }); }
+          if (tag && body && INLINE.includes(tag)) walkRuns(body, Object.assign({}, inherit, { c: tag === 'correct' ? '2070DF' : '1F71DE', bmk: 'UULA:' + tag }));
+          else if (tag && body && opts.splitInline !== false) { inlineSplits.push({ at: out.length, tag, body }); }
           else if (body) walkRuns(body, inherit);
         }
       }
@@ -258,7 +264,8 @@ async function read(data, opts) {
       report.pics++;
       const small = pc.cy < 34 * PT && c.text.trim();
       if (small && pc.obj) report.inlineObj++;
-      return { kind: 'pic', role: role === 'figure' ? null : role, media: pc.media, cx: pc.cx, cy: pc.cy, inline: !!small };
+      const pr = role === 'figure' ? null : ['question', 'choice', 'qhead', 'given'].includes(role) ? 'given' : role;
+      return { kind: 'pic', role: pr, media: pc.media, cx: pc.cx, cy: pc.cy, inline: !!small };
     });
     if (c.inlineSplits.length) {
       // text before | tagged inline part | text after (each its own box)
@@ -336,7 +343,7 @@ const xe = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', 
 function runX(t, st) {
   if (t == null || t === '') return '';
   const ar = /[؀-ۿ]/.test(t);
-  let a = '<a:rPr lang="' + (ar ? 'ar-SA' : 'en-US') + '"' + (st.sz ? ' sz="' + Math.max(800, Math.min(4000, st.sz)) + '"' : '') + (st.b ? ' b="1"' : '') + (st.i ? ' i="1"' : '') + (st.u ? ' u="sng"' : '') + (st.base ? ' baseline="' + st.base + '"' : '') + '>';
+  let a = '<a:rPr lang="' + (ar ? 'ar-SA' : 'en-US') + '"' + (st.bmk ? ' bmk="' + st.bmk + '"' : '') + (st.sz ? ' sz="' + Math.max(800, Math.min(4000, st.sz)) + '"' : '') + (st.b ? ' b="1"' : '') + (st.i ? ' i="1"' : '') + (st.u ? ' u="sng"' : '') + (st.base ? ' baseline="' + st.base + '"' : '') + '>';
   if (st.c) a += '<a:solidFill><a:srgbClr val="' + st.c + '"/></a:solidFill>';
   a += '</a:rPr>';
   return '<a:r>' + a + '<a:t>' + xe(t) + '</a:t></a:r>';
@@ -391,7 +398,7 @@ function shapes(units, ctx) {
       if (w > max) { h = Math.round(h * max / w); w = max; }
       // a narrow picture right after a question / text sits beside it (graph question layout)
       const prev = out[out.length - 1];
-      const beside = prev && prev.unit && prev.unit.kind === 'text' && w <= CW * 0.48 && !prev.side && ['question', 'answer', null, 'body'].includes(prev.unit.role) && u.role !== 'figure';
+      const beside = prev && prev.unit && prev.unit.kind === 'text' && w <= CW * 0.48 && !prev.side && ['question', 'answer', null, 'body', 'choice'].includes(prev.unit.role) && u.role !== 'figure';
       const ext = u.media.ext === 'jpeg' ? 'jpg' : u.media.ext;
       const rid = ctx.rels.image('w' + (ctx.mediaKey++) + '.' + ext, u.data);
       if (beside) {
@@ -559,6 +566,6 @@ function syncFallback(xml) {
   return UR.serialize(doc);
 }
 
-return { TYPES, TYPE, TAG, guess, group, read, shapes, batches, fillSlide, syncFallback, isBlue, RX };
+return { TYPES, TYPE, TAG, INLINE, guess, group, read, shapes, batches, fillSlide, syncFallback, isBlue, RX };
 })();
 if (typeof module !== 'undefined') module.exports = UW;

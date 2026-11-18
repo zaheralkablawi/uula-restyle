@@ -513,7 +513,7 @@ function snapColor(hex, role) {
   if (isGreen(c)) return C.givens;
   if (isOrange(c) && role !== 'qhead') return C.otherform;
   if (isRed(c) && (role === 'body' || role === 'answer' || role === 'label')) return 'FF0000';
-  if (isBlue(c) && (role === 'body' || role === 'question' || role === 'label')) return C.answer;
+  if (isBlue(c) && (role === 'body' || role === 'question' || role === 'label' || role === 'choice' || role === 'qcont')) return C.answer;
   return null;
 }
 function styleRPr(rPr, st, role, keepCol, math) {
@@ -1683,6 +1683,8 @@ function findSolutions(pkg) {
       const ans = roles.filter(r => r.role === 'answer');
       const blueChoice = roles.filter(r => r.role !== 'answer' && choiceLike(r) && desc(r.p, 'a', 'rPr').some(pr => { const c = colorOf(kid(pr, 'solidFill', 'a'), ctx); return c && isBlue(rgb(c)); }));
       const neg = /[❶-❿⓫-⓴]|\uD83C[\uDD50-\uDD69]/.test(t.text);
+      // answers written inside the question's line (marked from Word: bmk="UULA:answer" / "UULA:correct")
+      if (desc(t.c, 'a', 'rPr').some(pr => /^UULA:(answer|correct)$/.test(pr.getAttribute('bmk') || ''))) { found.push({ i: t.i, how: 'copy' }); continue; }
       if (ans.length === roles.length && !blueChoice.length) found.push({ i: t.i, how: 'hide' });
       else if (ans.length || blueChoice.length || neg) found.push({ i: t.i, how: 'copy' });
       continue;
@@ -1760,6 +1762,13 @@ function hideSolutions(pkg, grids) {
         } else if (choiceLike) {
           for (const pr of desc(r.p, 'a', 'rPr')) { const c = colorOf(kid(pr, 'solidFill', 'a'), ctx); if (c && isBlue(rgb(c))) { removeKids(pr, FILLS); placeChild(pr, solid(doc, '000000'), RPR_ORDER); pr.setAttribute('b', '0'); } }
         }
+      }
+      // a blank to fill: the answer words disappear (their space stays); a marked correct choice turns black
+      for (const pr of desc(view, 'a', 'rPr')) {
+        const m = /^UULA:(answer|correct)$/.exec(pr.getAttribute('bmk') || ''); if (!m) continue;
+        removeKids(pr, FILLS);
+        if (m[1] === 'answer') placeChild(pr, frag(doc, '<a:solidFill><a:srgbClr val="FFFFFF"><a:alpha val="0"/></a:srgbClr></a:solidFill>'), RPR_ORDER);
+        else { placeChild(pr, solid(doc, '000000'), RPR_ORDER); pr.setAttribute('b', '0'); }
       }
       for (const tn of [...desc(view, 'a', 't'), ...desc(view, 'm', 't')]) tn.textContent = [...tn.textContent].map(NEG).join('');
     } else if (t.kind === 'table') {

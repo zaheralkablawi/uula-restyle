@@ -171,6 +171,7 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
 
   <section class="panel" data-pane="wtag" hidden>
     <span class="note" data-en="Select content in the document, then pick its type. A coloured frame goes around it.">حدّد المحتوى في المستند، ثم اختر نوعه، فيظهر حوله إطار ملوّن.</span>
+    <span class="note" data-en="Picture of a question: put it inside the question's frame. An answer of a word or two inside the question: select those words and press Solution.">صورة السؤال: اجعلها داخل إطار السؤال. وإجابة من كلمة أو كلمتين داخل السؤال: حدّد الكلمات واضغط «حل».</span>
     <div id="wroles" style="display:grid;gap:4px"></div>
     <div class="sep"></div>
     <div class="btnrow">
@@ -724,7 +725,7 @@ function snapColor(hex, role) {
   if (isGreen(c)) return C.givens;
   if (isOrange(c) && role !== 'qhead') return C.otherform;
   if (isRed(c) && (role === 'body' || role === 'answer' || role === 'label')) return 'FF0000';
-  if (isBlue(c) && (role === 'body' || role === 'question' || role === 'label')) return C.answer;
+  if (isBlue(c) && (role === 'body' || role === 'question' || role === 'label' || role === 'choice' || role === 'qcont')) return C.answer;
   return null;
 }
 function styleRPr(rPr, st, role, keepCol, math) {
@@ -1894,6 +1895,8 @@ function findSolutions(pkg) {
       const ans = roles.filter(r => r.role === 'answer');
       const blueChoice = roles.filter(r => r.role !== 'answer' && choiceLike(r) && desc(r.p, 'a', 'rPr').some(pr => { const c = colorOf(kid(pr, 'solidFill', 'a'), ctx); return c && isBlue(rgb(c)); }));
       const neg = /[❶-❿⓫-⓴]|\uD83C[\uDD50-\uDD69]/.test(t.text);
+      // answers written inside the question's line (marked from Word: bmk="UULA:answer" / "UULA:correct")
+      if (desc(t.c, 'a', 'rPr').some(pr => /^UULA:(answer|correct)$/.test(pr.getAttribute('bmk') || ''))) { found.push({ i: t.i, how: 'copy' }); continue; }
       if (ans.length === roles.length && !blueChoice.length) found.push({ i: t.i, how: 'hide' });
       else if (ans.length || blueChoice.length || neg) found.push({ i: t.i, how: 'copy' });
       continue;
@@ -1971,6 +1974,13 @@ function hideSolutions(pkg, grids) {
         } else if (choiceLike) {
           for (const pr of desc(r.p, 'a', 'rPr')) { const c = colorOf(kid(pr, 'solidFill', 'a'), ctx); if (c && isBlue(rgb(c))) { removeKids(pr, FILLS); placeChild(pr, solid(doc, '000000'), RPR_ORDER); pr.setAttribute('b', '0'); } }
         }
+      }
+      // a blank to fill: the answer words disappear (their space stays); a marked correct choice turns black
+      for (const pr of desc(view, 'a', 'rPr')) {
+        const m = /^UULA:(answer|correct)$/.exec(pr.getAttribute('bmk') || ''); if (!m) continue;
+        removeKids(pr, FILLS);
+        if (m[1] === 'answer') placeChild(pr, frag(doc, '<a:solidFill><a:srgbClr val="FFFFFF"><a:alpha val="0"/></a:srgbClr></a:solidFill>'), RPR_ORDER);
+        else { placeChild(pr, solid(doc, '000000'), RPR_ORDER); pr.setAttribute('b', '0'); }
       }
       for (const tn of [...desc(view, 'a', 't'), ...desc(view, 'm', 't')]) tn.textContent = [...tn.textContent].map(NEG).join('');
     } else if (t.kind === 'table') {
@@ -2381,6 +2391,8 @@ const TYPES = [
 const TYPE = {};
 TYPES.forEach(g => g.items.forEach(([id, ar, en, col]) => { TYPE[id] = { id, ar, en, col }; }));
 const TAG = /^UULA:([a-z]+)$/;
+// an answer of a word or two written inside a question (a blank to fill) stays in its line
+const INLINE = ['answer', 'correct'];
 
 // ---------- guessing a type from a paragraph (auto-tag in Word) ----------
 const RX = {
@@ -2395,7 +2407,8 @@ const RX = {
   mars: /^\s*(إثراء|اثراء|تحدي|تحدٍّ|فكّر|سؤال ذكاء|من المريخ|Challenge)/i,
   quote: /^\s*(قال تعالى|قال رسول الله|قال الشاعر|﴿)/,
   choice: /^\s*([Ⓐ-ⓩ]|[(]?[a-dA-Dأبجد]\s*[)]\s)/,
-  other: /^\s*(صيغة أخرى|طريقة أخرى|حل آخر)/
+  other: /^\s*(صيغة أخرى|طريقة أخرى|حل آخر)/,
+  qord: /^\s*(أولاً|أولا|ثانياً|ثانيا|ثالثاً|ثالثا|رابعاً|رابعا|خامساً|خامسا)\s*[:：-]/
 };
 // p: { text, style, color (hex or ''), table, pic, bold, size }
 function guess(p) {
@@ -2416,7 +2429,7 @@ function guess(p) {
   if (RX.quote.test(t)) return 'quote';
   if (RX.other.test(t)) return 'other';
   if (RX.choice.test(t)) return 'choice';
-  if (RX.q.test(t) || RX.qnum.test(t)) return 'question';
+  if (RX.q.test(t) || RX.qnum.test(t) || RX.qord.test(t) || /(المطلوب|ما يلي|يأتي)\s*[:：]\s*$/.test(t)) return 'question';
   const c = (p.color || '').toUpperCase();
   if (c && isBlue(c)) return 'answer';
   if (c && isRed(c) && t.length < 60) return 'qhead';
@@ -2436,6 +2449,8 @@ function group(paras) {
     const g = p.type;
     if (!g) { if (cur && cur.type !== 'answer') cur = null; return; }   // an empty line ends a group (an answer may hold empty lines)
     if (cur && i === cur.to + 1 && g === cur.type && !['question', 'lesson', 'topic', 'chapter', 'qhead', 'table', 'figure'].includes(g)) { cur.to = i; return; }
+    // "- …" lines under a question are its parts
+    if (cur && cur.type === 'question' && i <= cur.to + 1 && g === 'body' && /^\s*[-–•▪]/.test(p.text || '')) { cur.to = i; return; }
     if (cur && i <= cur.to + 2 && (CONT[cur.type] || []).includes(g) && !(cur.type === 'question' && g === 'figure' && p.big)) { cur.to = i; if (g === 'choice' && cur.type === 'question') cur.choices = true; return; }
     cur = { type: g, from: i, to: i };
     out.push(cur);
@@ -2538,7 +2553,7 @@ async function read(data, opts) {
         const ln = c.localName, ns = c.namespaceURI;
         if (ns === W_NS && ln === 'r') {
           const rPr = wk(c, 'rPr');
-          const st = runStyle(rPr);
+          const st = Object.assign(runStyle(rPr), inherit || {});
           for (let k = c.firstElementChild; k; k = k.nextElementSibling) {
             if (k.namespaceURI !== W_NS && k.localName !== 'AlternateContent') continue;
             const kn = k.localName;
@@ -2558,7 +2573,8 @@ async function read(data, opts) {
           // an inline content control: a tagged part splits the paragraph
           const tag = sdtTag(c);
           const body = wk(c, 'sdtContent');
-          if (tag && body && opts.splitInline !== false) { inlineSplits.push({ at: out.length, tag, body }); }
+          if (tag && body && INLINE.includes(tag)) walkRuns(body, Object.assign({}, inherit, { c: tag === 'correct' ? '2070DF' : '1F71DE', bmk: 'UULA:' + tag }));
+          else if (tag && body && opts.splitInline !== false) { inlineSplits.push({ at: out.length, tag, body }); }
           else if (body) walkRuns(body, inherit);
         }
       }
@@ -2610,7 +2626,8 @@ async function read(data, opts) {
       report.pics++;
       const small = pc.cy < 34 * PT && c.text.trim();
       if (small && pc.obj) report.inlineObj++;
-      return { kind: 'pic', role: role === 'figure' ? null : role, media: pc.media, cx: pc.cx, cy: pc.cy, inline: !!small };
+      const pr = role === 'figure' ? null : ['question', 'choice', 'qhead', 'given'].includes(role) ? 'given' : role;
+      return { kind: 'pic', role: pr, media: pc.media, cx: pc.cx, cy: pc.cy, inline: !!small };
     });
     if (c.inlineSplits.length) {
       // text before | tagged inline part | text after (each its own box)
@@ -2688,7 +2705,7 @@ const xe = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', 
 function runX(t, st) {
   if (t == null || t === '') return '';
   const ar = /[؀-ۿ]/.test(t);
-  let a = '<a:rPr lang="' + (ar ? 'ar-SA' : 'en-US') + '"' + (st.sz ? ' sz="' + Math.max(800, Math.min(4000, st.sz)) + '"' : '') + (st.b ? ' b="1"' : '') + (st.i ? ' i="1"' : '') + (st.u ? ' u="sng"' : '') + (st.base ? ' baseline="' + st.base + '"' : '') + '>';
+  let a = '<a:rPr lang="' + (ar ? 'ar-SA' : 'en-US') + '"' + (st.bmk ? ' bmk="' + st.bmk + '"' : '') + (st.sz ? ' sz="' + Math.max(800, Math.min(4000, st.sz)) + '"' : '') + (st.b ? ' b="1"' : '') + (st.i ? ' i="1"' : '') + (st.u ? ' u="sng"' : '') + (st.base ? ' baseline="' + st.base + '"' : '') + '>';
   if (st.c) a += '<a:solidFill><a:srgbClr val="' + st.c + '"/></a:solidFill>';
   a += '</a:rPr>';
   return '<a:r>' + a + '<a:t>' + xe(t) + '</a:t></a:r>';
@@ -2743,7 +2760,7 @@ function shapes(units, ctx) {
       if (w > max) { h = Math.round(h * max / w); w = max; }
       // a narrow picture right after a question / text sits beside it (graph question layout)
       const prev = out[out.length - 1];
-      const beside = prev && prev.unit && prev.unit.kind === 'text' && w <= CW * 0.48 && !prev.side && ['question', 'answer', null, 'body'].includes(prev.unit.role) && u.role !== 'figure';
+      const beside = prev && prev.unit && prev.unit.kind === 'text' && w <= CW * 0.48 && !prev.side && ['question', 'answer', null, 'body', 'choice'].includes(prev.unit.role) && u.role !== 'figure';
       const ext = u.media.ext === 'jpeg' ? 'jpg' : u.media.ext;
       const rid = ctx.rels.image('w' + (ctx.mediaKey++) + '.' + ext, u.data);
       if (beside) {
@@ -2911,7 +2928,7 @@ function syncFallback(xml) {
   return UR.serialize(doc);
 }
 
-return { TYPES, TYPE, TAG, guess, group, read, shapes, batches, fillSlide, syncFallback, isBlue, RX };
+return { TYPES, TYPE, TAG, INLINE, guess, group, read, shapes, batches, fillSlide, syncFallback, isBlue, RX };
 })();
 if (typeof module !== 'undefined') module.exports = UW;
 </script>
@@ -3642,6 +3659,7 @@ function styleCC(cc, type) {
   const t = wtype(type);
   cc.tag = 'UULA:' + type; cc.title = L(t.ar, t.en); cc.color = '#' + t.col; cc.appearance = 'BoundingBox';
 }
+const isRedHex = h => { const m = /^#?([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})$/i.exec(h || ''); if (!m) return false; const [r, g, b] = m.slice(1).map(x => parseInt(x, 16)); return r > 170 && g < 90 && b < 90; };
 const isUula = cc => cc && !cc.isNullObject && /^UULA:/.test(cc.tag || '');
 // an empty line between two tagged parts that touch (so their frames do not stick together)
 function spacer(par, where) {
@@ -3746,6 +3764,23 @@ async function autoTag() {
     }
     let n = 0;
     for (const pl of plans) { const cc = pl.range.insertContentControl(); styleCC(cc, pl.g.type); n++; if (n % 40 === 0) await ctx.sync(); }
+    await ctx.sync();
+    // answers of a word or two written inside a question in another colour (red / blue): an inline «حل» frame
+    const qpars = [];
+    for (const pl of plans) if (['question', 'choice'].includes(pl.g.type)) for (let i = pl.g.from; i <= pl.g.to; i++) if (paras[i].text.trim()) qpars.push(ps.items[i]);
+    const words = qpars.map(p => { const w = p.getTextRanges([' '], false); w.load('items/text,items/font/color'); return w; });
+    await ctx.sync();
+    for (const w of words) {
+      const it = w.items; if (it.length < 2) continue;
+      const base = (it[0].font.color || '').toUpperCase();
+      const odd = x => { const c = (x.font.color || '').toUpperCase(); return c && c !== base && (UW.isBlue(c) || isRedHex(c)); };
+      for (let a = 0; a < it.length; a++) {
+        if (!odd(it[a])) continue;
+        let b = a; while (b + 1 < it.length && odd(it[b + 1])) b++;
+        const cc = it[a].expandTo(it[b]).insertContentControl(); styleCC(cc, 'answer'); n++;
+        a = b;
+      }
+    }
     await ctx.sync();
     return n;
   });

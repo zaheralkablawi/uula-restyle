@@ -1,0 +1,1297 @@
+// UULA Restyle — XML engine: turns one slide (a single-slide package from slide.exportAsBase64)
+// into the UULA study-guide style, and builds the ready templates. No Office.js here.
+const UR = (() => {
+'use strict';
+const NS = {
+  p: 'http://schemas.openxmlformats.org/presentationml/2006/main',
+  a: 'http://schemas.openxmlformats.org/drawingml/2006/main',
+  m: 'http://schemas.openxmlformats.org/officeDocument/2006/math',
+  r: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+  mc: 'http://schemas.openxmlformats.org/markup-compatibility/2006',
+  a14: 'http://schemas.microsoft.com/office/drawing/2010/main',
+  rel: 'http://schemas.openxmlformats.org/package/2006/relationships',
+  ct: 'http://schemas.openxmlformats.org/package/2006/content-types'
+};
+const PT = 12700;
+const ROW = Math.round(13.3 * PT);          // one line of 11pt text = the grid unit
+const M = 36 * PT;                          // side margins
+const FOOT = 54 * PT;                       // space kept for the footer
+const REL_IMG = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image';
+const REL_LINK = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink';
+
+// ---------- the UULA design system ----------
+const C = {
+  chapter: 'A6A6A6', lesson: '1F71DD', topic: '000000', body: '000000', qhead: 'FF0000', q: 'FF0000',
+  answer: '1F71DE', answerOk: '2070DF', givens: '00B050', formula: 'FE00FE', otherform: 'C45A11',
+  pill: '1F71DC', grid: 'D9D9D9', head: 'CAD0D8', mainCol: 'DAE0E9', alt: 'F1F1F1'
+};
+const STY = {
+  chapter: { sz: 1100, b: 1, c: C.chapter },
+  lesson: { sz: 2200, b: 1, c: C.lesson },
+  topic: { sz: 1650, b: 1, c: C.topic },
+  body: { sz: 1100, c: C.body, keepB: 1 },
+  choice: { sz: 1100, c: '000000', keepB: 1, ind: 1 },
+  boxtitle: { sz: 1100, b: 1, c: '000000' },
+  qhead: { sz: 1100, b: 1, c: C.qhead },
+  question: { sz: 1100, c: '000000', keepB: 1, q: 1 },
+  answer: { sz: 1100, c: C.answer, keepB: 1, ind: 1 },
+  source: { sz: 1100, b: 1, c: '000000' },
+  label: { sz: 1100, c: '000000', keepB: 1 }          // small labels beside pictures / inside groups
+};
+// containers: fill, icon, icon tint (for the vertical line)
+const BOX = {
+  note: { fill: 'FBEBD3', icon: 'bulb', name: 'Note' },
+  quote: { fill: 'E2F0D9', icon: 'book', line: '2AB672', name: 'Quote' },
+  def: { fill: 'E2F0D9', icon: 'book', line: '2AB672', name: 'Definition' },
+  formula: { fill: 'D3E4F5', icon: null, name: 'Formula' },
+  other: { fill: 'FBEBD3', icon: 'star', name: 'Other Form' },
+  activity: { fill: 'F1F1F1', icon: 'palette', name: 'Activity' },
+  mars: { fill: 'F1F1F1', icon: 'target', name: 'Challenge' },
+  practice: { fill: 'F1F1F1', icon: null, name: 'Practice' }
+};
+const PALETTE = ['000000', 'FFFFFF', 'A6A6A6', '1F71DD', '1F71DE', '1F71DC', '2070DF', 'FF0000', '00B050', 'FE00FE', 'C45A11', 'FFC000'];
+const CIRC = /[①-⓿❶-➓㉑-㉟㊱-㊿]/;
+const CIRC_SPLIT = /([①-⓿❶-➓㉑-㉟㊱-㊿]+)/;
+const AR = /[؀-ۿݐ-ݿﭐ-﷿ﹰ-﻿]/;
+
+// ---------- DOM helpers ----------
+const kids = (el, ln, ns) => el ? [...el.children].filter(c => c.localName === ln && (!ns || c.namespaceURI === NS[ns])) : [];
+const kid = (el, ln, ns) => kids(el, ln, ns)[0] || null;
+const desc = (el, ns, ln) => el ? [...el.getElementsByTagNameNS(NS[ns], ln)] : [];
+const mk = (doc, ns, ln) => doc.createElementNS(NS[ns], ns + ':' + ln);
+const parseXml = s => new DOMParser().parseFromString(s, 'application/xml');
+const serialize = d => new XMLSerializer().serializeToString(d);
+const XMLNS = 'xmlns:a="' + NS.a + '" xmlns:p="' + NS.p + '" xmlns:r="' + NS.r + '" xmlns:m="' + NS.m + '"';
+function frag(doc, xml) {
+  const w = parseXml('<w ' + XMLNS + '>' + xml + '</w>');
+  return doc.importNode(w.documentElement.firstElementChild, true);
+}
+function placeChild(parent, el, order) {
+  const idx = order.indexOf(el.localName);
+  for (const c of [...parent.children]) {
+    if (c === el) continue;
+    if (order.indexOf(c.localName) > idx) { parent.insertBefore(el, c); return el; }
+  }
+  parent.appendChild(el); return el;
+}
+const removeKids = (el, names) => { if (el) for (const c of [...el.children]) if (names.includes(c.localName)) el.removeChild(c); };
+const hasAncestor = (el, test) => { for (let e = el.parentNode; e && e.nodeType === 1; e = e.parentNode) if (test(e)) return true; return false; };
+const inMath = el => hasAncestor(el, e => e.namespaceURI === NS.m);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+const FILLS = ['noFill', 'solidFill', 'gradFill', 'blipFill', 'pattFill', 'grpFill'];
+const RPR_ORDER = ['ln', 'noFill', 'solidFill', 'gradFill', 'blipFill', 'pattFill', 'grpFill', 'effectLst', 'effectDag', 'highlight', 'uLnTx', 'uLn', 'uFillTx', 'uFill', 'latin', 'ea', 'cs', 'sym', 'hlinkClick', 'hlinkMouseOver', 'rtl', 'extLst'];
+const PPR_ORDER = ['lnSpc', 'spcBef', 'spcAft', 'buClrTx', 'buClr', 'buSzTx', 'buSzPct', 'buSzPts', 'buFontTx', 'buFont', 'buNone', 'buAutoNum', 'buChar', 'buBlip', 'tabLst', 'defRPr', 'extLst'];
+const SPPR_ORDER = ['xfrm', 'custGeom', 'prstGeom', 'noFill', 'solidFill', 'gradFill', 'blipFill', 'pattFill', 'grpFill', 'ln', 'effectLst', 'effectDag', 'scene3d', 'sp3d', 'extLst'];
+const TCPR_ORDER = ['lnL', 'lnR', 'lnT', 'lnB', 'lnTlToBr', 'lnBlToTr', 'cell3D', 'noFill', 'solidFill', 'gradFill', 'blipFill', 'pattFill', 'grpFill', 'headers', 'extLst'];
+const BODYPR_ORDER = ['prstTxWarp', 'noAutofit', 'normAutofit', 'spAutoFit', 'scene3d', 'sp3d', 'flatTx', 'extLst'];
+
+// ---------- colors ----------
+const PRST = { black: '000000', white: 'FFFFFF', red: 'FF0000', blue: '0000FF', darkBlue: '00008B', navy: '000080', gray: '808080', grey: '808080', yellow: 'FFFF00', green: '008000' };
+const rgb = h => [0, 2, 4].map(i => parseInt(h.substr(i, 2), 16));
+const isRed = ([r, g, b]) => r > 170 && g < 110 && b < 110;
+const isBlue = ([r, g, b]) => b > 140 && r < 120 && b - r > 60;
+const isGreen = ([r, g, b]) => g > 120 && r < 110 && b < 120 && g - r > 50;
+const isMagenta = ([r, g, b]) => r > 170 && b > 170 && g < 90;
+const isOrange = ([r, g, b]) => r > 170 && g > 60 && g < 150 && b < 60;
+const lum = h => { const [r, g, b] = rgb(h); return 0.299 * r + 0.587 * g + 0.114 * b; };
+
+function readTheme(files) {
+  const scheme = {};
+  if (!files.theme) return scheme;
+  const cs = desc(parseXml(files.theme), 'a', 'clrScheme')[0];
+  if (!cs) return scheme;
+  for (const c of cs.children) {
+    const s = kid(c, 'srgbClr'), y = kid(c, 'sysClr');
+    scheme[c.localName] = s ? s.getAttribute('val').toUpperCase() : y ? (y.getAttribute('lastClr') || '000000').toUpperCase() : null;
+  }
+  scheme.tx1 = scheme.dk1; scheme.bg1 = scheme.lt1; scheme.tx2 = scheme.dk2; scheme.bg2 = scheme.lt2;
+  return scheme;
+}
+function colorOf(container, ctx) {
+  if (!container) return null;
+  for (const c of container.children) {
+    const v = c.getAttribute('val');
+    let hex = null;
+    if (c.localName === 'srgbClr') hex = (v || '').toUpperCase();
+    else if (c.localName === 'schemeClr') hex = ctx.scheme[v] || null;
+    else if (c.localName === 'prstClr') hex = PRST[v] || null;
+    else if (c.localName === 'sysClr') hex = (c.getAttribute('lastClr') || (v === 'windowText' ? '000000' : 'FFFFFF')).toUpperCase();
+    else continue;
+    // lumMod / lumOff tints (bg1 lumMod 85% = light gray …)
+    const lm = kid(c, 'lumMod'), lo = kid(c, 'lumOff');
+    if (hex && (lm || lo)) {
+      const f = lm ? +lm.getAttribute('val') / 1e5 : 1, o = lo ? +lo.getAttribute('val') / 1e5 : 0;
+      hex = rgb(hex).map(x => Math.max(0, Math.min(255, Math.round(x * f + 255 * o))).toString(16).padStart(2, '0')).join('').toUpperCase();
+    }
+    return hex;
+  }
+  return null;
+}
+function solid(doc, hex) { const f = mk(doc, 'a', 'solidFill'), s = mk(doc, 'a', 'srgbClr'); s.setAttribute('val', hex); f.appendChild(s); return f; }
+function setSolid(parent, hex, order) { removeKids(parent, FILLS); return placeChild(parent, solid(parent.ownerDocument, hex), order); }
+
+// ---------- package ----------
+async function openPackage(b64) {
+  const zip = await JSZip.loadAsync(b64, { base64: true });
+  const names = Object.keys(zip.files);
+  const slidePath = names.find(n => /^ppt\/slides\/slide\d+\.xml$/.test(n));
+  const relsPath = slidePath.replace('slides/', 'slides/_rels/') + '.rels';
+  const files = { slide: await zip.file(slidePath).async('string') };
+  files.rels = zip.file(relsPath) ? await zip.file(relsPath).async('string')
+    : '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="' + NS.rel + '"/>';
+  let slideW = 6858000, slideH = 9899650;
+  const pres = zip.file('ppt/presentation.xml');
+  if (pres) {
+    const sz = desc(parseXml(await pres.async('string')), 'p', 'sldSz')[0];
+    if (sz) { slideW = +sz.getAttribute('cx'); slideH = +sz.getAttribute('cy'); }
+  }
+  const th = names.find(n => /^ppt\/theme\/theme\d+\.xml$/.test(n));
+  if (th) files.theme = await zip.file(th).async('string');
+  const layouts = [];
+  try {
+    const rels = parseXml(files.rels);
+    const lr = desc(rels, 'rel', 'Relationship').find(r => /slideLayout$/.test(r.getAttribute('Type')));
+    if (lr) {
+      const lp = 'ppt/slideLayouts/' + lr.getAttribute('Target').split('/').pop();
+      layouts.push(await zip.file(lp).async('string'));
+      const lrels = parseXml(await zip.file(lp.replace('slideLayouts/', 'slideLayouts/_rels/') + '.rels').async('string'));
+      const mr = desc(lrels, 'rel', 'Relationship').find(r => /slideMaster$/.test(r.getAttribute('Type')));
+      if (mr) layouts.push(await zip.file('ppt/slideMasters/' + mr.getAttribute('Target').split('/').pop()).async('string'));
+    }
+  } catch (e) { /* no layout info */ }
+  // a slide whose layout/master already carries the UULA footer keeps it from there
+  const uulaMaster = layouts.some(x => /U U L A \. C O M|UULA Footer/.test(x));
+  return { zip, slidePath, relsPath, files, slideW, slideH, layouts: layouts.map(parseXml), uulaMaster };
+}
+// media + relationships added while building a slide
+function makeRels(pkg) {
+  const doc = parseXml(pkg.files.rels);
+  const root = doc.documentElement;
+  let n = 1;
+  const used = new Set(desc(doc, 'rel', 'Relationship').map(r => r.getAttribute('Id')));
+  const media = {};
+  return {
+    doc,
+    image(key) {
+      if (media[key]) return media[key];
+      let id; do { id = 'rIdUR' + (n++); } while (used.has(id)); used.add(id);
+      const file = 'ur_' + key + '.png';
+      pkg.zip.file('ppt/media/' + file, UR_ASSETS[key], { base64: true });
+      const r = doc.createElementNS(NS.rel, 'Relationship');
+      r.setAttribute('Id', id); r.setAttribute('Type', REL_IMG); r.setAttribute('Target', '../media/' + file);
+      root.appendChild(r);
+      return (media[key] = id);
+    },
+    link(url) {
+      let id; do { id = 'rIdURl' + (n++); } while (used.has(id)); used.add(id);
+      const r = doc.createElementNS(NS.rel, 'Relationship');
+      r.setAttribute('Id', id); r.setAttribute('Type', REL_LINK); r.setAttribute('Target', url); r.setAttribute('TargetMode', 'External');
+      root.appendChild(r);
+      return id;
+    }
+  };
+}
+// strings go into the zip as UTF-8 bytes: JSZip's own encoder can split an emoji / math letter (surrogate pair)
+// that falls on one of its chunk borders, which PowerPoint then refuses
+const utf8 = s => new TextEncoder().encode(s);
+async function buildPackage(pkg, slideXml, rels) {
+  pkg.zip.file(pkg.slidePath, utf8(slideXml));
+  if (rels) pkg.zip.file(pkg.relsPath, utf8(serialize(rels.doc)));
+  let ct = await pkg.zip.file('[Content_Types].xml').async('string');
+  if (!/Extension="png"/i.test(ct)) { ct = ct.replace(/<Default /, '<Default Extension="png" ContentType="image/png"/><Default '); pkg.zip.file('[Content_Types].xml', utf8(ct)); }
+  return pkg.zip.generateAsync({ type: 'base64', compression: 'DEFLATE' });
+}
+
+// ---------- shapes ----------
+const SHAPE_TAGS = ['sp', 'pic', 'cxnSp', 'graphicFrame', 'grpSp', 'AlternateContent', 'contentPart'];
+const spTreeOf = doc => desc(doc, 'p', 'spTree')[0];
+const topItems = doc => [...spTreeOf(doc).children].filter(c => SHAPE_TAGS.includes(c.localName));
+function core(el) {
+  if (el.localName !== 'AlternateContent') return el;
+  const ch = kid(el, 'Choice', 'mc') || kid(el, 'Fallback', 'mc');
+  return ch ? ch.firstElementChild : el;
+}
+const allCores = el => el.localName === 'AlternateContent' ? [...kids(el, 'Choice', 'mc'), ...kids(el, 'Fallback', 'mc')].map(x => x.firstElementChild).filter(Boolean) : [el];
+function xfrmOf(c) {
+  if (!c) return null;
+  if (c.localName === 'graphicFrame') return kid(c, 'xfrm', 'p');
+  if (c.localName === 'grpSp') return kid(kid(c, 'grpSpPr', 'p'), 'xfrm', 'a');
+  return kid(kid(c, 'spPr', 'p'), 'xfrm', 'a');
+}
+function phOf(c) {
+  const nv = c && c.firstElementChild;
+  return nv ? desc(nv, 'p', 'ph')[0] || null : null;
+}
+function geomFromXfrm(x) {
+  if (!x) return null;
+  const off = kid(x, 'off', 'a'), ext = kid(x, 'ext', 'a');
+  if (!off || !ext) return null;
+  return { x: +off.getAttribute('x'), y: +off.getAttribute('y'), w: +ext.getAttribute('cx'), h: +ext.getAttribute('cy') };
+}
+function geomOf(el, pkg) {
+  const c = core(el);
+  const g = geomFromXfrm(xfrmOf(c));
+  if (g) return g;
+  const ph = phOf(c);
+  if (ph) {
+    const type = ph.getAttribute('type') || 'body', idx = ph.getAttribute('idx');
+    for (const L of pkg.layouts) for (const sp of desc(L, 'p', 'sp')) {
+      const lph = phOf(sp); if (!lph) continue;
+      const lt = lph.getAttribute('type') || 'body';
+      if ((idx != null && lph.getAttribute('idx') === idx) || lt === type) {
+        const lg = geomFromXfrm(xfrmOf(sp)); if (lg) return lg;
+      }
+    }
+  }
+  return null;
+}
+// write a position; for groups the children follow (chOff/chExt are left alone, so the group scales)
+function setGeom(el, g) {
+  for (const c of allCores(el)) {
+    const doc = c.ownerDocument;
+    let x = xfrmOf(c);
+    if (!x) {
+      if (c.localName === 'graphicFrame') { x = mk(doc, 'p', 'xfrm'); c.insertBefore(x, kid(c, 'graphic', 'a')); }
+      else {
+        const sp = kid(c, c.localName === 'grpSp' ? 'grpSpPr' : 'spPr', 'p'); if (!sp) continue;
+        x = mk(doc, 'a', 'xfrm'); sp.insertBefore(x, sp.firstChild);
+      }
+      x.appendChild(mk(doc, 'a', 'off')); x.appendChild(mk(doc, 'a', 'ext'));
+    }
+    const off = kid(x, 'off', 'a'), ext = kid(x, 'ext', 'a');
+    const n = v => { v = Math.round(+v); return isFinite(v) ? v : 0; };
+    if (g.x != null) off.setAttribute('x', n(g.x));
+    if (g.y != null) off.setAttribute('y', n(g.y));
+    if (g.w != null) ext.setAttribute('cx', Math.max(0, n(g.w)));
+    if (g.h != null) ext.setAttribute('cy', Math.max(0, n(g.h)));
+    if (c.localName === 'grpSp' && g.keepChildren) {
+      const co = kid(x, 'chOff', 'a'), ce = kid(x, 'chExt', 'a');
+      if (co && ce) { /* children keep their own coordinates, the group frame maps them */ }
+    }
+  }
+}
+const textOf = el => desc(el, 'a', 't').map(t => t.textContent).join('') + desc(el, 'm', 't').map(t => t.textContent).join('');
+const paraText = p => [...p.getElementsByTagNameNS(NS.a, 't'), ...p.getElementsByTagNameNS(NS.m, 't')].map(t => t.textContent).join('');
+const isLineGeom = c => {
+  if (c.localName === 'cxnSp') return true;
+  const pg = desc(kid(c, 'spPr', 'p'), 'a', 'prstGeom')[0];
+  return !!pg && /^(line|straightConnector1|bentConnector\d|curvedConnector\d)$/.test(pg.getAttribute('prst'));
+};
+function fillColorOf(c, ctx) {
+  const spPr = kid(c, 'spPr', 'p');
+  const sf = kid(spPr, 'solidFill', 'a');
+  if (sf) return colorOf(sf, ctx);
+  const gf = kid(spPr, 'gradFill', 'a');
+  if (gf) { const gs = desc(gf, 'a', 'gs')[0]; return gs ? colorOf(gs, ctx) : null; }
+  if (kid(spPr, 'noFill', 'a') || kid(spPr, 'blipFill', 'a')) return null;
+  const ref = desc(kid(c, 'style', 'p'), 'a', 'fillRef')[0];
+  return ref && +ref.getAttribute('idx') > 0 ? colorOf(ref, ctx) : null;
+}
+function cnvOf(c) { const nv = c && c.firstElementChild; return nv ? kid(nv, 'cNvPr', 'p') : null; }
+function maxId(doc) { let m = 1; for (const n of desc(doc, 'p', 'cNvPr')) m = Math.max(m, +n.getAttribute('id') || 0); return m; }
+
+// ---------- text helpers ----------
+// size (hundredths of pt) of the first run in a paragraph, falling back to the body size
+function runSz(p) {
+  for (const r of desc(p, 'a', 'rPr')) if (r.getAttribute('sz')) return +r.getAttribute('sz');
+  const e = kid(p, 'endParaRPr', 'a'); if (e && e.getAttribute('sz')) return +e.getAttribute('sz');
+  return 0;
+}
+function runBold(p) {
+  const rs = desc(p, 'a', 'r').filter(r => (kid(r, 't', 'a') || {}).textContent && kid(r, 't', 'a').textContent.trim());
+  if (!rs.length) return false;
+  return rs.every(r => { const pr = kid(r, 'rPr', 'a'); return pr && /^(1|true)$/.test(pr.getAttribute('b') || ''); });
+}
+function runColor(p, ctx) {
+  for (const r of desc(p, 'a', 'r')) {
+    const t = kid(r, 't', 'a'); if (!t || !t.textContent.trim()) continue;
+    const pr = kid(r, 'rPr', 'a'); const sf = pr && kid(pr, 'solidFill', 'a');
+    return sf ? colorOf(sf, ctx) : null;
+  }
+  for (const r of desc(p, 'm', 'r')) { const pr = desc(r, 'a', 'rPr')[0]; const sf = pr && kid(pr, 'solidFill', 'a'); if (sf) return colorOf(sf, ctx); }
+  return null;
+}
+const hasBullet = p => { const pPr = kid(p, 'pPr', 'a'); return !!pPr && !!(kid(pPr, 'buChar', 'a') || kid(pPr, 'buAutoNum', 'a')); };
+const bulletChar = p => { const pPr = kid(p, 'pPr', 'a'); const b = pPr && kid(pPr, 'buChar', 'a'); return b ? b.getAttribute('char') : null; };
+
+// question / answer / heading patterns (Arabic + English)
+const Q_START = /^\s*(س\s*[0-9٠-٩]+|سؤال|السؤال|علل|عل+ل|اذكر|اُذكر|عرّف|عرف|قارن|وضّح|وضح|اشرح|بيّن|بين\s|ما\s|ماذا|متى|لماذا|كيف|هل\s|أوجد|اوجد|احسب|بسّط|بسط|حل\s|حلّ|أثبت|اثبت|ارسم|أكمل|اكمل|اختر|ضع\s|صحح|Q\s*[0-9]|Find|Solve|Prove|Simplify|Evaluate|What|Why|How|Explain|Define)/i;
+const Q_NUM = /^\s*([0-9٠-٩]{1,2}\s*[-.)]|[(]\s*[0-9٠-٩]{1,2}\s*[)])\s*\S/;
+const Q_PREFIX = /^\s*(س\s*[0-9٠-٩]*\s*[:/\-).]|السؤال\s*\S*\s*:|سؤال\s*[0-9٠-٩]*\s*:|[0-9٠-٩]{1,2}\s*[-.)]|[(]\s*[0-9٠-٩]{1,2}\s*[)]|Q\s*[0-9]*\s*[:.)])\s*/i;
+const A_START = /^\s*(ج\s*[0-9٠-٩]*\s*[:/\-]|الجواب|الإجابة|الاجابة|الحل\s*:|الحل$|Answer|Solution)/i;
+const QHEAD = /^\s*(أجب|اجب|مثال|أمثلة|حاول أن تحل|حاول ان تحل|تدريب|تمرين|تمارين|التمارين|أسئلة|اسئلة|تحقق من فهمك|Example|Exercise|Try)/i;
+const PILL = /^\s*((?:تعريف|نظرية|خاصية|قاعدة|مسلّمة|مسلمة|نتيجة|Definition|Theorem|Property|Rule)\s*[0-9٠-٩]*\s*[:：])\s*/i;
+const CHOICE = /^\s*([\u24B6-\u24E9]|[(]?[a-dA-Dأبجد]\s*[)]\s)/;
+const KW = {
+  note: /ملاحظة|ملاحظه|تنبيه|هام\b|مهم\b|انتبه|تذكّر|تذكر|Note|Important|Remember/i,
+  quote: /قال تعالى|قال رسول الله|ﷺ|﴿|﴾|«|»|من كتاب|قال الشاعر/,
+  def: /^\s*(تعريف|المفهوم|مفهوم|Definition)/i,
+  formula: /قانون|معادلة|نظرية|القاعدة|الصيغة|Formula|Theorem/i,
+  activity: /^\s*(نشاط|Activity)/i,
+  mars: /إثراء|اثراء|تحدي|تحدٍّ|فكّر|فكر\b|سؤال ذكاء|من المريخ|Challenge/i,
+  practice: /تـ*د*ر*ب\s*و\s*تـ*ف*و*ق|تدرب وتفوق|Practice\s*&\s*Succeed/i
+};
+
+// ---------- analysis ----------
+// returns the items of the slide with a role each
+function analyze(doc, pkg, ctx) {
+  const W = pkg.slideW, H = pkg.slideH;
+  const items = topItems(doc).map((el, i) => {
+    const c = core(el);
+    const it = { i, el, c, g: geomOf(el, pkg), tag: c.localName, kind: 'other', drop: null, role: null, text: '' };
+    const cnv = cnvOf(c);
+    it.name = cnv ? cnv.getAttribute('name') || '' : '';
+    it.id = cnv ? cnv.getAttribute('id') : null;
+    if (!it.g) { it.g = { x: 0, y: 0, w: 0, h: 0 }; it.nogeom = true; }
+    const ph = phOf(c); it.ph = ph ? ph.getAttribute('type') || 'body' : null;
+    it.text = textOf(c).trim();
+    if (it.tag === 'pic') it.kind = 'pic';
+    else if (it.tag === 'graphicFrame') it.kind = desc(c, 'a', 'tbl').length ? 'table' : 'object';
+    else if (it.tag === 'grpSp') it.kind = 'group';
+    else if (it.tag === 'contentPart') it.kind = 'ink';
+    else if (isLineGeom(c)) it.kind = 'line';
+    else if (it.tag === 'sp') it.kind = it.text ? 'text' : 'shape';
+    if (it.tag === 'sp') it.fill = fillColorOf(c, ctx);
+    it.off = it.g.x + it.g.w <= 0 || it.g.x >= W || it.g.y >= H || it.g.y + it.g.h <= 0;
+    return it;
+  });
+  for (const it of items) classify(it, items, pkg, ctx);
+  findContainers(items, pkg);
+  return items;
+}
+function classify(it, items, pkg, ctx) {
+  const W = pkg.slideW, H = pkg.slideH, g = it.g;
+  if (it.off) { it.drop = it.kind === 'pic' ? 'offpic' : (it.kind === 'text' && /^(https?:|www\.)/i.test(it.text.replace(/\s+/g, '')) ? 'link' : 'off'); return; }
+  if (/^UULA (Footer|Watermark)|^CustomPageNumber_/.test(it.name)) { it.drop = 'footer'; return; }
+  if (['sldNum', 'ftr', 'dt'].includes(it.ph)) { it.drop = 'footer'; return; }
+  if (it.kind === 'text') {
+    const t = it.text.replace(/\s+/g, ' ');
+    if (/^[0-9٠-٩]{1,4}$/.test(t) && g.w < W * 0.25 && g.y > H * 0.85) { it.drop = 'pagenum'; return; }
+    if (/^(صفحة|الصفحة|ص|Page|P\.)\s*[0-9٠-٩]{1,4}$/i.test(t) && g.y > H * 0.85) { it.drop = 'pagenum'; return; }
+    if (g.y > H * 0.9 && (/U\s*U\s*L\s*A\s*\.\s*C\s*O\s*M/i.test(t) || /جـ*م*ـ*ي*ـ*ع.*محفوظة|حقوق/.test(t) || /^20\d\d\s*[—–-]\s*20\d\d$/.test(t))) { it.drop = 'footer'; return; }
+  }
+  if (it.kind === 'pic') {
+    // a picture covering most of the slide is a background
+    if (g.w > W * 0.85 && g.h > H * 0.6) { it.drop = 'decor'; return; }
+    // footer logo
+    if (g.y > H * 0.92 && g.w < 60 * PT && g.h < 60 * PT) { it.drop = 'footer'; return; }
+    const small = Math.max(g.w, g.h) < 100 * PT, linked = !!desc(it.c, 'a', 'hlinkClick').length;
+    const r = g.h ? g.w / g.h : 0;
+    if (small && (linked || (r > 0.75 && r < 1.3 && Math.max(g.w, g.h) < 70 * PT && g.x < W * 0.3))) { it.kind = 'qr'; return; }
+    if (Math.max(g.w, g.h) < 22 * PT) { it.kind = 'icon'; return; }
+    return;
+  }
+  if (it.kind === 'shape') {
+    // a filled shape without text: card (container) candidate or decoration
+    const edge = g.y <= 2 * PT || g.y + g.h >= H - 2 * PT;
+    if (edge && g.w > W * 0.8 && g.h < H * 0.12) { it.drop = 'decor'; return; }     // header / footer strip
+    if (it.fill && g.w > W * 0.3 && g.h > 18 * PT) { it.kind = 'card'; return; }
+    if (g.w > W * 0.9 && g.h < 12 * PT) { it.drop = 'decor'; return; }       // colored strip
+    if (!it.fill && !desc(it.c, 'a', 'ln').length) { it.drop = 'decor'; return; }
+    return;
+  }
+  if (it.kind === 'line') {
+    if (g.w > W * 0.85 && g.y < H * 0.2) { it.drop = 'decor'; return; }      // old header rule
+    return;
+  }
+  if (it.kind === 'text') {
+    // a big filled text shape works as a container holding its own text
+    if (it.fill && lum(it.fill) < 250 && g.w > W * 0.45) { it.boxText = true; }
+    else if (it.fill && g.w < W * 0.3) { it.kind = 'chip'; return; }      // small colored label (س / ج bubbles …)
+  }
+}
+// cards hold the items whose centre lies inside them
+function findContainers(items, pkg) {
+  const cards = items.filter(t => !t.drop && (t.kind === 'card' || t.boxText));
+  for (const t of items) {
+    if (t.drop || t.kind === 'card' || t.boxText) continue;
+    const cx = t.g.x + t.g.w / 2, cy = t.g.y + t.g.h / 2;
+    let best = null;
+    for (const k of cards) {
+      const g = k.g;
+      if (cx >= g.x && cx <= g.x + g.w && cy >= g.y && cy <= g.y + g.h && (!best || g.w * g.h < best.g.w * best.g.h)) best = k;
+    }
+    if (best) t.box = best;
+  }
+  // a card holding nothing is decoration
+  for (const k of cards) if (k.kind === 'card' && !items.some(t => t.box === k)) k.drop = 'decor';
+}
+// container type from the text it holds and its original color
+function boxType(k, members) {
+  const txt = [k.boxText ? k.text : '', ...members.filter(t => t.kind === 'text').map(t => t.text)].join(' ').replace(/\u0640/g, '');
+  const first = txt.trim();
+  if (KW.practice.test(first)) return 'practice';
+  if (KW.activity.test(first)) return 'activity';
+  if (KW.mars.test(first.slice(0, 60))) return 'mars';
+  if (KW.note.test(first.slice(0, 40))) return 'note';
+  if (KW.quote.test(first)) return 'quote';
+  if (KW.def.test(first)) return 'def';
+  const f = k.fill ? k.fill.toUpperCase() : '';
+  if (f === 'FBEBD3') return 'note';
+  if (f === 'E2F0D9') return 'def';
+  if (f === 'F1F1F1') return 'activity';
+  return 'formula';
+}
+
+// ---------- paragraph roles ----------
+function paraRoles(it, ctx, pkg) {
+  const ps = kids(kid(it.c, 'txBody', 'p'), 'p', 'a');
+  const W = pkg.slideW, H = pkg.slideH;
+  const out = [];
+  let lastQ = -1;
+  for (let k = 0; k < ps.length; k++) {
+    const p = ps[k], t = paraText(p).replace(/\u0640/g, '').trim();
+    let role = 'body';
+    const col = runColor(p, ctx), crgb = col && /^[0-9A-F]{6}$/.test(col) ? rgb(col) : null;
+    const sz = runSz(p), bold = runBold(p), bu = bulletChar(p);
+    const body = ctx.bodySz || 1100;
+    const big = sz && sz >= body * 1.2, nPar = ps.filter(x => paraText(x).trim()).length;
+    if (!t) role = out.length ? out[out.length - 1].role : 'body';
+    else if (it.ph === 'title' || it.ph === 'ctrTitle') role = 'lesson';
+    else if (A_START.test(t)) role = 'answer';
+    else if (CHOICE.test(t) || (CIRC.test(t.charAt(0)) && /[Ⓐ-ⓩ]/.test(t))) role = 'choice';
+    else if (bu === 'Q' || bu === 'س') role = 'question';
+    else if (QHEAD.test(t) && (t.length < 140)) role = 'qhead';
+    else if (crgb && isRed(crgb) && bold && t.length < 160 && !/[؟?]\s*$/.test(t)) role = 'qhead';
+    else if (crgb && isBlue(crgb) && lastQ >= 0) role = 'answer';
+    else if (Q_START.test(t) || Q_NUM.test(t) || /[؟?]\s*$/.test(t)) role = 'question';
+    else if (crgb && isBlue(crgb) && (!sz || sz <= body * 1.15)) role = 'answer';
+    else if (((bold && (!sz || sz >= body)) || big) && t.length < 70 && nPar <= 2 && !hasBullet(p) && !/[.:،,]\s*$/.test(t)) role = it.box ? 'boxtitle' : 'topic';
+    if (role === 'question') lastQ = k;
+    out.push({ p, role, text: t, bullet: hasBullet(p) && bu !== 'Q' && bu !== 'س', col: col });
+  }
+  // a lone short first line ending with ':' followed by questions introduces them
+  for (let k = 0; k < out.length - 1; k++) if (out[k].role === 'question' && /[:：]\s*$/.test(out[k].text) && out[k + 1].role === 'question') out[k].role = 'qhead';
+  return out;
+}
+// chapter + lesson at the top of the slide
+function headerRoles(items, pkg) {
+  const H = pkg.slideH;
+  const texts = items.filter(t => !t.drop && t.kind === 'text' && !t.box && t.g.y < H * 0.16);
+  if (!texts.length) return;
+  const sz = t => Math.max(...kids(kid(t.c, 'txBody', 'p'), 'p', 'a').map(runSz), 0);
+  const title = texts.find(t => t.ph === 'title' || t.ph === 'ctrTitle')
+    || texts.filter(t => sz(t) >= 1600 && t.text.length < 120).sort((a, b) => sz(b) - sz(a) || a.g.y - b.g.y)[0];
+  if (title) {
+    title.role = 'lesson';
+    const above = texts.filter(t => t !== title && t.g.y + t.g.h <= title.g.y + title.g.h * 0.5 && t.text.length < 80);
+    if (above.length) above.sort((a, b) => a.g.y - b.g.y)[0].role = 'chapter';
+  } else {
+    const ch = texts.find(t => /الوحدة|الفصل|Unit|Chapter/.test(t.text) && t.text.length < 80 && sz(t) <= 1200);
+    if (ch) ch.role = 'chapter';
+  }
+}
+
+// ---------- styling ----------
+function snapColor(hex, role) {
+  // keep meaningful colors, snapped to the palette; everything else takes the role color
+  if (!hex || !/^[0-9A-F]{6}$/.test(hex)) return null;
+  const c = rgb(hex);
+  if (isMagenta(c)) return C.formula;
+  if (isGreen(c)) return C.givens;
+  if (isOrange(c) && role !== 'qhead') return C.otherform;
+  if (isRed(c) && (role === 'body' || role === 'answer' || role === 'label')) return 'FF0000';
+  if (isBlue(c) && (role === 'body' || role === 'question' || role === 'label')) return C.answer;
+  return null;
+}
+function styleRPr(rPr, st, role, keepCol, math) {
+  const doc = rPr.ownerDocument;
+  rPr.setAttribute('sz', String(st.sz));
+  if (st.b) rPr.setAttribute('b', '1');
+  else if (!st.keepB) rPr.removeAttribute('b');
+  ['i', 'u', 'strike', 'cap', 'spc', 'kern', 'baseline'].forEach(a => { if (a !== 'baseline' && a !== 'i') rPr.removeAttribute(a); });
+  if (!math) rPr.removeAttribute('i');
+  const old = kid(rPr, 'solidFill', 'a');
+  const oldHex = old ? colorOf(old, { scheme: {} }) : null;
+  removeKids(rPr, ['ln', 'noFill', 'solidFill', 'gradFill', 'blipFill', 'pattFill', 'grpFill', 'effectLst', 'effectDag', 'highlight']);
+  const keep = keepCol ? snapColor(keepCol, role) || snapColor(oldHex, role) : null;
+  placeChild(rPr, solid(doc, keep || st.c), RPR_ORDER);
+  if (!math) {
+    removeKids(rPr, ['latin', 'ea', 'cs']);
+    for (const t of ['latin', 'cs']) { const e = mk(doc, 'a', t); e.setAttribute('typeface', 'UULA Sans'); placeChild(rPr, e, RPR_ORDER); }
+  }
+}
+// circled numbers / letters are always black (split runs when needed)
+function blackCircles(root) {
+  const doc = root.ownerDocument;
+  const setBlack = r => {
+    let rPr = [...r.children].find(n => n.localName === 'rPr');
+    if (!rPr) { rPr = mk(doc, 'a', 'rPr'); rPr.setAttribute('lang', 'ar-KW'); r.insertBefore(rPr, r.firstChild); }
+    removeKids(rPr, FILLS);
+    placeChild(rPr, solid(doc, '000000'), RPR_ORDER);
+  };
+  for (const r of [...desc(root, 'a', 'r'), ...desc(root, 'm', 'r')]) {
+    const t = [...r.children].find(x => x.localName === 't'); if (!t || !CIRC.test(t.textContent)) continue;
+    if (hasAncestor(r, e => e.localName === 'tc' && e.getAttribute('data-ur-sol') === '1')) continue;
+    const parts = t.textContent.split(CIRC_SPLIT).filter(s => s.length);
+    if (parts.length === 1) { setBlack(r); continue; }
+    for (const s of parts) {
+      const c = r.cloneNode(true); const ct = [...c.children].find(x => x.localName === 't'); ct.textContent = s;
+      if (/^\s|\s$/.test(s)) ct.setAttribute('xml:space', 'preserve');
+      if (CIRC.test(s)) setBlack(c);
+      r.parentNode.insertBefore(c, r);
+    }
+    r.parentNode.removeChild(r);
+  }
+}
+function setPPr(p, opt) {
+  const doc = p.ownerDocument;
+  let pPr = kid(p, 'pPr', 'a');
+  if (!pPr) { pPr = mk(doc, 'a', 'pPr'); p.insertBefore(pPr, p.firstChild); }
+  const tabs = kid(pPr, 'tabLst', 'a');
+  while (pPr.firstChild) pPr.removeChild(pPr.firstChild);
+  ['lvl', 'marR', 'defTabSz', 'eaLnBrk', 'fontAlgn', 'latinLnBrk', 'hangingPunct'].forEach(a => pPr.removeAttribute(a));
+  pPr.setAttribute('algn', opt.algn); pPr.setAttribute('rtl', opt.rtl ? '1' : '0');
+  pPr.setAttribute('marL', String(opt.marL || 0)); pPr.setAttribute('indent', String(opt.indent || 0));
+  const add = x => { const w = parseXml('<w ' + XMLNS + '>' + x + '</w>').documentElement; for (const n of [...w.children]) pPr.appendChild(doc.importNode(n, true)); };
+  add('<a:lnSpc><a:spcPct val="100000"/></a:lnSpc>');
+  add('<a:spcBef><a:spcPts val="0"/></a:spcBef>');
+  add('<a:spcAft><a:spcPts val="0"/></a:spcAft>');
+  if (opt.bullet === 'Q') add('<a:buClr><a:srgbClr val="FF0000"/></a:buClr><a:buSzPct val="100000"/><a:buFont typeface="Avenir Next Arabic Black"/><a:buChar char="Q"/>');
+  else if (opt.bullet === '§') add('<a:buFont typeface="Wingdings" pitchFamily="2" charset="2"/><a:buChar char="§"/>');
+  else if (opt.bullet && opt.bullet.auto) { const b = frag(doc, '<a:buAutoNum type="' + opt.bullet.auto + '"/>'); if (opt.bullet.start) b.setAttribute('startAt', opt.bullet.start); add('<a:buFontTx/>'); pPr.appendChild(b); }
+  else add('<a:buNone/>');
+  if (tabs) pPr.appendChild(tabs);
+  return pPr;
+}
+// normalise the text body of a shape (insets 0, autofit, top anchor)
+function setBody(c, opt) {
+  const doc = c.ownerDocument;
+  const tb = kid(c, 'txBody', 'p'); if (!tb) return;
+  const bp = kid(tb, 'bodyPr', 'a');
+  const ins = opt.ins || [0, 0, 0, 0];
+  ['lIns', 'tIns', 'rIns', 'bIns'].forEach((a, k) => bp.setAttribute(a, String(ins[k])));
+  bp.setAttribute('wrap', opt.wrap || 'square'); bp.setAttribute('rtlCol', '0');
+  bp.setAttribute('anchor', opt.anchor || 't');
+  ['vert', 'numCol', 'spcCol', 'rot', 'upright'].forEach(a => bp.removeAttribute(a));
+  removeKids(bp, ['prstTxWarp', 'noAutofit', 'normAutofit', 'spAutoFit']);
+  placeChild(bp, mk(doc, 'a', opt.autofit === false ? 'noAutofit' : 'spAutoFit'), BODYPR_ORDER);
+  const ls = kid(tb, 'lstStyle', 'a'); if (ls) while (ls.firstChild) ls.removeChild(ls.firstChild);
+}
+function plainShape(c, keepFill) {
+  const doc = c.ownerDocument;
+  const spPr = kid(c, 'spPr', 'p'); if (!spPr) return;
+  removeKids(spPr, ['effectLst', 'effectDag', 'scene3d', 'sp3d']);
+  if (!keepFill) {
+    removeKids(spPr, [...FILLS, 'ln']);
+    placeChild(spPr, mk(doc, 'a', 'noFill'), SPPR_ORDER);
+    placeChild(spPr, frag(doc, '<a:ln><a:noFill/></a:ln>'), SPPR_ORDER);
+  }
+  const x = xfrmOf(c); if (x) { x.removeAttribute('rot'); x.removeAttribute('flipH'); x.removeAttribute('flipV'); }
+  const st = kid(c, 'style', 'p'); if (st) c.removeChild(st);
+}
+// style every paragraph of a text item; returns the roles found (for spacing)
+function styleText(it, ctx, pkg, forcedRole) {
+  const c = it.c;
+  const roles = forcedRole ? kids(kid(c, 'txBody', 'p'), 'p', 'a').map(p => ({ p, role: forcedRole, text: paraText(p).trim(), bullet: hasBullet(p), col: runColor(p, ctx) })) : paraRoles(it, ctx, pkg);
+  const arAll = AR.test(it.text);
+  let stripped = false;
+  for (const pr of roles) {
+    const st = STY[pr.role] || STY.body;
+    const ar = pr.text ? AR.test(pr.text) : arAll;
+    let bullet = null, marL = 0, indent = 0;
+    if (st.q) {
+      bullet = 'Q'; marL = 182880; indent = -182880;
+      const t0 = desc(pr.p, 'a', 't')[0];
+      if (t0 && Q_PREFIX.test(t0.textContent)) { t0.textContent = t0.textContent.replace(Q_PREFIX, ''); stripped = true; }
+    } else if (pr.role === 'answer' || pr.role === 'choice') { marL = 182880; }
+    else if (pr.bullet && (pr.role === 'body')) {
+      const auto = desc(kid(pr.p, 'pPr', 'a'), 'a', 'buAutoNum')[0];
+      bullet = auto ? { auto: auto.getAttribute('type'), start: auto.getAttribute('startAt') } : '§';
+      marL = 182880; indent = -182880;
+    }
+    setPPr(pr.p, { algn: (pr.role === 'pill' ? 'ctr' : ar ? 'r' : 'l'), rtl: ar, marL, indent, bullet });
+    const keepCol = ['body', 'answer', 'question', 'label', 'choice'].includes(pr.role);
+    for (const r of desc(pr.p, 'a', 'r')) { let rPr = kid(r, 'rPr', 'a'); if (!rPr) { rPr = mk(r.ownerDocument, 'a', 'rPr'); rPr.setAttribute('lang', ar ? 'ar-KW' : 'en-US'); r.insertBefore(rPr, r.firstChild); } styleRPr(rPr, st, pr.role, keepCol ? (rPr.querySelector && kid(rPr, 'solidFill', 'a') ? colorOf(kid(rPr, 'solidFill', 'a'), ctx) : null) : null, false); }
+    for (const r of desc(pr.p, 'a', 'fld')) { let rPr = kid(r, 'rPr', 'a'); if (rPr) styleRPr(rPr, st, pr.role, null, false); }
+    for (const rPr of desc(pr.p, 'a', 'rPr').filter(x => inMath(x))) styleRPr(rPr, st, pr.role, keepCol ? colorOf(kid(rPr, 'solidFill', 'a'), ctx) : null, true);
+    const e = kid(pr.p, 'endParaRPr', 'a'); if (e) styleRPr(e, st, pr.role, null, false);
+  }
+  return { roles: roles.map(r => r.role), stripped };
+}
+
+// ---------- tables ----------
+function styleTable(it, ctx, W) {
+  const doc = it.c.ownerDocument;
+  const tbl = desc(it.c, 'a', 'tbl')[0]; if (!tbl) return;
+  const tblPr = kid(tbl, 'tblPr', 'a');
+  if (tblPr) { removeKids(tblPr, ['tableStyleId', ...FILLS, 'effectLst']); ['bandRow', 'bandCol', 'lastRow', 'lastCol'].forEach(a => tblPr.removeAttribute(a)); }
+  const rows = kids(tbl, 'tr', 'a');
+  const grid = kids(kid(tbl, 'tblGrid', 'a'), 'gridCol', 'a');
+  const cellText = tc => textOf(tc).trim();
+  // the answer table at the end of the objective exercises: a cell reading exactly "الحل"
+  const sol = rows.some(r => kids(r, 'tc', 'a').some(tc => /^(الحل|الإجابة|الاجابة)$/.test(cellText(tc)))) && !/شرط الحل/.test(textOf(tbl));
+  const firstColHead = rows.length > 1 && rows.every(r => { const t = kids(r, 'tc', 'a')[0]; return t && cellText(t); }) && grid.length > 2 && !sol
+    ? false : false;
+  rows.forEach((tr, ri) => {
+    tr.setAttribute('h', '254000');
+    kids(tr, 'tc', 'a').forEach((tc, ci) => {
+      const txt = cellText(tc);
+      let fill = ri === 0 ? C.head : (ri % 2 ? 'FFFFFF' : C.alt), bold = ri === 0;
+      if (sol) {
+        const ansRow = ri > 0;
+        const solCol = kids(tr, 'tc', 'a').findIndex(x => /^(الحل|الإجابة|الاجابة|السؤال)$/.test(cellText(x)));
+        fill = ri === 0 ? C.head : 'FFFFFF'; bold = ri === 0;
+        if (ci === solCol || /^(الحل|الإجابة|الاجابة|السؤال)$/.test(txt)) { fill = ri === 0 ? C.head : C.mainCol; bold = true; }
+        if (ansRow && /^[a-dA-D]$/.test(txt)) {
+          const t = desc(tc, 'a', 't')[0];
+          t.textContent = String.fromCharCode(0x24D0 + txt.toLowerCase().charCodeAt(0) - 97);
+          tc.setAttribute('data-ur-sol', '1');
+        }
+      } else if (firstColHead && ci === 0 && ri > 0) { fill = C.mainCol; bold = true; }
+      let tcPr = kid(tc, 'tcPr', 'a');
+      if (tcPr) tc.removeChild(tcPr);
+      tcPr = frag(doc, '<a:tcPr marL="72000" marR="72000" marT="0" marB="0" anchor="ctr">'
+        + ['lnL', 'lnR', 'lnT', 'lnB'].map(n => '<a:' + n + ' w="6350"><a:solidFill><a:srgbClr val="D9D9D9"/></a:solidFill></a:' + n + '>').join('')
+        + '<a:solidFill><a:srgbClr val="' + fill + '"/></a:solidFill></a:tcPr>');
+      tc.appendChild(tcPr);
+      const solCell = tc.getAttribute('data-ur-sol') === '1';
+      for (const p of desc(tc, 'a', 'p')) {
+        const ar = AR.test(paraText(p));
+        setPPr(p, { algn: 'ctr', rtl: ar });
+        const st = { sz: 1100, b: bold ? 1 : 0, c: solCell ? C.answer : '000000' };
+        for (const r of desc(p, 'a', 'r')) { let rPr = kid(r, 'rPr', 'a'); if (!rPr) { rPr = mk(doc, 'a', 'rPr'); r.insertBefore(rPr, r.firstChild); } styleRPr(rPr, st, 'cell', null, false); if (solCell) rPr.removeAttribute('b'); }
+        for (const rPr of desc(p, 'a', 'rPr').filter(inMath)) styleRPr(rPr, st, 'cell', null, true);
+        const e = kid(p, 'endParaRPr', 'a'); if (e) styleRPr(e, st, 'cell', null, false);
+      }
+    });
+  });
+  // width = content width, keeping the column ratios
+  const CW = W - 2 * M;
+  const tot = grid.reduce((s, g) => s + (+g.getAttribute('w') || 0), 0) || 1;
+  let acc = 0;
+  grid.forEach((g, k) => { const w = k === grid.length - 1 ? CW - acc : Math.round((+g.getAttribute('w') || 0) * CW / tot); acc += w; g.setAttribute('w', String(w)); });
+  it.tableRows = rows.length; it.sol = sol;
+}
+
+// ---------- pictures ----------
+function stylePic(it, inBox) {
+  const doc = it.c.ownerDocument;
+  for (const c of allCores(it.el)) {
+    const spPr = kid(c, 'spPr', 'p'); if (!spPr) continue;
+    removeKids(spPr, ['ln', 'effectLst', 'effectDag', 'scene3d', 'sp3d']);
+    if (!inBox && it.kind === 'pic') placeChild(spPr, frag(doc, '<a:ln w="6350"><a:solidFill><a:srgbClr val="D9D9D9"/></a:solidFill></a:ln>'), SPPR_ORDER);
+    const st = kid(c, 'style', 'p'); if (st) c.removeChild(st);
+    const bf = kid(c, 'blipFill', 'p'), blip = bf && kid(bf, 'blip', 'a');
+    if (blip) removeKids(blip, ['alphaModFix', 'duotone', 'grayscl', 'lum', 'biLevel', 'clrChange', 'tint']);
+  }
+}
+// fonts inside groups / small labels: UULA Sans, sizes kept
+function fontOnly(root) {
+  for (const rPr of [...desc(root, 'a', 'rPr'), ...desc(root, 'a', 'endParaRPr'), ...desc(root, 'a', 'defRPr')]) {
+    if (inMath(rPr)) continue;
+    const doc = rPr.ownerDocument;
+    removeKids(rPr, ['latin', 'ea', 'cs']);
+    for (const t of ['latin', 'cs']) { const e = mk(doc, 'a', t); e.setAttribute('typeface', 'UULA Sans'); placeChild(rPr, e, RPR_ORDER); }
+  }
+}
+
+// ---------- XML builders (also used by the templates) ----------
+let NEXT = 1000;
+const nid = () => String(NEXT++);
+const rPrX = (o) => '<a:rPr lang="' + (o.ar === false ? 'en-US' : 'ar-KW') + '" sz="' + (o.sz || 1100) + '"' + (o.b ? ' b="1"' : ' b="0"') + ' dirty="0"><a:solidFill><a:srgbClr val="' + (o.c || '000000') + '"/></a:solidFill><a:latin typeface="' + (o.font || 'UULA Sans') + '"/><a:cs typeface="' + (o.font || 'UULA Sans') + '"/></a:rPr>';
+function pX(text, o) {
+  o = o || {};
+  const ar = o.ar !== false;
+  let ppr = '<a:pPr marL="' + (o.marL || 0) + '" indent="' + (o.indent || 0) + '" algn="' + (o.algn || (ar ? 'r' : 'l')) + '" rtl="' + (ar ? 1 : 0) + '"><a:lnSpc><a:spcPct val="100000"/></a:lnSpc><a:spcBef><a:spcPts val="0"/></a:spcBef><a:spcAft><a:spcPts val="0"/></a:spcAft>';
+  if (o.q) ppr += '<a:buClr><a:srgbClr val="FF0000"/></a:buClr><a:buSzPct val="100000"/><a:buFont typeface="Avenir Next Arabic Black"/><a:buChar char="Q"/>';
+  else if (o.dot) ppr += '<a:buFont typeface="Wingdings" pitchFamily="2" charset="2"/><a:buChar char="§"/>';
+  else ppr += '<a:buNone/>';
+  ppr += '</a:pPr>';
+  const runs = (Array.isArray(text) ? text : [[text, {}]]).map(([t, ro]) => '<a:r>' + rPrX(Object.assign({}, o, ro)) + '<a:t>' + esc(t) + '</a:t></a:r>').join('');
+  return '<a:p>' + ppr + runs + '<a:endParaRPr lang="ar-KW" sz="' + (o.sz || 1100) + '" dirty="0"><a:solidFill><a:srgbClr val="' + (o.c || '000000') + '"/></a:solidFill><a:latin typeface="UULA Sans"/><a:cs typeface="UULA Sans"/></a:endParaRPr></a:p>';
+}
+function txX(name, x, y, w, h, paras, o) {
+  o = o || {};
+  const ins = o.ins || [0, 0, 0, 0];
+  return '<p:sp><p:nvSpPr><p:cNvPr id="' + nid() + '" name="' + esc(name) + '"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="' + Math.round(x) + '" y="' + Math.round(y) + '"/><a:ext cx="' + Math.round(w) + '" cy="' + Math.round(h) + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr>'
+    + '<p:txBody><a:bodyPr wrap="' + (o.wrap || 'square') + '" lIns="' + ins[0] + '" tIns="' + ins[1] + '" rIns="' + ins[2] + '" bIns="' + ins[3] + '" rtlCol="0" anchor="' + (o.anchor || 't') + '">' + (o.noFit ? '<a:noAutofit/>' : '<a:spAutoFit/>') + '</a:bodyPr><a:lstStyle/>' + paras + '</p:txBody></p:sp>';
+}
+function boxX(name, y, h, fill, W) {
+  return '<p:sp><p:nvSpPr><p:cNvPr id="' + nid() + '" name="UULA ' + esc(name) + ' Container"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="' + Math.round(y) + '"/><a:ext cx="' + W + '" cy="' + Math.round(h) + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="' + fill + '"/></a:solidFill><a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr rtlCol="0" anchor="ctr"/><a:lstStyle/><a:p><a:endParaRPr lang="ar-KW" dirty="0"/></a:p></p:txBody></p:sp>';
+}
+function gradBoxX(name, y, h, W) {
+  return '<p:sp><p:nvSpPr><p:cNvPr id="' + nid() + '" name="UULA ' + esc(name) + ' Container"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="' + Math.round(y) + '"/><a:ext cx="' + W + '" cy="' + Math.round(h) + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:gradFill flip="none" rotWithShape="1"><a:gsLst><a:gs pos="0"><a:srgbClr val="F2F2F2"/></a:gs><a:gs pos="100000"><a:srgbClr val="EBE6FE"/></a:gs></a:gsLst><a:path path="circle"><a:fillToRect l="50000" t="50000" r="50000" b="50000"/></a:path><a:tileRect/></a:gradFill><a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr rtlCol="0" anchor="ctr"/><a:lstStyle/><a:p><a:endParaRPr lang="ar-KW" dirty="0"/></a:p></p:txBody></p:sp>';
+}
+function picX(name, rId, x, y, w, h, o) {
+  o = o || {};
+  return '<p:pic><p:nvPicPr><p:cNvPr id="' + nid() + '" name="' + esc(name) + '"' + (o.descr ? ' descr="' + esc(o.descr) + '"' : '') + '>' + (o.link ? '<a:hlinkClick r:id="' + o.link + '"/>' : '') + '</p:cNvPr><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="' + rId + '"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="' + Math.round(x) + '" y="' + Math.round(y) + '"/><a:ext cx="' + Math.round(w) + '" cy="' + Math.round(h) + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' + (o.border ? '<a:ln w="6350"><a:solidFill><a:srgbClr val="D9D9D9"/></a:solidFill></a:ln>' : '') + '</p:spPr></p:pic>';
+}
+function pillX(term, x, y, w) {
+  return '<p:sp><p:nvSpPr><p:cNvPr id="' + nid() + '" name="UULA Definition Pill"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="' + Math.round(x) + '" y="' + Math.round(y) + '"/><a:ext cx="' + Math.round(w) + '" cy="254000"/></a:xfrm><a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 50000"/></a:avLst></a:prstGeom><a:solidFill><a:srgbClr val="1F71DC"/></a:solidFill><a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr wrap="none" lIns="0" tIns="0" rIns="0" bIns="0" rtlCol="0" anchor="ctr"><a:noAutofit/></a:bodyPr><a:lstStyle/>'
+    + pX(term, { algn: 'ctr', b: 1, c: 'FFFFFF' }) + '</p:txBody></p:sp>';
+}
+const pillW = term => Math.max(75.6, term.length * 6 + 24) * PT;
+function lineX(x, y, h, color) {
+  return '<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="' + nid() + '" name="UULA Container Line"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr><p:spPr><a:xfrm><a:off x="' + Math.round(x) + '" y="' + Math.round(y) + '"/><a:ext cx="0" cy="' + Math.round(h) + '"/></a:xfrm><a:prstGeom prst="line"><a:avLst/></a:prstGeom><a:ln w="29210"><a:solidFill><a:srgbClr val="' + color + '"/></a:solidFill></a:ln></p:spPr></p:cxnSp>';
+}
+function tableX(rows, W, o) {
+  o = o || {};
+  const CW = W - 2 * M, n = rows[0].length;
+  const ws = o.widths ? o.widths.map(f => Math.round(f * CW)) : Array.from({ length: n }, () => Math.floor(CW / n));
+  ws[n - 1] = CW - ws.slice(0, n - 1).reduce((a, b) => a + b, 0);
+  const cell = (t, fill, b, c) => '<a:tc><a:txBody><a:bodyPr/><a:lstStyle/>' + pX(t, { algn: 'ctr', b, c: c || '000000', ar: AR.test(t) || !t }) + '</a:txBody><a:tcPr marL="72000" marR="72000" marT="0" marB="0" anchor="ctr">'
+    + ['lnL', 'lnR', 'lnT', 'lnB'].map(k => '<a:' + k + ' w="6350"><a:solidFill><a:srgbClr val="D9D9D9"/></a:solidFill></a:' + k + '>').join('')
+    + '<a:solidFill><a:srgbClr val="' + fill + '"/></a:solidFill></a:tcPr></a:tc>';
+  const trs = rows.map((r, ri) => '<a:tr h="254000">' + r.map((t, ci) => {
+    if (o.sol) return ri === 0 ? cell(t, ci === n - 1 ? C.head : C.head, 1) : cell(t, ci === n - 1 ? C.mainCol : 'FFFFFF', ci === n - 1 ? 1 : 0, ci === n - 1 ? '000000' : C.answer);
+    if (ri === 0) return cell(t, C.head, 1);
+    if (o.mainCol && ci === n - 1) return cell(t, C.mainCol, 1);
+    return cell(t, ri % 2 ? 'FFFFFF' : C.alt, 0);
+  }).join('') + '</a:tr>').join('');
+  return '<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="' + nid() + '" name="' + (o.name || 'UULA Table') + '"/><p:cNvGraphicFramePr><a:graphicFrameLocks noGrp="1"/></p:cNvGraphicFramePr><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="' + M + '" y="' + Math.round(o.y || 0) + '"/><a:ext cx="' + CW + '" cy="' + rows.length * 254000 + '"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl><a:tblPr firstRow="1"/><a:tblGrid>'
+    + ws.map(w => '<a:gridCol w="' + w + '"/>').join('') + '</a:tblGrid>' + trs + '</a:tbl></a:graphicData></a:graphic></p:graphicFrame>';
+}
+// the footer (only when the slide's master is not a UULA master)
+function yearText(now) {
+  const d = now || new Date();
+  const Y = d.getMonth() >= 7 ? d.getFullYear() : d.getFullYear() - 1;
+  return (Y + 1) + ' — ' + Y;
+}
+function footerX(W, H, rels, opt) {
+  const fy = H - 499863, gray = 'A6A6A6';
+  let x = '';
+  if (opt.watermark) {
+    // two-part UULA watermark as in the reference layout (light gray)
+    x += picX('UULA Watermark Logo', rels.image('wm1'), 1110043 + 807934, 2690083, 3012000, 2635000);
+    x += picX('UULA Watermark Text', rels.image('wm2'), 1110043, 2690083 + 3485000, 4637914, 840000);
+  }
+  x += picX('UULA Footer Logo', rels.image('logo'), 416175, fy, 358657, 358657);
+  x += txX('UULA Footer Site', 883108, fy + 50820, 1100000, 230832, '<a:p><a:pPr algn="l" rtl="0"><a:buNone/></a:pPr><a:r><a:rPr lang="en-US" sz="900" b="0"><a:solidFill><a:srgbClr val="' + gray + '"/></a:solidFill><a:latin typeface="Nasalization Rg"/><a:cs typeface="UULA Sans"/></a:rPr><a:t>U U L A . C O M</a:t></a:r></a:p>', { wrap: 'none', anchor: 'ctr', noFit: true });
+  x += txX('UULA Footer Rights', 885489, fy + 196471, 900000, 169277, '<a:p><a:pPr algn="l" rtl="0"><a:buNone/></a:pPr><a:r><a:rPr lang="ar-KW" sz="500" b="1"><a:solidFill><a:srgbClr val="' + gray + '"/></a:solidFill><a:latin typeface="Avenir Next Arabic"/><a:cs typeface="Avenir Next Arabic"/></a:rPr><a:t>© جـــــمـــيـــع الـــحـــقـــوق مـــحـفـــوظـــة</a:t></a:r></a:p>', { wrap: 'none', anchor: 'ctr', noFit: true });
+  x += txX('UULA Footer Year', W - 460381 - 900000, fy + 94811, 900000, 261610, '<a:p><a:pPr algn="r" rtl="0"><a:buNone/></a:pPr><a:r><a:rPr lang="en-US" sz="1100"><a:solidFill><a:srgbClr val="' + gray + '"/></a:solidFill><a:latin typeface="UULA Sans Medium"/><a:cs typeface="UULA Sans Medium"/></a:rPr><a:t>' + yearText(opt.now) + '</a:t></a:r></a:p>', { wrap: 'none', anchor: 'ctr', noFit: true });
+  return x;
+}
+function pageNumX(W, H, n) {
+  return txX('CustomPageNumber_' + n, Math.round(W / 2 - 25 * PT), H - Math.round(34.5 * PT), 50 * PT, Math.round(20.6 * PT),
+    '<a:p><a:pPr algn="ctr" rtl="0"><a:buNone/></a:pPr><a:r><a:rPr lang="en-US" sz="1100" dirty="0"><a:solidFill><a:srgbClr val="A6A6A6"/></a:solidFill><a:latin typeface="UULA Sans"/><a:cs typeface="UULA Sans"/></a:rPr><a:t>' + n + '</a:t></a:r></a:p>', { anchor: 'ctr', noFit: true });
+}
+
+// ---------- text height estimate (refined later with the real heights) ----------
+function estimateText(c, widthEmu) {
+  const tb = kid(c, 'txBody', 'p'); if (!tb) return ROW;
+  const bp = kid(tb, 'bodyPr', 'a');
+  const ins = bp ? (+(bp.getAttribute('tIns') || 45720) + +(bp.getAttribute('bIns') || 45720)) : 0;
+  let h = 0;
+  for (const p of kids(tb, 'p', 'a')) {
+    const sz = (runSz(p) || 1100) / 100;
+    const pPr = kid(p, 'pPr', 'a');
+    const marL = pPr ? Math.max(0, +(pPr.getAttribute('marL') || 0)) : 0;
+    const t = paraText(p);
+    const mathCount = desc(p, 'm', 'oMath').length + desc(p, 'm', 'f').length * 2;
+    const avail = Math.max(PT * 20, widthEmu - marL) / PT;
+    const lines = Math.max(1, Math.ceil(t.length * sz * 0.5 / avail));
+    h += lines * sz * 1.21 * PT + (mathCount ? Math.min(mathCount, 3) * 4 * PT : 0);
+  }
+  return Math.max(ROW, Math.round(h + ins));
+}
+
+// ---------- restyle ----------
+// opts: { pageNum, watermark, now, newIds }
+function restyle(pkg, opts) {
+  opts = opts || {};
+  const W = pkg.slideW, H = pkg.slideH, CW = W - 2 * M;
+  const doc = parseXml(pkg.files.slide);
+  const ctx = { scheme: readTheme(pkg.files) };
+  const rels = makeRels(pkg);
+  NEXT = maxId(doc) + 1;
+  const report = { boxes: 0, tables: 0, qr: 0, links: [], linkFail: [], dropped: 0, questions: 0 };
+  const items = analyze(doc, pkg, ctx);
+  // the usual body size on this slide (topics are bigger than it)
+  const szCount = {};
+  for (const t of items) if (t.kind === 'text' && !t.drop) for (const p of desc(t.c, 'a', 'p')) { const z = runSz(p) || 1800; szCount[z] = (szCount[z] || 0) + paraText(p).length; }
+  ctx.bodySz = +Object.entries(szCount).sort((a, b) => b[1] - a[1]).map(e => e[0])[0] || 1100;
+  headerRoles(items, pkg);
+  const spTree = spTreeOf(doc);
+
+  // 1) replace an old QR with a new one parked outside the slide (+ its link box)
+  const newQr = items.filter(t => t.drop === 'offpic');
+  const linkBox = items.find(t => t.drop === 'link');
+  if (newQr.length) {
+    const nq = newQr[0];
+    const old = items.filter(t => t.kind === 'qr').sort((a, b) => Math.abs(a.g.y - nq.g.y) - Math.abs(b.g.y - nq.g.y))[0];
+    if (linkBox) {
+      const url = linkBox.text.replace(/\s+/g, '');
+      try {
+        const id = rels.link(/^www\./i.test(url) ? 'https://' + url : url);
+        const cnv = cnvOf(nq.c); for (const h of kids(cnv, 'hlinkClick', 'a')) cnv.removeChild(h);
+        const h = frag(doc, '<a:hlinkClick r:id="' + id + '"/>'); cnv.insertBefore(h, cnv.firstChild);
+        report.links.push(url);
+      } catch (e) { report.linkFail.push(url); }
+    }
+    const ratio = nq.g.w ? nq.g.h / nq.g.w : 1;
+    const w = old ? old.g.w : 513080;
+    nq.g = { x: old ? old.g.x : M, y: old ? old.g.y : nq.g.y, w, h: Math.round(w * ratio) };
+    const xf = xfrmOf(nq.c); if (xf) { xf.removeAttribute('rot'); xf.removeAttribute('flipH'); xf.removeAttribute('flipV'); }
+    setGeom(nq.el, nq.g);
+    nq.drop = null; nq.kind = 'qr'; nq.off = false; nq.box = old ? old.box : null;
+    if (old) { spTree.insertBefore(nq.el, old.el); old.drop = 'replaced'; nq.i = old.i; }
+    report.qr++;
+  }
+
+  // 2) remove decoration, old footers and page numbers (links outside the slide stay)
+  for (const t of items) {
+    if (!t.drop || t.drop === 'link' || t.drop === 'off' || t.drop === 'offpic') continue;
+    if (t.el.parentNode) t.el.parentNode.removeChild(t.el);
+    if (t.drop === 'decor' || t.drop === 'replaced') report.dropped++;
+  }
+  const live = items.filter(t => !t.drop);
+
+  // 3) style each item
+  for (const t of live) {
+    if (t.kind === 'text' || (t.kind === 'chip')) {
+      if (t.kind === 'chip') { fontOnly(t.c); continue; }
+      const forced = t.role === 'lesson' || t.role === 'chapter' ? t.role : null;
+      const r = styleText(t, ctx, pkg, forced);
+      t.roles = r.roles;
+      if (!forced) {
+        const rs = r.roles.filter((x, k) => t.paraTexts ? t.paraTexts[k] : true);
+        const firstR = rs[0] || 'body';
+        t.role = rs.every(x => x === firstR) ? firstR : (firstR === 'qhead' && rs.includes('question') ? 'qhead' : firstR);
+      }
+      report.questions += r.roles.filter(x => x === 'question').length;
+      setBody(t.c, { ins: t.boxText ? [M, ROW, M, 2 * ROW] : null });
+      plainShape(t.c, !!t.boxText);
+    } else if (t.kind === 'table') { styleTable(t, ctx, W); report.tables++; }
+    else if (t.kind === 'pic' || t.kind === 'qr' || t.kind === 'icon') stylePic(t, !!t.box || t.kind !== 'pic');
+    else if (t.kind === 'group') { fontOnly(t.c); for (const p of desc(t.c, 'p', 'pic')) { const spPr = kid(p, 'spPr', 'p'); removeKids(spPr, ['effectLst']); } }
+    else if (t.kind === 'shape' || t.kind === 'line') { const spPr = kid(t.c, 'spPr', 'p'); removeKids(spPr, ['effectLst', 'effectDag', 'scene3d', 'sp3d']); }
+  }
+  // old box icons (book / bulb …) inside cards are replaced by ours
+  for (const t of live) if (t.box && (t.kind === 'icon' || (t.kind === 'line' && t.g.w < 3 * PT && t.g.x > W * 0.8))) { t.el.parentNode && t.el.parentNode.removeChild(t.el); t.drop = 'icon'; }
+  blackCircles(spTree);
+
+  // 4) definition pills: "تعريف: …" → pill + text
+  const extra = [];
+  for (const t of live.filter(x => !x.drop && x.kind === 'text' && x.role === 'body' && !x.boxText)) {
+    const ps = kids(kid(t.c, 'txBody', 'p'), 'p', 'a').filter(p => paraText(p).trim());
+    if (!ps.length) continue;
+    const t0 = desc(ps[0], 'a', 't')[0]; if (!t0) continue;
+    const m = paraText(ps[0]).match(PILL);
+    if (!m || !t0.textContent.startsWith(m[0].slice(0, Math.min(m[0].length, t0.textContent.length))) || t0.textContent.length < m[0].trim().length) continue;
+    const term = m[1].trim();
+    t0.textContent = t0.textContent.slice(Math.min(t0.textContent.length, m[0].length)).replace(/^\s+/, '');
+    t.pill = { term, w: pillW(term) };
+  }
+
+  // 5) containers (a free text starting with ملاحظة / نشاط / قال تعالى … gets its own container)
+  for (const t of live.filter(x => !x.drop && x.kind === 'text' && !x.box && !x.boxText && !['lesson', 'chapter'].includes(x.role))) {
+    const s0 = t.text.trim().slice(0, 50);
+    let type = null;
+    if (KW.activity.test(s0)) type = 'activity';
+    else if (/^\s*(ملاحظة|ملاحظه|تنبيه|انتبه|تذكّر|تذكر|هام|مهم|Note|Important|Remember)/i.test(s0)) type = 'note';
+    else if (/^\s*(إثراء|اثراء|تحدي|فكّر|سؤال ذكاء|أسئلة من المريخ)/.test(s0)) type = 'mars';
+    else if (/^\s*(قال تعالى|قال رسول الله|قال الشاعر|﴿)/.test(s0)) type = 'quote';
+    if (!type) continue;
+    const el = frag(doc, boxX(BOX[type].name, t.g.y, t.g.h, BOX[type].fill, W));
+    spTree.insertBefore(el, kid(spTree, 'grpSpPr', 'p').nextSibling);
+    const v = { kind: 'card', virtual: true, el, c: el, g: { x: 0, y: t.g.y, w: W, h: t.g.h }, fill: BOX[type].fill, text: '', forced: type };
+    t.box = v; live.push(v);
+  }
+  const cards = live.filter(t => !t.drop && (t.kind === 'card' || t.boxText));
+  for (const k of cards) {
+    const members = live.filter(t => t.box === k && !t.drop);
+    k.type = k.forced || boxType(k, members);
+    const B = BOX[k.type];
+    report.boxes++;
+    if (k.kind === 'card') {
+      // the card itself becomes the container: full width, square corners, our fill, at the back
+      const c = k.c;
+      const spPr = kid(c, 'spPr', 'p');
+      const geo = kid(spPr, 'prstGeom', 'a') || kid(spPr, 'custGeom', 'a');
+      if (geo) spPr.removeChild(geo);
+      placeChild(spPr, frag(doc, '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>'), SPPR_ORDER);
+      removeKids(spPr, [...FILLS, 'ln', 'effectLst', 'effectDag', 'scene3d', 'sp3d']);
+      if (k.type === 'practice') placeChild(spPr, frag(doc, '<a:gradFill flip="none" rotWithShape="1"><a:gsLst><a:gs pos="0"><a:srgbClr val="F2F2F2"/></a:gs><a:gs pos="100000"><a:srgbClr val="EBE6FE"/></a:gs></a:gsLst><a:path path="circle"><a:fillToRect l="50000" t="50000" r="50000" b="50000"/></a:path><a:tileRect/></a:gradFill>'), SPPR_ORDER);
+      else placeChild(spPr, solid(doc, B.fill), SPPR_ORDER);
+      placeChild(spPr, frag(doc, '<a:ln><a:noFill/></a:ln>'), SPPR_ORDER);
+      const st = kid(c, 'style', 'p'); if (st) c.removeChild(st);
+      const cnv = cnvOf(c); if (cnv) cnv.setAttribute('name', 'UULA ' + B.name + ' Container');
+      spTree.insertBefore(k.el, kid(spTree, 'grpSpPr', 'p').nextSibling);
+    } else {
+      const spPr = kid(k.c, 'spPr', 'p');
+      const geo = kid(spPr, 'prstGeom', 'a') || kid(spPr, 'custGeom', 'a');
+      if (geo) spPr.removeChild(geo);
+      placeChild(spPr, frag(doc, '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>'), SPPR_ORDER);
+      removeKids(spPr, [...FILLS, 'ln', 'effectLst']);
+      placeChild(spPr, solid(doc, B.fill), SPPR_ORDER);
+      placeChild(spPr, frag(doc, '<a:ln><a:noFill/></a:ln>'), SPPR_ORDER);
+      spTree.insertBefore(k.el, kid(spTree, 'grpSpPr', 'p').nextSibling);
+    }
+    if (B.icon) {
+      const ic = frag(doc, picX('UULA ' + B.name + ' Icon', rels.image(B.icon), 0, 0, (B.icon === 'bulb' ? 11.1 : 14.1) * PT, (B.icon === 'bulb' ? 15.4 : 15.9) * PT));
+      spTree.appendChild(ic);
+      k.iconEl = ic;
+      if (B.line) { const ln = frag(doc, lineX(0, 0, ROW, B.line)); spTree.appendChild(ln); k.lineEl = ln; }
+    }
+  }
+
+  // 6) pills become shapes now (they need ids after the containers)
+  for (const t of live.filter(x => x.pill)) {
+    const el = frag(doc, pillX(t.pill.term, 0, 0, t.pill.w));
+    t.el.parentNode.insertBefore(el, t.el.nextSibling);
+    t.pill.el = el;
+  }
+
+  // 7) footer + page number + white background
+  const root = doc.documentElement;
+  const cSld = kid(root, 'cSld', 'p');
+  const bg = kid(cSld, 'bg', 'p'); if (bg) cSld.removeChild(bg);
+  if (!pkg.uulaMaster) {
+    root.setAttribute('showMasterSp', '0');
+    cSld.insertBefore(frag(doc, '<p:bg><p:bgPr><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:effectLst/></p:bgPr></p:bg>'), spTree);
+    const wmFirst = opts.watermark !== false;
+    const fx = footerX(W, H, rels, { watermark: wmFirst, now: opts.now });
+    const wrap = parseXml('<w ' + XMLNS + '>' + fx + '</w>').documentElement;
+    const firstShape = kid(spTree, 'grpSpPr', 'p').nextSibling;
+    for (const n of [...wrap.children]) {
+      const el = doc.importNode(n, true);
+      if (/Watermark/.test(textOf(el) + (cnvOf(el) || { getAttribute: () => '' }).getAttribute('name'))) spTree.insertBefore(el, kid(spTree, 'grpSpPr', 'p').nextSibling);
+      else spTree.appendChild(el);
+    }
+  }
+  if (opts.pageNum != null) spTree.appendChild(frag(doc, pageNumX(W, H, opts.pageNum)));
+  // animations point at shapes that may be gone
+  for (const tm of kids(root, 'timing', 'p')) root.removeChild(tm);
+
+  // 8) layout plan (text boxes count by the height of their text, not of an oversized box)
+  for (const t of live) if (!t.drop && t.kind === 'text' && !t.boxText && !t.nogeom) t.g = Object.assign({}, t.g, { h: Math.min(t.g.h, estimateText(t.c, t.g.w)) });
+  const plan = buildPlan(doc, live.filter(t => !t.drop), cards, pkg);
+  applyLayout(doc, plan, layout(plan, null, pkg), pkg);
+  markNames(doc);
+  report.items = live.length;
+  return { xml: serialize(doc), rels, plan, report, doc };
+}
+
+// ---------- layout ----------
+// The plan lists blocks from top to bottom. A block is a container (with rows inside) or a row.
+// A row holds items side by side; inside a row, items that overlap horizontally form a column stacked top-down.
+function buildPlan(doc, live, cards, pkg) {
+  const W = pkg.slideW, H = pkg.slideH, CW = W - 2 * M;
+  const order = topItems(doc);
+  const idxOf = el => order.indexOf(el);
+  const flow = live.filter(t => !(t.kind === 'card' || t.boxText) && !t.box && !t.drop);
+  const header = flow.filter(t => t.role === 'chapter' || t.role === 'lesson');
+  const free = flow.filter(t => !header.includes(t));
+  const units = [];
+  for (const k of cards) {
+    const members = live.filter(t => t.box === k && !t.drop);
+    units.push({ box: k, y: k.g.y, members });
+  }
+  for (const t of free) units.push({ item: t, y: t.g.y });
+  units.sort((a, b) => a.y - b.y);
+  // rows: free items that overlap vertically (a container is always its own block)
+  const blocks = [];
+  let cur = null;
+  const ov = (a, b) => Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+  for (const u of units) {
+    if (u.box) { cur = null; blocks.push({ type: 'box', box: u.box, rows: makeRows(u.members, u.box) }); continue; }
+    const g = u.item.g;
+    if (cur && ov(cur.span, g) > Math.min(g.h, cur.span.h) * 0.3 && u.item.kind !== 'line') {
+      cur.items.push(u.item);
+      const y0 = Math.min(cur.span.y, g.y), y1 = Math.max(cur.span.y + cur.span.h, g.y + g.h); cur.span = { y: y0, h: y1 - y0 };
+    } else if (u.item.kind === 'line' && cur && g.y < cur.span.y + cur.span.h) {
+      cur.items.push(u.item);
+    } else { cur = { type: 'row', items: [u.item], span: { y: g.y, h: g.h } }; blocks.push(cur); }
+  }
+  for (const b of blocks) if (b.type === 'row') b.cols = makeCols(b.items);
+  const mapItem = t => ({
+    idx: idxOf(t.el), kind: t.kind, role: t.role || null, roles: t.roles || null,
+    g0: t.g, text: t.text ? t.text.slice(0, 40) : '', est: 0, inBox: !!t.box,
+    pill: t.pill ? { idx: idxOf(t.pill.el), w: t.pill.w } : null,
+    paras: t.kind === 'text' ? kids(kid(t.c, 'txBody', 'p'), 'p', 'a').map(p => { const pPr = kid(p, 'pPr', 'a'); return [paraText(p).length, (runSz(p) || 1100) / 100, pPr ? Math.max(0, +(pPr.getAttribute('marL') || 0)) : 0, desc(p, 'm', 'oMath').length + desc(p, 'm', 'f').length * 2]; }) : null
+  });
+  const plan = {
+    W, H, header: header.sort((a, b) => a.g.y - b.g.y).map(mapItem),
+    blocks: blocks.map(b => b.type === 'box'
+      ? { type: 'box', idx: idxOf(b.box.el), boxType: b.box.type, textBox: !!b.box.boxText, icon: b.box.iconEl ? idxOf(b.box.iconEl) : -1, line: b.box.lineEl ? idxOf(b.box.lineEl) : -1,
+        hasQr: b.rows.some(r => r.items.some(t => t.kind === 'qr')),
+        rows: b.rows.map(r => ({ cols: makeCols(r.items).map(c => c.map(mapItem)) })) }
+      : { type: 'row', cols: b.cols.map(c => c.map(mapItem)) })
+  };
+  // estimated heights (for text) so the first layout is close
+  const els = order;
+  const each = f => { plan.header.forEach(f); plan.blocks.forEach(b => (b.type === 'box' ? b.rows : [b]).forEach(r => r.cols.forEach(c => c.forEach(f)))); };
+  each(it => {
+    const el = els[it.idx]; const c = el && core(el);
+    it.est = it.kind === 'text' ? 0 : it.g0.h;
+    it._c = c;
+  });
+  return plan;
+}
+function makeRows(items) {
+  const rows = [];
+  const s = [...items].sort((a, b) => a.g.y - b.g.y);
+  let cur = null;
+  for (const t of s) {
+    const g = t.g;
+    if (cur && Math.min(cur.y1, g.y + g.h) - Math.max(cur.y0, g.y) > Math.min(g.h, cur.y1 - cur.y0) * 0.3) { cur.items.push(t); cur.y0 = Math.min(cur.y0, g.y); cur.y1 = Math.max(cur.y1, g.y + g.h); }
+    else { cur = { items: [t], y0: g.y, y1: g.y + g.h }; rows.push(cur); }
+  }
+  return rows;
+}
+function makeCols(items) {
+  // columns: items overlapping horizontally (transitively); ordered right-to-left
+  const cols = [];
+  for (const t of [...items].sort((a, b) => a.g.y - b.g.y)) {
+    const hit = cols.find(c => c.some(u => Math.min(u.g.x + u.g.w, t.g.x + t.g.w) - Math.max(u.g.x, t.g.x) > Math.min(u.g.w, t.g.w) * 0.25));
+    if (hit) hit.push(t); else cols.push([t]);
+  }
+  return cols.sort((a, b) => Math.max(...b.map(t => t.g.x + t.g.w)) - Math.max(...a.map(t => t.g.x + t.g.w)));
+}
+// gap (in rows) before an item, from the roles
+function gapBefore(prev, it) {
+  if (!prev) return 1;
+  const pr = prev.role, r = it.role;
+  if ((r === 'answer' || r === 'choice') && (pr === 'question' || pr === 'answer' || pr === 'choice')) return 0;
+  if (r === 'question' && (pr === 'answer' || pr === 'choice' || pr === 'question')) return 1;
+  if (r === 'topic') return 3;
+  if (r === 'qhead' && pr !== 'qhead') return 3;
+  if (r === 'question' && pr !== 'question' && pr !== 'answer' && pr !== 'qhead') return 3;
+  if (prev.kind === 'qr' || it.kind === 'qr') return 1;
+  return 1;
+}
+// heights: map idx -> real height (EMU) from PowerPoint; null = estimate
+// returns positions for every idx + container rects + overflow info
+function layout(plan, heights, pkg) {
+  const a = layoutPass(plan, heights, 'rule');
+  if (a.overflow < 0) return a;
+  const b = layoutPass(plan, heights, 'tight');
+  return b.bottom < a.bottom ? b : a;
+}
+// mode 'rule': the gaps of the design system (1 line, 3 lines, 0 between a question and its answer)
+// mode 'tight': the original gaps rounded to the grid, never more than the rule (to save a page)
+function layoutPass(plan, heights, mode) {
+  const W = plan.W, H = plan.H, CW = W - 2 * M, LIMIT = H - FOOT;
+  const pos = {};
+  const hOf = (it, w) => (heights && heights[it.idx] != null) ? heights[it.idx] : it.kind === 'text' ? estParas(it.paras, w || CW) : it.g0.h;
+  const ch = plan.header.find(i => i.role === 'chapter'), le = plan.header.find(i => i.role === 'lesson');
+  let afterHeader = null;
+  if (ch) { pos[ch.idx] = { x: M, y: Math.round(22.6 * PT), w: CW }; afterHeader = 22.6 * PT + hOf(ch); }
+  if (le) { const ly = ch ? 42.7 * PT : 22.6 * PT; pos[le.idx] = { x: M, y: Math.round(ly), w: CW }; afterHeader = ly + hOf(le); }
+  for (const h of plan.header) if (h !== ch && h !== le) { const yy = afterHeader || 22.6 * PT; pos[h.idx] = { x: M, y: Math.round(yy), w: CW }; afterHeader = yy + hOf(h); }
+  const snap = d => Math.max(0, Math.round(d / ROW));
+  const gapRows = (prev, it, origGap) => {
+    const rule = gapBefore(prev, it);
+    if (mode !== 'tight' || origGap == null) return rule;
+    return Math.min(rule, snap(origGap));
+  };
+  const allOf = cols => cols.flat();
+  const top0 = items => Math.min(...items.map(i => i.g0.y));
+  const bot0 = items => Math.max(...items.map(i => i.g0.y + i.g0.h));
+  const firstOf = items => [...items].sort((a, b) => a.g0.y - b.g0.y || (b.g0.x + b.g0.w) - (a.g0.x + a.g0.w))[0];
+  const lastOf = items => [...items].sort((a, b) => (b.g0.y + b.g0.h) - (a.g0.y + a.g0.h))[0];
+  const TEXTY = ['question', 'answer', 'body', 'topic', 'qhead', 'choice', 'source'];
+  // place one row (columns side by side) with its top at `top` inside [x0, x1]; returns the bottom
+  function placeRow(cols, top, x0, x1) {
+    const items = allOf(cols);
+    const rt = top0(items);
+    const minX = Math.min(...items.map(i => i.g0.x)), maxX = Math.max(...items.map(i => i.g0.x + i.g0.w));
+    const span = Math.max(1, maxX - minX);
+    const k = Math.min(1, (x1 - x0) / span);
+    const inside = minX >= x0 - 2 * PT && maxX <= x1 + 2 * PT;
+    const single = items.length === 1 || cols.length === 1;
+    let rb = top;
+    const hasQr = items.some(i => i.kind === 'qr');
+    const placed = [];
+    for (const it of [...items].sort((a, b) => a.g0.y - b.g0.y)) {
+      let x, w;
+      const wide = it.kind === 'table' || (it.kind === 'text' && (it.g0.w > W * 0.45 || (single && TEXTY.includes(it.role))));
+      if (wide && cols.length === 1) { x = x0; w = x1 - x0; }
+      else if (inside) { x = Math.max(x0, it.g0.x); w = Math.min(it.g0.w, x1 - x); }
+      else { w = Math.round(it.g0.w * k); x = Math.round(x1 - (maxX - it.g0.x - it.g0.w) * k - w); x = Math.max(x0, Math.min(x, x1 - w)); }
+      if (it.kind === 'table') { x = x0; w = x1 - x0; }
+      if (it.kind === 'qr') { x = x0; w = it.g0.w; }
+      let y = top + (it.g0.y - rt);
+      // keep clear of what was above it (and overlaps it horizontally): text may have grown
+      for (const q of placed) {
+        const above = q.it.g0.y + q.it.g0.h <= it.g0.y + 3 * PT;
+        const hov = Math.min(q.it.g0.x + q.it.g0.w, it.g0.x + it.g0.w) - Math.max(q.it.g0.x, it.g0.x);
+        if (!above || hov <= Math.min(q.it.g0.w, it.g0.w) * 0.1) continue;
+        const og = it.g0.y - (q.it.g0.y + q.it.g0.h);
+        const need = (q.it.role === 'question' && (it.role === 'answer' || it.role === 'choice')) ? 0 : Math.max(0, Math.min(og, ROW));
+        y = Math.max(y, q.bottom + need);
+      }
+      let bottomNow;
+      if (it.pill) {
+        const pw = it.pill.w, long = pw > (x1 - x0) / 3;
+        pos[it.pill.idx] = { x: x + w - pw, y: Math.round(y), w: pw, h: 254000 };
+        if (long) pos[it.idx] = { x, y: Math.round(y + 254000 + 4 * PT), w };
+        else pos[it.idx] = { x, y: Math.round(y + 1.5 * PT), w: Math.max(40 * PT, w - pw - 8 * PT) };
+        bottomNow = y + Math.max(254000, (long ? 254000 + 4 * PT : 1.5 * PT) + hOf(it, pos[it.idx].w));
+      } else {
+        const p = { x: Math.round(x), y: Math.round(y), w: Math.round(w) };
+        if (['pic', 'group', 'qr', 'icon', 'object', 'chip', 'shape', 'ink'].includes(it.kind)) p.h = Math.round(it.g0.h * (w / (it.g0.w || w)));
+        if (it.kind === 'line') { p.w = Math.round(it.g0.w * (inside ? 1 : k)); p.h = it.g0.h; }
+        pos[it.idx] = p;
+        bottomNow = y + (it.kind === 'text' ? hOf(it, p.w) : it.kind === 'table' ? hOf(it) : (p.h != null ? p.h : hOf(it)));
+      }
+      placed.push({ it, bottom: bottomNow });
+      rb = Math.max(rb, bottomNow);
+    }
+    if (hasQr) shiftForQr(cols, pos, x1);
+    return rb;
+  }
+  let y = afterHeader != null ? afterHeader : 0, first = true, prevItems = null, prevBox = false, bottom = afterHeader || 0;
+  const rowsInfo = [];
+  plan.blocks.forEach((b, bi) => {
+    if (b.type === 'box') {
+      const members = b.rows.flatMap(r => allOf(r.cols));
+      let cTop;
+      if (first) cTop = afterHeader != null ? afterHeader + Math.round(1.55 * ROW) : 0;
+      else cTop = y + ROW;
+      let iy = cTop + (first && afterHeader == null ? 2 * ROW : ROW);
+      const x1 = W - M - (b.icon >= 0 ? 15 * PT : 0);
+      let prevR = null;
+      for (const r of b.rows) {
+        const its = allOf(r.cols);
+        if (prevR) { const pi = allOf(prevR.cols); iy += gapRows(lastOf(pi), firstOf(its), top0(its) - bot0(pi)) * ROW; }
+        iy = placeRow(r.cols, iy, M, x1);
+        prevR = r;
+      }
+      if (!b.rows.length) iy = cTop + ROW;
+      const cBot = iy + 2 * ROW;
+      pos[b.idx] = { x: 0, y: Math.round(cTop), w: W, h: Math.round(cBot - cTop), box: true };
+      if (b.icon >= 0) pos[b.icon] = { x: W - 47 * PT, y: Math.round(cTop + ROW - 2 * PT), keep: true };
+      if (b.line >= 0) {
+        const lines = (iy - cTop - ROW) / ROW;
+        pos[b.line] = lines > 2.2 ? { x: W - 40 * PT, y: Math.round(cTop + ROW + 17 * PT), w: 0, h: Math.round(Math.max(ROW, iy - (cTop + ROW + 17 * PT))) } : { hide: true };
+      }
+      rowsInfo.push({ bi, top: cTop, bottom: cBot, role: 'box' });
+      y = cBot; first = false; prevItems = members; prevBox = true; bottom = Math.max(bottom, y);
+      return;
+    }
+    const its = allOf(b.cols), f = firstOf(its);
+    let top;
+    if (first) top = afterHeader != null ? afterHeader + ROW : 22.6 * PT;
+    else if (prevBox) top = y + ROW;
+    else top = y + gapRows(lastOf(prevItems), f, top0(its) - bot0(prevItems)) * ROW;
+    const rb = placeRow(b.cols, top, M, W - M);
+    rowsInfo.push({ bi, top, bottom: rb, role: f && f.role });
+    y = rb; first = false; prevItems = its; prevBox = false; bottom = Math.max(bottom, y);
+  });
+  let overflow = -1;
+  for (const r of rowsInfo) if (r.bottom > LIMIT + PT) { overflow = r.bi; break; }
+  return { pos, bottom, overflow, rowsInfo, limit: LIMIT, mode };
+}
+// text height from paragraph info at a given width
+function estParas(paras, w) {
+  if (!paras || !paras.length) return ROW;
+  let h = 0;
+  for (const [n, sz, marL, math] of paras) {
+    const avail = Math.max(20 * PT, w - marL) / PT;
+    const lines = Math.max(1, Math.ceil(n * sz * 0.47 / avail));
+    h += lines * sz * 1.21 * PT + Math.min(math, 3) * 3 * PT;
+  }
+  return Math.max(ROW, Math.round(h));
+}
+// a QR at x=36: the other items of the row start at 86.5pt
+function shiftForQr(cols, pos, x1) {
+  const flat = cols.flat();
+  const q = flat.find(i => i.kind === 'qr'); if (!q) return;
+  const qx = M, qy = pos[q.idx].y;
+  pos[q.idx] = Object.assign(pos[q.idx], { x: qx, w: q.g0.w, h: q.g0.h });
+  for (const it of flat) {
+    if (it === q || it.kind !== 'text') continue;
+    const p = pos[it.idx]; if (!p) continue;
+    const vo = Math.min(p.y + (it.g0.h || ROW), pos[q.idx].y + q.g0.h) - Math.max(p.y, pos[q.idx].y);
+    if (vo <= 0) continue;
+    const minX = Math.round(86.5 * PT);
+    if (p.x < minX) { const right = p.x + p.w; p.x = minX; p.w = Math.max(30 * PT, Math.min(right, x1) - minX); }
+    if (it.pill) { const pp = pos[it.pill.idx]; if (pp && pp.x < minX) pp.x = minX; }
+  }
+  // the QR lines up with the top of the row
+  const tops = flat.filter(i => i !== q && pos[i.idx]).map(i => pos[i.idx].y);
+  if (tops.length) pos[q.idx].y = Math.min(qy, ...tops);
+}
+function applyLayout(doc, plan, lay) {
+  const order = topItems(doc);
+  for (const [idx, p] of Object.entries(lay.pos)) {
+    const el = order[+idx]; if (!el) continue;
+    if (p.hide) { setGeom(el, { h: 0 }); continue; }   // removed by the app (indexes must not shift here)
+    const g = {};
+    if (p.x != null) g.x = p.x; if (p.y != null) g.y = p.y;
+    if (p.w != null && !p.keep) g.w = p.w;
+    if (p.h != null && !p.keep) g.h = p.h;
+    const c = core(el);
+    if (c.localName === 'sp' && desc(c, 'a', 'spAutoFit').length && p.h == null) {
+      // text: keep a sensible height so PowerPoint draws it before autofit runs
+      g.h = Math.max(ROW, estimateText(c, g.w || ROW));
+    }
+    if (c.localName === 'graphicFrame') { const tbl = desc(c, 'a', 'tbl')[0]; if (tbl) g.h = kids(tbl, 'tr', 'a').length * 254000; g.w = g.w; }
+    setGeom(el, g);
+  }
+}
+// every top-level shape gets " #ur<n>" at the end of its name: the app finds shapes by it, then removes it
+const MARK = / #ur\d+$/;
+function markNames(doc) {
+  topItems(doc).forEach((el, i) => {
+    for (const c of allCores(el)) { const n = cnvOf(c); if (n) n.setAttribute('name', (n.getAttribute('name') || '').replace(MARK, '') + ' #ur' + i); }
+  });
+}
+// ---------- splitting ----------
+// two slides from one: blocks [0, k) stay (with the header), blocks [k, …) move to a new slide.
+// returns [{ xml, plan }, { xml, plan }] with item indexes renumbered for each part
+function splitParts(xml, plan, k, opts) {
+  opts = opts || {};
+  const idsOf = b => b.type === 'box'
+    ? [b.idx, b.icon, b.line, ...b.rows.flatMap(r => r.cols.flat().flatMap(i => [i.idx, i.pill ? i.pill.idx : -1]))]
+    : b.cols.flat().flatMap(i => [i.idx, i.pill ? i.pill.idx : -1]);
+  const head = plan.header.map(h => h.idx);
+  const planned = new Set([...head, ...plan.blocks.flatMap(idsOf)].filter(i => i >= 0));
+  const part = (blocks, withHead, pageNum, first) => {
+    const doc = parseXml(xml);
+    const order = topItems(doc);
+    const keep = new Set([...(withHead ? head : []), ...blocks.flatMap(idsOf)].filter(i => i >= 0));
+    const removed = new Set();
+    order.forEach((el, i) => {
+      const c = core(el), n = cnvOf(c), name = n ? n.getAttribute('name') || '' : '';
+      let drop = planned.has(i) && !keep.has(i);
+      if (/^CustomPageNumber_/.test(name)) drop = true;
+      // items parked outside the slide (links) stay with the first part only
+      if (!planned.has(i) && !first && !/^UULA (Footer|Watermark)/.test(name)) {
+        const g = geomFromXfrm(xfrmOf(c));
+        if (g && (g.x + g.w <= 0 || g.x >= plan.W)) drop = true;
+      }
+      if (drop) { el.parentNode.removeChild(el); removed.add(i); }
+    });
+    if (pageNum != null) spTreeOf(doc).appendChild(frag(doc, pageNumX(plan.W, plan.H, pageNum)));
+    const map = {}; let n = 0;
+    order.forEach((el, i) => { if (!removed.has(i)) map[i] = n++; });
+    const re = i => i >= 0 && map[i] != null ? map[i] : -1;
+    const ri = it => Object.assign({}, it, { idx: re(it.idx), pill: it.pill ? Object.assign({}, it.pill, { idx: re(it.pill.idx) }) : null });
+    const p = {
+      W: plan.W, H: plan.H,
+      header: withHead ? plan.header.map(ri) : [],
+      blocks: blocks.map(b => b.type === 'box'
+        ? Object.assign({}, b, { idx: re(b.idx), icon: re(b.icon), line: re(b.line), rows: b.rows.map(r => ({ cols: r.cols.map(c => c.map(ri)) })) })
+        : Object.assign({}, b, { cols: b.cols.map(c => c.map(ri)) }))
+    };
+    markNames(doc);
+    return { xml: serialize(doc), plan: p };
+  };
+  return [part(plan.blocks.slice(0, k), true, opts.pageA, true), part(plan.blocks.slice(k), false, opts.pageB, false)];
+}
+// ---------- where a split may happen ----------
+// returns the block index where the second slide should start (or -1)
+function splitPoint(plan, lay) {
+  const bi = lay.overflow;
+  if (bi <= 0) return bi === 0 ? -1 : -1;
+  let k = bi;
+  const roleOf = b => b.type === 'box' ? 'box' : (b.cols.flat().sort((x, y) => x.g0.y - y.g0.y)[0] || {}).role;
+  // never separate an answer from its question: move back while the block starts with an answer
+  while (k > 1 && roleOf(plan.blocks[k]) === 'answer') k--;
+  // a new topic should not start in the last quarter of the page
+  const prevTop = lay.rowsInfo.find(r => r.bi === k - 1);
+  if (k > 1 && ['topic', 'qhead'].includes(roleOf(plan.blocks[k - 1])) && prevTop && prevTop.top > plan.H * 0.75) k--;
+  return k;
+}
+
+return {
+  NS, PT, ROW, M, FOOT, C, STY, BOX, openPackage, buildPackage, parseXml, serialize, restyle, layout, applyLayout, splitParts, splitPoint, markNames, MARK,
+  // used by the templates module
+  util: { pX, txX, boxX, gradBoxX, picX, pillX, pillW, lineX, tableX, makeRels, frag, topItems, core, cnvOf, maxId, spTreeOf, kid, kids, desc, xfrmOf, geomOf, setNext: n => { NEXT = n; }, yearText, pageNumX, estimateText }
+};
+})();
+if (typeof module !== 'undefined') module.exports = UR;

@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+  xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides"
+  xsi:type="TaskPaneApp">
+  <Id>40b66582-a127-4c39-9e8d-65a2397008d8</Id>
+  <Version>1.0.0.0</Version>
+  <ProviderName>Zaher Alkablawi</ProviderName>
+  <DefaultLocale>ar-SA</DefaultLocale>
+  <DisplayName DefaultValue="UULA Restyle"/>
+  <Description DefaultValue="تحويل شرائح A4 إلى ستايل مذكرات علا بضغطة زر، مع قوالب المذكرة الجاهزة."/>
+  <IconUrl DefaultValue="https://zaheralkablawi.github.io/uula-restyle/icon-32.png"/>
+  <HighResolutionIconUrl DefaultValue="https://zaheralkablawi.github.io/uula-restyle/icon-64.png"/>
+  <SupportUrl DefaultValue="https://github.com/zaheralkablawi/uula-restyle"/>
+  <AppDomains>
+    <AppDomain>https://zaheralkablawi.github.io</AppDomain>
+  </AppDomains>
+  <Hosts>
+    <Host Name="Presentation"/>
+  </Hosts>
+  <DefaultSettings>
+    <SourceLocation DefaultValue="https://zaheralkablawi.github.io/uula-restyle/taskpane.html"/>
+  </DefaultSettings>
+  <Permissions>ReadWriteDocument</Permissions>
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <Hosts>
+      <Host xsi:type="Presentation">
+        <DesktopFormFactor>
+          <ExtensionPoint xsi:type="PrimaryCommandSurface">
+            <OfficeTab id="TabHome">
+              <Group id="UULARestyle.Group">
+                <Label resid="UR.Group"/>
+                <Icon>
+                  <bt:Image size="16" resid="UR.Icon16"/>
+                  <bt:Image size="32" resid="UR.Icon32"/>
+                  <bt:Image size="80" resid="UR.Icon80"/>
+                </Icon>
+                <Control xsi:type="Button" id="UULARestyle.Open">
+                  <Label resid="UR.Button"/>
+                  <Supertip>
+                    <Title resid="UR.Button"/>
+                    <Description resid="UR.Tip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="UR.Icon16"/>
+                    <bt:Image size="32" resid="UR.Icon32"/>
+                    <bt:Image size="80" resid="UR.Icon80"/>
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <TaskpaneId>UULARestylePane</TaskpaneId>
+                    <SourceLocation resid="UR.Url"/>
+                  </Action>
+                </Control>
+              </Group>
+            </OfficeTab>
+          </ExtensionPoint>
+        </DesktopFormFactor>
+      </Host>
+    </Hosts>
+    <Resources>
+      <bt:Images>
+        <bt:Image id="UR.Icon16" DefaultValue="https://zaheralkablawi.github.io/uula-restyle/icon-16.png"/>
+        <bt:Image id="UR.Icon32" DefaultValue="https://zaheralkablawi.github.io/uula-restyle/icon-32.png"/>
+        <bt:Image id="UR.Icon80" DefaultValue="https://zaheralkablawi.github.io/uula-restyle/icon-80.png"/>
+      </bt:Images>
+      <bt:Urls>
+        <bt:Url id="UR.Url" DefaultValue="https://zaheralkablawi.github.io/uula-restyle/taskpane.html"/>
+      </bt:Urls>
+      <bt:ShortStrings>
+        <bt:String id="UR.Group" DefaultValue="UULA Restyle"/>
+        <bt:String id="UR.Button" DefaultValue="UULA Restyle"/>
+      </bt:ShortStrings>
+      <bt:LongStrings>
+        <bt:String id="UR.Tip" DefaultValue="تحويل الشرائح لستايل علا وقوالب المذكرة"/>
+      </bt:LongStrings>
+    </Resources>
+  </VersionOverrides>
+</OfficeApp>

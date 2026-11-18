@@ -272,12 +272,56 @@ function buildTemplateList() {
   }
 }
 $('tpls').addEventListener('click', e => { const b = e.target.closest('.tbtn'); if (b) insertTemplate(b.dataset.id); });
+// a container chosen while objects are selected: it goes around them (without the template's own text)
+async function wrapSelected(id, tid) {
+  const n = await run(async ctx => {
+    const shapes = ctx.presentation.getSelectedShapes(); shapes.load('items/name'); await ctx.sync();
+    if (!shapes.items.length) return 0;
+    shapes.items.forEach(s => { s.name = (s.name || '').replace(/ #ursel$/, '') + ' #ursel'; });
+    await ctx.sync();
+    return shapes.items.length;
+  }).catch(() => 0);
+  if (!n) return false;
+  const pkg = await UR.openPackage(await exportSlide(id));
+  let r;
+  try { r = UR.wrapBox(pkg, UR.WRAP[tid]); }
+  catch (e) { await clearSel(id); throw e; }
+  const newId = await insertAfter(await UR.buildPackage(pkg, r.xml, r.rels), id);
+  await deleteSlide(id);
+  await run(async ctx => {
+    const sh = ctx.presentation.slides.getItem(newId).shapes;
+    sh.load('items/name,items/left,items/top,items/width,items/height'); await ctx.sync();
+    const byIdx = {}; sh.items.forEach((s, k) => { const m = / #ur(\d+)$/.exec(s.name || ''); if (m) byIdx[+m[1]] = k; });
+    const sel = r.sel.map(i => byIdx[i]).filter(k => k != null);
+    // real sizes: the container fits around what it holds
+    const y0 = Math.min(...sel.map(k => sh.items[k].top)), y1 = Math.max(...sel.map(k => sh.items[k].top + sh.items[k].height));
+    const G = 13.39;
+    const bk = byIdx[r.box];
+    if (bk != null) { const b = sh.items[bk]; b.top = r.small ? y0 - 4 : y0 - G; b.height = Math.max(r.minH / PT, r.small ? (y1 - y0) + 8 : (y1 - y0) + 3 * G); }
+    if (r.icon != null && byIdx[r.icon] != null && !r.small) sh.items[byIdx[r.icon]].top = y0 - G + G - 2;
+    if (r.line != null && byIdx[r.line] != null) { const l = sh.items[byIdx[r.line]]; l.top = y0 + 17; l.height = Math.max(G, (y1 - y0) - 17); }
+    await ctx.sync();
+    sh.items.forEach(s => s.load('left,top,width,height')); await ctx.sync();
+    // on the page grid, and what is under it moves with two grid steps
+    const H = r.H / PT;
+    const rects = sh.items.map((s, k) => ({ key: k, x: s.left * PT, y: s.top * PT, w: s.width * PT, h: s.height * PT,
+      fixed: /^UULA (Footer|Watermark)|^CustomPageNumber_/.test((s.name || '').replace(/ #ur\d+$/, '')) || s.top > H - 54 || s.left + s.width <= 0 || s.left >= r.W / PT }));
+    const group = [...sel, bk, r.icon != null ? byIdx[r.icon] : null, r.line != null ? byIdx[r.line] : null].filter(k => k != null);
+    const mv = UR.reflow(rects, group, { keepX: true });
+    for (const [k, m] of Object.entries(mv)) if (m.y != null) sh.items[+k].top = m.y / PT;
+    await ctx.sync();
+    ctx.presentation.setSelectedSlides([newId]); await ctx.sync();
+  });
+  await unmark(newId);
+  return true;
+}
 async function insertTemplate(tid) {
   if (busy || !supported) return;
   busy = true; lock(); tsay('');
   try {
     const id = await currentId();
     if (!id) { tsay(L('حدّد شريحة أولًا.', 'Select a slide first.')); return; }
+    if (UR.WRAP[tid] && await wrapSelected(id, tid)) { tsay(L('وُضعت الحاوية حول العناصر المحددة.', 'The container was put around the selected objects.')); return; }
     const pkg = await UR.openPackage(await exportSlide(id));
     const r = URT.apply(pkg, tid);
     const newId = await insertAfter(await UR.buildPackage(pkg, r.xml, r.rels), id);

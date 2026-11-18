@@ -1747,6 +1747,61 @@ function align(rects, W, mode, only) {
   }
   return out;
 }
+// ---------- a container around the selected objects ----------
+// the selected objects (" #ursel" at the end of their name) get the container behind them: full width, one line
+// above and two below the content, the icon on the right and the content kept clear of it. Their text keeps its roles.
+const WRAP = { note: 'note', quote: 'quote', formula: 'formula', activity: 'activity', mars: 'mars', other: 'other', cancelled: 'cancelled', practice: 'practice' };
+function wrapBox(pkg, type) {
+  const W = pkg.slideW, H = pkg.slideH;
+  const doc = parseXml(pkg.files.slide);
+  const rels = makeRels(pkg);
+  NEXT = maxId(doc) + 1;
+  const spTree = spTreeOf(doc);
+  const all = topItems(doc).map((el, i) => { const c = core(el), n = cnvOf(c); return { i, el, c, name: n ? n.getAttribute('name') || '' : '', g: geomOf(el, pkg) || { x: 0, y: 0, w: 0, h: 0 } }; });
+  const sel = all.filter(t => / #ursel$/.test(t.name));
+  if (!sel.length) throw new Error('nosel');
+  for (const t of sel) for (const c of allCores(t.el)) { const n = cnvOf(c); if (n) n.setAttribute('name', (n.getAttribute('name') || '').replace(/ #ursel$/, '')); }
+  const B = type === 'cancelled' ? { name: 'Cancelled', frame: 'FFC000' } : type === 'practice' ? { name: 'Practice', grad: true } : BOX[type];
+  let x0 = Math.min(...sel.map(t => t.g.x)), x1 = Math.max(...sel.map(t => t.g.x + t.g.w));
+  const y0 = Math.min(...sel.map(t => t.g.y)), y1 = Math.max(...sel.map(t => t.g.y + t.g.h));
+  const small = type === 'other';
+  // something beside the selection (a graph …): the container covers only the selection's side
+  const others = all.filter(t => !sel.includes(t) && t.g.w && !/^UULA (Footer|Watermark)|^CustomPageNumber_/.test(t.name) && !(t.g.w > W * 0.85 && t.g.h > H * 0.6));
+  const besideL = others.some(o => Math.min(o.g.y + o.g.h, y1) - Math.max(o.g.y, y0) > 4 * PT && o.g.x + o.g.w <= x0 + 2 * PT);
+  const besideR = others.some(o => Math.min(o.g.y + o.g.h, y1) - Math.max(o.g.y, y0) > 4 * PT && o.g.x >= x1 - 2 * PT);
+  // content clear of the icon and inside the page margins
+  const right = B.icon && !small && !besideR ? Math.round(488.8 * PT) : besideR ? x1 : W - M;
+  for (const t of sel) {
+    let x = t.g.x, w = t.g.w;
+    if (x + w > right) { if (w > right - M) { w = right - M; x = M; } else x = right - w; }
+    if (x < M && !small && !besideL) { x = M; if (x + w > right) w = right - M; }
+    if (x !== t.g.x || w !== t.g.w) { setGeom(t.el, { x, w: w !== t.g.w ? w : null }); t.g = Object.assign({}, t.g, { x, w }); }
+    if (t.c.localName === 'pic') stylePic({ el: t.el, c: t.c, kind: 'pic' }, true);    // no frame inside a container
+  }
+  const top = small ? y0 - 4 * PT : y0 - ROW, h = small ? (y1 - y0) + 8 * PT : (y1 - y0) + 3 * ROW;
+  let box;
+  if (B.grad) box = frag(doc, gradBoxX(B.name, top, Math.max(h, 68 * PT), W));
+  else if (B.frame) box = frag(doc, '<p:sp><p:nvSpPr><p:cNvPr id="' + nid() + '" name="UULA Cancelled Container"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="' + Math.round(top) + '"/><a:ext cx="' + W + '" cy="' + Math.round(h) + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:ln w="19050"><a:solidFill><a:srgbClr val="FFC000"/></a:solidFill></a:ln></p:spPr><p:txBody><a:bodyPr rtlCol="0" anchor="ctr"/><a:lstStyle/><a:p><a:endParaRPr lang="ar-KW" dirty="0"/></a:p></p:txBody></p:sp>');
+  else box = frag(doc, boxX(B.name, top, h, B.fill, W));
+  if (small) setGeom(box, { x: x0 - 6 * PT, w: (x1 - x0) + 30 * PT });
+  else if (besideL || besideR) {
+    const bx = besideL ? x0 - 10 * PT : 0, br = besideR ? x1 + 10 * PT : W;
+    setGeom(box, { x: bx, w: br - bx });
+  }
+  const first = sel.reduce((a, b) => (a.i < b.i ? a : b));
+  spTree.insertBefore(box, first.el);
+  let icon = null, line = null;
+  if (B.icon) {
+    const bulb = B.icon === 'bulb';
+    icon = frag(doc, picX('UULA ' + B.name + ' Icon', rels.image(B.icon), small ? x1 + 6 * PT : besideR ? x1 - 16 * PT : W - 47 * PT, small ? top + 2 * PT : top + ROW - 2 * PT, (bulb ? 11.1 : 14.1) * PT, (bulb ? 15.4 : 15.9) * PT));
+    spTree.appendChild(icon);
+  }
+  if (B.line) { line = frag(doc, lineX(W - 40 * PT, top + ROW + 17 * PT, Math.max(ROW, (y1 - y0) - 17 * PT), B.line)); spTree.appendChild(line); }
+  markNames(doc);
+  const order = topItems(doc);
+  return { xml: serialize(doc), rels, W, H, small, minH: B.grad ? 68 * PT : 0,
+    sel: sel.map(t => order.indexOf(t.el)), box: order.indexOf(box), icon: icon ? order.indexOf(icon) : null, line: line ? order.indexOf(line) : null };
+}
 // ---------- hide / show the solutions ----------
 // Hidden originals keep everything: each object holding a solution gets hidden="1" and the name prefix
 // "UULA SolHidden "; when only part of it is a solution, a student copy ("UULA SolView …") is put after it:
@@ -1930,7 +1985,7 @@ function splitPoint(plan, lay) {
 }
 
 return {
-  NS, PT, ROW, M, FOOT, C, STY, BOX, openPackage, buildPackage, parseXml, serialize, restyle, layout, applyLayout, splitParts, splitPoint, markNames, MARK, applyRole, reflow, spacing, align, findSolutions, hideSolutions, showSolutions, hasSolutions, TEXT_ROLES, BOX_ROLES, G, Y0, snapUp, snapX,
+  NS, PT, ROW, M, FOOT, C, STY, BOX, openPackage, buildPackage, parseXml, serialize, restyle, layout, applyLayout, splitParts, splitPoint, markNames, MARK, applyRole, wrapBox, WRAP, reflow, spacing, align, findSolutions, hideSolutions, showSolutions, hasSolutions, TEXT_ROLES, BOX_ROLES, G, Y0, snapUp, snapX,
   // used by the templates module
   util: { pX, txX, boxX, gradBoxX, picX, pillX, pillW, lineX, tableX, makeRels, frag, topItems, core, cnvOf, maxId, spTreeOf, kid, kids, desc, xfrmOf, geomOf, setNext: n => { NEXT = n; }, yearText, pageNumX, estimateText }
 };
@@ -2493,12 +2548,56 @@ function buildTemplateList() {
   }
 }
 $('tpls').addEventListener('click', e => { const b = e.target.closest('.tbtn'); if (b) insertTemplate(b.dataset.id); });
+// a container chosen while objects are selected: it goes around them (without the template's own text)
+async function wrapSelected(id, tid) {
+  const n = await run(async ctx => {
+    const shapes = ctx.presentation.getSelectedShapes(); shapes.load('items/name'); await ctx.sync();
+    if (!shapes.items.length) return 0;
+    shapes.items.forEach(s => { s.name = (s.name || '').replace(/ #ursel$/, '') + ' #ursel'; });
+    await ctx.sync();
+    return shapes.items.length;
+  }).catch(() => 0);
+  if (!n) return false;
+  const pkg = await UR.openPackage(await exportSlide(id));
+  let r;
+  try { r = UR.wrapBox(pkg, UR.WRAP[tid]); }
+  catch (e) { await clearSel(id); throw e; }
+  const newId = await insertAfter(await UR.buildPackage(pkg, r.xml, r.rels), id);
+  await deleteSlide(id);
+  await run(async ctx => {
+    const sh = ctx.presentation.slides.getItem(newId).shapes;
+    sh.load('items/name,items/left,items/top,items/width,items/height'); await ctx.sync();
+    const byIdx = {}; sh.items.forEach((s, k) => { const m = / #ur(\d+)$/.exec(s.name || ''); if (m) byIdx[+m[1]] = k; });
+    const sel = r.sel.map(i => byIdx[i]).filter(k => k != null);
+    // real sizes: the container fits around what it holds
+    const y0 = Math.min(...sel.map(k => sh.items[k].top)), y1 = Math.max(...sel.map(k => sh.items[k].top + sh.items[k].height));
+    const G = 13.39;
+    const bk = byIdx[r.box];
+    if (bk != null) { const b = sh.items[bk]; b.top = r.small ? y0 - 4 : y0 - G; b.height = Math.max(r.minH / PT, r.small ? (y1 - y0) + 8 : (y1 - y0) + 3 * G); }
+    if (r.icon != null && byIdx[r.icon] != null && !r.small) sh.items[byIdx[r.icon]].top = y0 - G + G - 2;
+    if (r.line != null && byIdx[r.line] != null) { const l = sh.items[byIdx[r.line]]; l.top = y0 + 17; l.height = Math.max(G, (y1 - y0) - 17); }
+    await ctx.sync();
+    sh.items.forEach(s => s.load('left,top,width,height')); await ctx.sync();
+    // on the page grid, and what is under it moves with two grid steps
+    const H = r.H / PT;
+    const rects = sh.items.map((s, k) => ({ key: k, x: s.left * PT, y: s.top * PT, w: s.width * PT, h: s.height * PT,
+      fixed: /^UULA (Footer|Watermark)|^CustomPageNumber_/.test((s.name || '').replace(/ #ur\d+$/, '')) || s.top > H - 54 || s.left + s.width <= 0 || s.left >= r.W / PT }));
+    const group = [...sel, bk, r.icon != null ? byIdx[r.icon] : null, r.line != null ? byIdx[r.line] : null].filter(k => k != null);
+    const mv = UR.reflow(rects, group, { keepX: true });
+    for (const [k, m] of Object.entries(mv)) if (m.y != null) sh.items[+k].top = m.y / PT;
+    await ctx.sync();
+    ctx.presentation.setSelectedSlides([newId]); await ctx.sync();
+  });
+  await unmark(newId);
+  return true;
+}
 async function insertTemplate(tid) {
   if (busy || !supported) return;
   busy = true; lock(); tsay('');
   try {
     const id = await currentId();
     if (!id) { tsay(L('حدّد شريحة أولًا.', 'Select a slide first.')); return; }
+    if (UR.WRAP[tid] && await wrapSelected(id, tid)) { tsay(L('وُضعت الحاوية حول العناصر المحددة.', 'The container was put around the selected objects.')); return; }
     const pkg = await UR.openPackage(await exportSlide(id));
     const r = URT.apply(pkg, tid);
     const newId = await insertAfter(await UR.buildPackage(pkg, r.xml, r.rels), id);

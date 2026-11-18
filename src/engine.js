@@ -1369,6 +1369,7 @@ function applyRole(pkg, role) {
   for (const t of sel.sort((a, b) => a.g.y - b.g.y)) {
     t.g = Object.assign({}, t.g, { y: t.g.y + shift });
     if (t.kind === 'table') { t.fullW = false; styleTable(t, ctx, W); rename(t, 'table'); out.push({ idx: t.i, kind: 'table' }); continue; }
+    if (['given', 'correct'].includes(role)) { rename(t, role); continue; }       // marks only: no styling, no moving
     if (t.kind === 'pic' || t.kind === 'grpSp') { stylePic(t, false); rename(t, role === 'answer' ? 'answer' : 'pic'); out.push({ idx: t.i, kind: 'pic' }); continue; }
     if (t.kind !== 'text') { rename(t, role); continue; }
     const isBox = BOX_ROLES.includes(role);
@@ -1654,7 +1655,12 @@ function findSolutions(pkg) {
   for (const t of items) {
     if (t.drop || /^UULA (SolHidden|SolView)/.test(t.name)) continue;
     const pin = PIN.exec(t.name);
-    if (pin && pin[1] === 'answer') { found.push({ i: t.i, how: 'hide' }); continue; }
+    if (pin && pin[1] === 'given') continue;                                   // part of the question: never touched
+    if (pin && pin[1] === 'correct') { found.push({ i: t.i, how: 'copy', correct: true }); continue; }
+    if (pin && pin[1] === 'answer') {
+      if (t.kind === 'pic') { const blip = desc(t.c, 'a', 'blip')[0], rid = blip && blip.getAttributeNS(NS.r, 'embed'), target = rid && relT(rid); if (target) { found.push({ i: t.i, how: 'grid', pinned: true, media: 'ppt/media/' + target.split('/').pop() }); continue; } }
+      found.push({ i: t.i, how: 'hide' }); continue;
+    }
     if (t.kind === 'text') {
       if (['lesson', 'chapter'].includes(t.role) || t.fill) continue;
       const roles = paraRoles(t, ctx, pkg).filter(r => r.text);
@@ -1677,11 +1683,29 @@ function findSolutions(pkg) {
       const near = texts.filter(x => x.g.y < t.g.y + t.g.h && x.g.y > t.g.y - 260 * PT).sort((a, b) => Math.abs(a.g.y - t.g.y) - Math.abs(b.g.y - t.g.y)).slice(0, 6);
       const qs = near.filter(x => DRAW.test(x.text));
       const above = texts.filter(x => x.g.y + x.g.h <= t.g.y + 4 * PT && DRAW.test(x.text) && QHEAD.test(x.text.replace(/ـ/g, '')));
-      if (qs.length || above.length) {
+      // the question shows the drawing ("المرسوم", "المجاور", "في الشكل") → the graph belongs to the question
+      const given = near.some(x => /المرسوم|المرسومة|المجاور|الشكل التالي|في الشكل|من الشكل|الرسم المجاور|التمثيل المجاور/.test(x.text));
+      // answers written beside the graph (blue text in the same band) → the graph is part of the solution
+      const besideAns = texts.some(x => Math.min(x.g.y + x.g.h, t.g.y + t.g.h) - Math.max(x.g.y, t.g.y) > 10 * PT
+        && (x.g.x >= t.g.x + t.g.w - 4 * PT || x.g.x + x.g.w <= t.g.x + 4 * PT)
+        && paraRoles(x, ctx, pkg).some(r => r.text && r.role === 'answer'));
+      if (!given && (qs.length || above.length || besideAns)) {
         const blip = desc(t.c, 'a', 'blip')[0], rid = blip && blip.getAttributeNS(NS.r, 'embed');
         const target = rid && relT(rid);
         if (target) found.push({ i: t.i, how: 'grid', media: 'ppt/media/' + target.split('/').pop() });
       }
+    }
+  }
+  // a letter written in white over a filled circle (the circle is a separate shape): it turns black with it
+  for (const f of found.slice()) {
+    const sh = items.find(x => x.i === f.i);
+    if (!sh || sh.kind !== 'shape') continue;
+    for (const t of texts) {
+      if (found.some(x => x.i === t.i)) continue;
+      const cx = t.g.x + t.g.w / 2, cy = t.g.y + t.g.h / 2;
+      if (cx < sh.g.x || cx > sh.g.x + sh.g.w || cy < sh.g.y || cy > sh.g.y + sh.g.h) continue;
+      const light = desc(t.c, 'a', 'rPr').some(pr => { const c = colorOf(kid(pr, 'solidFill', 'a'), ctx); return c && lum(c) > 230; });
+      if (light) found.push({ i: t.i, how: 'copy', correct: true });
     }
   }
   return found;
@@ -1698,7 +1722,7 @@ function hideSolutions(pkg, grids) {
   let n = 0;
   for (const f of list) {
     const t = items.find(x => x.i === f.i); if (!t) continue;
-    if (f.how === 'grid' && !grids[f.i]) continue;            // not a graph after all (no drawing found)
+    if (f.how === 'grid' && !grids[f.i]) { if (!f.pinned) continue; f.how = 'hide'; }   // no drawing found: hide it (marked) or leave it
     n++;
     const view = f.how === 'hide' ? null : t.el.cloneNode(true);
     for (const c of allCores(t.el)) { const nv = cnvOf(c); if (nv) { nv.setAttribute('hidden', '1'); nv.setAttribute('name', 'UULA SolHidden ' + (nv.getAttribute('name') || '')); } }
@@ -1713,6 +1737,7 @@ function hideSolutions(pkg, grids) {
       const W45 = W * 0.45;
       for (const r of roles) {
         if (!r.text) continue;
+        if (f.correct) { for (const pr of desc(r.p, 'a', 'rPr')) { removeKids(pr, FILLS); placeChild(pr, solid(doc, '000000'), RPR_ORDER); pr.setAttribute('b', '0'); } continue; }
         const choiceLike = r.role === 'choice' || /[①-⓿❶-➓]/.test(bulletChar(r.p) || '') || (t.g.w < W45 && r.text.length < 60);
         if (r.role === 'answer') {
           // invisible, the space stays for the student
@@ -1729,7 +1754,7 @@ function hideSolutions(pkg, grids) {
         if (!tcs.some(tc => /^(الحل|الإجابة|الاجابة)$/.test(textOf(tc).trim()))) continue;
         for (const tc of tcs) { if (/^(الحل|الإجابة|الاجابة)$/.test(textOf(tc).trim())) continue; for (const pr of [...desc(tc, 'a', 'rPr'), ...desc(tc, 'a', 'endParaRPr')]) { removeKids(pr, FILLS); placeChild(pr, frag(doc, '<a:solidFill><a:srgbClr val="FFFFFF"><a:alpha val="0"/></a:srgbClr></a:solidFill>'), RPR_ORDER); } }
       }
-    } else if (t.kind === 'shape') {
+    } else if (t.kind === 'shape' || (f.correct && t.kind !== 'text')) {
       const spPr = kid(vt.c, 'spPr', 'p'); removeKids(spPr, FILLS); placeChild(spPr, mk(doc, 'a', 'noFill'), SPPR_ORDER);
       for (const pr of desc(view, 'a', 'rPr')) { removeKids(pr, FILLS); placeChild(pr, solid(doc, '000000'), RPR_ORDER); }
       const st = kid(vt.c, 'style', 'p'); if (st) { const fr = desc(st, 'a', 'fillRef')[0]; if (fr) fr.setAttribute('idx', '0'); }

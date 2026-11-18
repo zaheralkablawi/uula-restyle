@@ -313,6 +313,80 @@ async function insertTemplate(tid) {
   finally { busy = false; lock(); }
 }
 
+// ---------- one object at a time ----------
+const ROLES = [
+  { g: 'نصوص', items: [['chapter', 'اسم الوحدة', 'A6A6A6'], ['lesson', 'اسم الدرس', '1F71DD'], ['topic', 'عنوان موضوع', '000000'], ['body', 'فقرة', 'FFFFFF'], ['bullets', 'نقاط', 'FFFFFF'], ['qhead', 'عنوان أسئلة', 'FF0000'], ['question', 'سؤال', 'FF0000'], ['answer', 'حل', '1F71DE'], ['choice', 'خيارات الإجابة', 'FFFFFF']] },
+  { g: 'حاويات', items: [['note', 'ملاحظة', 'FBEBD3'], ['quote', 'نص مقتطف', 'E2F0D9'], ['def', 'تعريف', 'E2F0D9'], ['formula', 'معادلات وقوانين', 'D3E4F5'], ['other', 'صيغة أخرى للسؤال', 'FBEBD3'], ['activity', 'نشاط', 'F1F1F1'], ['mars', 'أسئلة من المريخ', 'F1F1F1']] }
+];
+function buildRoleList() {
+  const host = $('roles'); host.innerHTML = '';
+  for (const g of ROLES) {
+    const d = document.createElement('div'); d.className = 'tgroup';
+    d.innerHTML = '<div class="gt">' + g.g + '</div>';
+    const grid = document.createElement('div'); grid.className = 'tgrid';
+    for (const [id, name, col] of g.items) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'tbtn'; b.dataset.role = id;
+      b.innerHTML = '<i style="background:#' + col + '"></i><span>' + name + '</span>';
+      grid.appendChild(b);
+    }
+    d.appendChild(grid); host.appendChild(d);
+  }
+}
+$('roles').addEventListener('click', e => { const b = e.target.closest('.tbtn'); if (b) pinRole(b.dataset.role); });
+const rsay = m => { $('rstatus').textContent = m || ''; };
+async function clearSel(slideId) {
+  await run(async ctx => {
+    const sh = ctx.presentation.slides.getItem(slideId).shapes; sh.load('items/name'); await ctx.sync();
+    sh.items.forEach(s => { if (/ #ursel$/.test(s.name || '')) s.name = s.name.replace(/ #ursel$/, ''); });
+    await ctx.sync();
+  }).catch(() => {});
+}
+async function pinRole(role) {
+  if (busy || !supported) return;
+  busy = true; lock(); rsay('');
+  let slideId = null;
+  try {
+    const got = await run(async ctx => {
+      const slides = ctx.presentation.getSelectedSlides(); slides.load('items/id');
+      const shapes = ctx.presentation.getSelectedShapes(); shapes.load('items/name');
+      await ctx.sync();
+      if (!slides.items.length || !shapes.items.length) return null;
+      shapes.items.forEach(s => { s.name = (s.name || '').replace(/ #ursel$/, '') + ' #ursel'; });
+      await ctx.sync();
+      return { id: slides.items[0].id, n: shapes.items.length };
+    });
+    if (!got) { rsay('حدّد مربعًا في الشريحة أولًا.'); return; }
+    slideId = got.id;
+    const pkg = await UR.openPackage(await exportSlide(slideId));
+    let r;
+    try { r = UR.applyRole(pkg, role); }
+    catch (e) { await clearSel(slideId); rsay(e.message === 'nosel' ? 'حدّد مربعًا في الشريحة أولًا.' : 'تعذّر التحويل: ' + errText(e)); return; }
+    const newId = await insertAfter(await UR.buildPackage(pkg, r.xml, r.rels), slideId);
+    await deleteSlide(slideId); slideId = null;
+    // real text heights: fit the container around the text
+    await run(async ctx => {
+      const { map } = await shapesByMark(ctx, newId);
+      const texts = r.targets.filter(t => t.kind === 'text' && map[t.idx]);
+      texts.forEach(t => { const s = map[t.idx]; try { s.textFrame.wordWrap = true; s.textFrame.autoSizeSetting = 'AutoSizeShapeToFitText'; } catch (e) {} });
+      await ctx.sync();
+      texts.forEach(t => map[t.idx].load('height,top'));
+      await ctx.sync();
+      for (const t of texts) {
+        if (!t.box || !map[t.box]) continue;
+        const h = map[t.idx].height, other = t.boxType === 'other';
+        const b = map[t.box]; b.top = t.top / PT; b.height = other ? h + 8 : h + 3 * 13.3;
+        if (t.line != null && map[t.line]) map[t.line].height = Math.max(13.3, h - 17);
+      }
+      await ctx.sync();
+      ctx.presentation.setSelectedSlides([newId]); await ctx.sync();
+      try { const ids = r.targets.map(t => map[t.idx]).filter(Boolean).map(s => s.id); ctx.presentation.slides.getItem(newId).setSelectedShapes(ids); await ctx.sync(); } catch (e) {}
+    });
+    await unmark(newId);
+    rsay('تم.');
+  } catch (e) { if (slideId) await clearSel(slideId); rsay('تعذّر التحويل: ' + errText(e)); }
+  finally { busy = false; lock(); }
+}
+
 // ---------- main button ----------
 function lock() {
   $('goBtn').disabled = busy || !supported;
@@ -369,6 +443,7 @@ $('aboutBtn').addEventListener('click', () => {
 // ---------- start ----------
 $('appVer').textContent = VER;
 buildTemplateList();
+buildRoleList();
 lock();
 const ready = (window.Office && Office.onReady) ? Office.onReady() : Promise.resolve({});
 ready.then(info => {

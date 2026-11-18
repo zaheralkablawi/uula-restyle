@@ -49,6 +49,9 @@ const BOX = {
   mars: { fill: 'F1F1F1', icon: 'target', name: 'Challenge' },
   practice: { fill: 'F1F1F1', icon: null, name: 'Practice' }
 };
+const TEXT_ROLES = ['chapter', 'lesson', 'topic', 'body', 'bullets', 'qhead', 'question', 'answer', 'choice'];
+const BOX_ROLES = ['note', 'quote', 'def', 'formula', 'other', 'activity', 'mars'];
+const PIN = /^UULA:([a-z]+)\s*/;
 const PALETTE = ['000000', 'FFFFFF', 'A6A6A6', '1F71DD', '1F71DE', '1F71DC', '2070DF', 'FF0000', '00B050', 'FE00FE', 'C45A11', 'FFC000'];
 const CIRC = /[①-⓿❶-➓㉑-㉟㊱-㊿]/;
 const CIRC_SPLIT = /([①-⓿❶-➓㉑-㉟㊱-㊿]+)/;
@@ -364,6 +367,8 @@ function classify(it, items, pkg, ctx) {
   const W = pkg.slideW, H = pkg.slideH, g = it.g;
   if (it.off) { it.drop = it.kind === 'pic' ? 'offpic' : (it.kind === 'text' && /^(https?:|www\.)/i.test(it.text.replace(/\s+/g, '')) ? 'link' : 'off'); return; }
   if (/^UULA (Footer|Watermark)|^CustomPageNumber_/.test(it.name)) { it.drop = 'footer'; return; }
+  const pin = PIN.exec(it.name);
+  if (pin) { if (TEXT_ROLES.includes(pin[1])) it.pinText = pin[1]; else if (BOX_ROLES.includes(pin[1])) it.pinBox = pin[1]; else it.pinObj = pin[1]; if (it.kind === 'text') return; }
   if (['sldNum', 'ftr', 'dt'].includes(it.ph)) { it.drop = 'footer'; return; }
   if (it.kind === 'text') {
     const t = it.text.replace(/\s+/g, ' ');
@@ -419,6 +424,8 @@ function findContainers(items, pkg) {
 }
 // container type from the text it holds and its original color
 function boxType(k, members) {
+  const nm = /^UULA (.+) Container/.exec(k.name || '');
+  if (nm) { const key = Object.keys(BOX).find(b => BOX[b].name === nm[1]); if (key) return key; }
   const txt = [k.boxText ? k.text : '', ...members.filter(t => t.kind === 'text').map(t => t.text)].join(' ').replace(/\u0640/g, '');
   const first = txt.trim();
   if (KW.practice.test(first)) return 'practice';
@@ -584,7 +591,13 @@ function plainShape(c, keepFill) {
 // style every paragraph of a text item; returns the roles found (for spacing)
 function styleText(it, ctx, pkg, forcedRole) {
   const c = it.c;
-  const roles = forcedRole ? kids(kid(c, 'txBody', 'p'), 'p', 'a').map(p => ({ p, role: forcedRole, text: paraText(p).trim(), bullet: hasBullet(p), col: runColor(p, ctx) })) : paraRoles(it, ctx, pkg);
+  let roles = forcedRole ? kids(kid(c, 'txBody', 'p'), 'p', 'a').map(p => ({ p, role: forcedRole === 'bullets' ? 'body' : forcedRole, text: paraText(p).trim(), bullet: forcedRole === 'bullets' ? !!paraText(p).trim() : hasBullet(p), col: runColor(p, ctx) })) : paraRoles(it, ctx, pkg);
+  // a box marked "question" keeps its answer lines as answers
+  if (forcedRole === 'question') {
+    const auto = paraRoles(it, ctx, pkg);
+    let seenQ = false;
+    roles.forEach((r, k) => { if (!r.text) return; if (seenQ && auto[k] && ['answer', 'choice'].includes(auto[k].role)) r.role = auto[k].role; if (r.role === 'question') seenQ = true; });
+  }
   const arAll = AR.test(it.text);
   let stripped = false;
   for (const pr of roles) {
@@ -834,6 +847,7 @@ function restyle(pkg, opts) {
   for (const t of items) if (t.kind === 'text' && !t.drop) for (const p of desc(t.c, 'a', 'p')) { const z = runSz(p) || 1800; szCount[z] = (szCount[z] || 0) + paraText(p).length; }
   ctx.bodySz = +Object.entries(szCount).sort((a, b) => b[1] - a[1]).map(e => e[0])[0] || 1100;
   headerRoles(items, pkg);
+  for (const t of items) if (t.pinText) t.role = t.pinText === 'bullets' ? 'body' : t.pinText;
   const spTree = spTreeOf(doc);
 
   // 1) replace an old QR with a new one parked outside the slide (+ its link box)
@@ -880,9 +894,10 @@ function restyle(pkg, opts) {
   for (const t of live) {
     if (t.kind === 'text' || (t.kind === 'chip')) {
       if (t.kind === 'chip') { fontOnly(t.c); continue; }
-      const forced = t.role === 'lesson' || t.role === 'chapter' ? t.role : null;
+      const forced = t.pinText || (t.pinBox ? 'body' : null) || (t.role === 'lesson' || t.role === 'chapter' ? t.role : null);
       const r = styleText(t, ctx, pkg, forced);
       t.roles = r.roles;
+      if (forced) t.role = forced === 'bullets' ? 'body' : forced;
       if (!forced) {
         const rs = r.roles.filter((x, k) => t.paraTexts ? t.paraTexts[k] : true);
         const firstR = rs[0] || 'body';
@@ -916,8 +931,9 @@ function restyle(pkg, opts) {
   // 5) containers (a free text starting with ملاحظة / نشاط / قال تعالى … gets its own container)
   for (const t of live.filter(x => !x.drop && x.kind === 'text' && !x.box && !x.boxText && !['lesson', 'chapter'].includes(x.role))) {
     const s0 = t.text.trim().slice(0, 50);
-    let type = null;
-    if (KW.activity.test(s0)) type = 'activity';
+    let type = t.pinBox || null;
+    if (type) { /* pinned by the user */ }
+    else if (KW.activity.test(s0)) type = 'activity';
     else if (/^\s*(ملاحظة|ملاحظه|تنبيه|انتبه|تذكّر|تذكر|هام|مهم|Note|Important|Remember)/i.test(s0)) type = 'note';
     else if (/^\s*(إثراء|اثراء|تحدي|فكّر|سؤال ذكاء|أسئلة من المريخ)/.test(s0)) type = 'mars';
     else if (/^\s*(قال تعالى|قال رسول الله|قال الشاعر|﴿)/.test(s0)) type = 'quote';
@@ -1339,6 +1355,79 @@ function markNames(doc) {
     for (const c of allCores(el)) { const n = cnvOf(c); if (n) n.setAttribute('name', (n.getAttribute('name') || '').replace(MARK, '') + ' #ur' + i); }
   });
 }
+// ---------- one object at a time ----------
+// the user picks what a selected object is; its name keeps the choice ("UULA:answer …") so a later
+// full conversion respects it. Selected shapes carry " #ursel" at the end of their name.
+function applyRole(pkg, role) {
+  const W = pkg.slideW, H = pkg.slideH, CW = W - 2 * M;
+  const doc = parseXml(pkg.files.slide);
+  const ctx = { scheme: readTheme(pkg.files), bodySz: 1100 };
+  const rels = makeRels(pkg);
+  NEXT = maxId(doc) + 1;
+  const spTree = spTreeOf(doc);
+  const items = topItems(doc).map((el, i) => {
+    const c = core(el), n = cnvOf(c);
+    return { i, el, c, name: n ? n.getAttribute('name') || '' : '', g: geomOf(el, pkg) || { x: 0, y: 0, w: 0, h: 0 }, kind: c.localName === 'pic' ? 'pic' : c.localName === 'graphicFrame' ? (desc(c, 'a', 'tbl').length ? 'table' : 'object') : c.localName === 'sp' && kid(c, 'txBody', 'p') ? 'text' : c.localName, text: textOf(c).trim() };
+  });
+  const sel = items.filter(t => / #ursel$/.test(t.name));
+  if (!sel.length) throw new Error('nosel');
+  const out = [];
+  const rename = (t, r) => { for (const c of allCores(t.el)) { const n = cnvOf(c); if (n) n.setAttribute('name', 'UULA:' + r + ' ' + (n.getAttribute('name') || '').replace(/ #ursel$/, '').replace(PIN, '')); } };
+  let shift = 0;
+  for (const t of sel.sort((a, b) => a.g.y - b.g.y)) {
+    t.g = Object.assign({}, t.g, { y: t.g.y + shift });
+    if (t.kind === 'table') { t.fullW = false; styleTable(t, ctx, W); rename(t, 'table'); out.push({ idx: t.i, kind: 'table' }); continue; }
+    if (t.kind === 'pic' || t.kind === 'grpSp') { stylePic(t, false); rename(t, 'pic'); out.push({ idx: t.i, kind: 'pic' }); continue; }
+    if (t.kind !== 'text') { rename(t, role); continue; }
+    const isBox = BOX_ROLES.includes(role);
+    styleText(t, ctx, pkg, isBox ? 'body' : role);
+    setBody(t.c, {});
+    plainShape(t.c, false);
+    rename(t, role);
+    const rec = { idx: t.i, kind: 'text', role };
+    if (role === 'chapter') setGeom(t.el, { x: M, y: 22.6 * PT, w: CW });
+    else if (role === 'lesson') setGeom(t.el, { x: M, y: 42.7 * PT, w: CW });
+    else if (isBox) {
+      const B = BOX[role];
+      const iconW = B.icon ? 15 * PT : 0;
+      // something beside the text (a graph …): the container covers only the text's side
+      const beside = items.some(o => o !== t && o.g.w && !/^UULA (Footer|Watermark)|^CustomPageNumber_/.test(o.name)
+        && Math.min(o.g.y + o.g.h, t.g.y + t.g.h) - Math.max(o.g.y, t.g.y) > 4 * PT && (o.g.x + o.g.w <= t.g.x + 2 * PT || o.g.x >= t.g.x + t.g.w - 2 * PT));
+      const narrow = role === 'other' || beside;
+      const tx = narrow ? t.g.x : M, tw = role === 'other' ? t.g.w - 24 * PT : narrow ? Math.min(t.g.w, W - M - iconW - t.g.x) : CW - iconW;
+      const est = estimateText(t.c, tw);
+      const top = role === 'other' ? t.g.y - 4 * PT : t.g.y - ROW;
+      const boxH = role === 'other' ? est + 8 * PT : est + 3 * ROW;
+      setGeom(t.el, { x: tx, y: t.g.y, w: tw, h: est });
+      const bx = role === 'other' ? t.g.x - 6 * PT : beside ? t.g.x - 10 * PT : 0, bw = role === 'other' ? t.g.w : beside ? W - (t.g.x - 10 * PT) : W;
+      const box = frag(doc, boxX(B.name, top, boxH, B.fill, W));
+      setGeom(box, { x: bx, w: bw });
+      spTree.insertBefore(box, t.el);
+      rec.box = true; rec.boxType = role; rec.top = top; rec.x = tx; rec.w = tw; rec.boxX = bx; rec.boxW = bw;
+      if (B.icon) {
+        const bulb = B.icon === 'bulb';
+        const ic = frag(doc, picX('UULA ' + B.name + ' Icon', rels.image(B.icon), role === 'other' ? bx + bw - 18 * PT : Math.max(tx + tw + 2 * PT, W - 47 * PT), role === 'other' ? top + 2 * PT : top + ROW - 2 * PT, (bulb ? 11.1 : 14.1) * PT, (bulb ? 15.4 : 15.9) * PT));
+        spTree.insertBefore(ic, t.el.nextSibling); rec.iconEl = ic;
+      }
+      if (B.line) { const ln = frag(doc, lineX(W - 40 * PT, top + ROW + 17 * PT, Math.max(ROW, est - 17 * PT), B.line)); spTree.insertBefore(ln, t.el.nextSibling); rec.lineEl = ln; }
+      rec.boxEl = box;
+      // what was under the object moves down if the container needs the room
+      const need = (top + boxH) - (t.g.y + t.g.h);
+      if (need > 0) {
+        for (const o of items) if (o !== t && !/^UULA (Footer|Watermark)|^CustomPageNumber_/.test(o.name) && o.g.y >= t.g.y + t.g.h - 2 * PT && o.g.y < H - FOOT * 0.6) { o.g = Object.assign({}, o.g, { y: o.g.y + need }); setGeom(o.el, { y: o.g.y }); }
+        shift += need;
+      }
+    }
+    out.push(rec);
+  }
+  blackCircles(spTree);
+  markNames(doc);
+  const order = topItems(doc);
+  for (const r of out) { r.idx = order.indexOf(sel.find(t => t.i === r.idx).el); if (r.boxEl) { r.box = order.indexOf(r.boxEl); delete r.boxEl; } if (r.iconEl) { r.icon = order.indexOf(r.iconEl); delete r.iconEl; } if (r.lineEl) { r.line = order.indexOf(r.lineEl); delete r.lineEl; } }
+  // the marks were set before the final order was known: set them again
+  markNames(doc);
+  return { xml: serialize(doc), rels, targets: out, W, H };
+}
 // ---------- splitting ----------
 // two slides from one: blocks [0, k) stay (with the header), blocks [k, …) move to a new slide.
 // returns [{ xml, plan }, { xml, plan }] with item indexes renumbered for each part
@@ -1398,7 +1487,7 @@ function splitPoint(plan, lay) {
 }
 
 return {
-  NS, PT, ROW, M, FOOT, C, STY, BOX, openPackage, buildPackage, parseXml, serialize, restyle, layout, applyLayout, splitParts, splitPoint, markNames, MARK,
+  NS, PT, ROW, M, FOOT, C, STY, BOX, openPackage, buildPackage, parseXml, serialize, restyle, layout, applyLayout, splitParts, splitPoint, markNames, MARK, applyRole, TEXT_ROLES, BOX_ROLES,
   // used by the templates module
   util: { pX, txX, boxX, gradBoxX, picX, pillX, pillW, lineX, tableX, makeRels, frag, topItems, core, cnvOf, maxId, spTreeOf, kid, kids, desc, xfrmOf, geomOf, setNext: n => { NEXT = n; }, yearText, pageNumX, estimateText }
 };

@@ -23,30 +23,30 @@ const P = {
 // ---------- the list shown in the pane ----------
 // group: section title in the pane; id; name; spec(W)
 const LIST = [
-  { g: 'عناوين', id: 'header', name: 'اسم الدرس' },
-  { g: 'عناوين', id: 'topic', name: 'موضوع', full: 'عنوان موضوع' },
-  { g: 'نصوص', id: 'body', name: 'فقرة' },
-  { g: 'نصوص', id: 'bullets', name: 'نقاط' },
-  { g: 'نصوص', id: 'cols', name: 'أعمدة نقاط', full: 'نقاط قصيرة بأعمدة' },
-  { g: 'نصوص', id: 'pill', name: 'كبسولة', full: 'كبسولة تعريف' },
-  { g: 'أسئلة', id: 'qhead', name: 'عنوان أسئلة' },
-  { g: 'أسئلة', id: 'question', name: 'سؤال' },
-  { g: 'أسئلة', id: 'qa', name: 'سؤال وجواب' },
-  { g: 'أسئلة', id: 'answer', name: 'جواب' },
-  { g: 'أسئلة', id: 'qqr', name: 'سؤال مع QR' },
-  { g: 'أسئلة', id: 'mcq', name: 'اختيار متعدد', full: 'اختيار من متعدد' },
-  { g: 'أسئلة', id: 'problem', name: 'مسألة', full: 'مسألة: معطيات وقانون وحل' },
-  { g: 'أسئلة', id: 'other', name: 'صيغة أخرى', full: 'السؤال بصيغة أخرى' },
-  { g: 'حاويات', id: 'note', name: 'ملاحظة', full: 'ملاحظة مهمة' },
-  { g: 'حاويات', id: 'quote', name: 'نص مقتطف' },
-  { g: 'حاويات', id: 'formula', name: 'قوانين', full: 'معادلات وقوانين' },
-  { g: 'حاويات', id: 'activity', name: 'نشاط' },
-  { g: 'حاويات', id: 'mars', name: 'من المريخ', full: 'أسئلة من المريخ' },
-  { g: 'حاويات', id: 'cancelled', name: 'محتوى معلّق' },
-  { g: 'جداول', id: 'table', name: 'جدول' },
-  { g: 'جداول', id: 'tableMain', name: 'جدول رئيسي', full: 'جدول بعمود رئيسي' },
-  { g: 'جداول', id: 'solTable', name: 'جدول الحل', full: 'جدول حل التمارين الموضوعية' },
-  { g: 'نهاية الدرس', id: 'practice', name: 'تدرب وتفوق' }
+  { g: 'عناوين', id: 'header', name: 'اسم الدرس', en: 'Lesson' },
+  { g: 'عناوين', id: 'topic', name: 'موضوع', en: 'Topic', full: 'عنوان موضوع' },
+  { g: 'نصوص', id: 'body', name: 'فقرة', en: 'Paragraph' },
+  { g: 'نصوص', id: 'bullets', name: 'نقاط', en: 'Bullets' },
+  { g: 'نصوص', id: 'cols', name: 'أعمدة نقاط', en: 'Columns', full: 'نقاط قصيرة بأعمدة' },
+  { g: 'نصوص', id: 'pill', name: 'كبسولة', en: 'Term pill', full: 'كبسولة تعريف' },
+  { g: 'أسئلة', id: 'qhead', name: 'عنوان أسئلة', en: 'Q head' },
+  { g: 'أسئلة', id: 'question', name: 'سؤال', en: 'Question' },
+  { g: 'أسئلة', id: 'qa', name: 'سؤال وجواب', en: 'Q + A' },
+  { g: 'أسئلة', id: 'answer', name: 'جواب', en: 'Answer' },
+  { g: 'أسئلة', id: 'qqr', name: 'سؤال مع QR', en: 'Q + QR' },
+  { g: 'أسئلة', id: 'mcq', name: 'اختيار متعدد', en: 'Choices', full: 'اختيار من متعدد' },
+  { g: 'أسئلة', id: 'problem', name: 'مسألة', en: 'Problem', full: 'مسألة: معطيات وقانون وحل' },
+  { g: 'أسئلة', id: 'other', name: 'صيغة أخرى', en: 'Other form', full: 'السؤال بصيغة أخرى' },
+  { g: 'حاويات', id: 'note', name: 'ملاحظة', en: 'Note', full: 'ملاحظة مهمة' },
+  { g: 'حاويات', id: 'quote', name: 'نص مقتطف', en: 'Quote' },
+  { g: 'حاويات', id: 'formula', name: 'قوانين', en: 'Formulas', full: 'معادلات وقوانين' },
+  { g: 'حاويات', id: 'activity', name: 'نشاط', en: 'Activity' },
+  { g: 'حاويات', id: 'mars', name: 'من المريخ', en: 'Challenge', full: 'أسئلة من المريخ' },
+  { g: 'حاويات', id: 'cancelled', name: 'محتوى معلّق', en: 'Suspended' },
+  { g: 'جداول', id: 'table', name: 'جدول', en: 'Table' },
+  { g: 'جداول', id: 'tableMain', name: 'جدول رئيسي', en: 'Main table', full: 'جدول بعمود رئيسي' },
+  { g: 'جداول', id: 'solTable', name: 'جدول الحل', en: 'Answers', full: 'جدول حل التمارين الموضوعية' },
+  { g: 'نهاية الدرس', id: 'practice', name: 'تدرب وتفوق', en: 'Practice' }
 ];
 
 // ---------- specs ----------
@@ -275,6 +275,7 @@ function apply(pkg, id) {
   return { xml: UR.serialize(doc), rels, built, top: ft.top, first: total - els.length, count: els.length, bottom: pl.bottom, fits: pl.bottom <= pkg.slideH - UR.FOOT };
 }
 
-return { LIST, spec, build, place, freeTop, apply };
+const GROUP_EN = { 'عناوين': 'Headings', 'نصوص': 'Text', 'أسئلة': 'Questions', 'حاويات': 'Containers', 'جداول': 'Tables', 'نهاية الدرس': 'Lesson end' };
+return { LIST, GROUP_EN, spec, build, place, freeTop, apply };
 })();
 if (typeof module !== 'undefined') module.exports = URT;

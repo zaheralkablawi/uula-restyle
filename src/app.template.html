@@ -72,71 +72,79 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
 .mbox{background:var(--panel);border-radius:12px;max-width:420px;width:100%;max-height:80vh;overflow:auto;padding:14px 16px;box-shadow:0 16px 40px rgb(0 0 0 / .3)}
 .mbox h3{margin:0 0 8px;font-size:1rem}.mbox p{margin:6px 0}.mbox ul{margin:6px 0;padding-inline-start:1.2em}
 .mbox .foot{text-align:center;color:var(--muted);font-size:.8rem;margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px}
+.tabs button{font:inherit;font-size:.74rem;border:0;background:none;color:var(--muted);border-radius:7px;padding:4px 2px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1.2}
+.tabs button:hover{color:var(--accent)}
+.tabs button[aria-selected="true"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.ib.lang{font:inherit;font-size:.72rem;font-weight:700;width:30px}
+.sep{height:1px;background:var(--line);margin:2px 0}
 .credit{text-align:center;font-size:.72rem;color:var(--muted);padding:6px 0 0}
 </style></head><body>
 <div class="wrap">
   <header>
     <h1><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="12.5" fill="none" stroke="#1f71de" stroke-width="2.6"/><path fill="#1f71de" d="M16 7.2l2.1 5.6 5.7 2.2-5.7 2.2L16 22.8l-2.1-5.6-5.7-2.2 5.7-2.2z"/><circle cx="22.3" cy="22.3" r="1.9" fill="#1f71de"/></svg><span class="bt"><span class="root">UULA</span><span class="sub">Restyle</span></span></h1>
-    <button type="button" class="ib updbtn" id="updBtn" hidden aria-label="تحديث جديد" title="تحديث جديد"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 10a6 6 0 1 1-1.8-4.3"/><path d="M16.2 3.2v3.5h-3.5"/></svg><span class="dot"></span></button>
+    <button type="button" class="ib updbtn" id="updBtn" hidden aria-label="Update" data-ar-title="تحديث جديد" data-en-title="New update"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 10a6 6 0 1 1-1.8-4.3"/><path d="M16.2 3.2v3.5h-3.5"/></svg><span class="dot"></span></button>
+    <button type="button" class="ib lang" id="langBtn" data-ar-title="English" data-en-title="العربية">EN</button>
     <div class="appmenu">
-      <button type="button" class="ib" id="menuBtn" aria-expanded="false" title="القائمة" aria-label="القائمة"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 6h12M4 10h12M4 14h12"/></svg></button>
+      <button type="button" class="ib" id="menuBtn" aria-expanded="false" aria-label="Menu" data-ar-title="القائمة" data-en-title="Menu"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 6h12M4 10h12M4 14h12"/></svg></button>
       <div class="menu" id="appMenu" hidden>
-        <button type="button" id="chkUpd">التحقق من التحديثات</button>
-        <button type="button" id="aboutBtn">حول الأداة</button>
+        <button type="button" id="chkUpd" data-en="Check for updates">التحقق من التحديثات</button>
+        <button type="button" id="aboutBtn" data-en="About">حول الأداة</button>
       </div>
     </div>
   </header>
 
-  <section class="panel">
-    <div class="chead"><svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor"><path d="M10 2.5l1.7 4.6 4.8 1.8-4.8 1.8L10 15.5l-1.7-4.8-4.8-1.8 4.8-1.8z"/></svg><b>تحويل لستايل علا</b></div>
-    <div class="seg" id="scope">
-      <button type="button" data-v="cur" aria-pressed="true">الشريحة الحالية</button>
-      <button type="button" data-v="all" aria-pressed="false">كل الشرائح</button>
+  <nav class="tabs" id="tabs" role="tablist">
+    <button type="button" role="tab" data-tab="conv" aria-selected="true"><svg viewBox="0 0 20 20" width="15" height="15" fill="currentColor"><path d="M10 2.5l1.7 4.6 4.8 1.8-4.8 1.8L10 15.5l-1.7-4.8-4.8-1.8 4.8-1.8z"/></svg><span data-en="Restyle">تحويل</span></button>
+    <button type="button" role="tab" data-tab="obj" aria-selected="false"><svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M4 3l11 6-5 1.5L8 16z"/></svg><span data-en="Object">عنصر محدد</span></button>
+    <button type="button" role="tab" data-tab="ins" aria-selected="false"><svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="14" height="5" rx="1.2"/><rect x="3" y="10" width="6" height="7" rx="1.2"/><rect x="11" y="10" width="6" height="7" rx="1.2"/></svg><span data-en="Insert">إدراج</span></button>
+    <button type="button" role="tab" data-tab="set" aria-selected="false"><svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="2.6"/><path d="M10 2.5v2.2M10 15.3v2.2M2.5 10h2.2M15.3 10h2.2M4.7 4.7l1.6 1.6M13.7 13.7l1.6 1.6M4.7 15.3l1.6-1.6M13.7 6.3l1.6-1.6"/></svg><span data-en="Settings">الإعدادات</span></button>
+  </nav>
+
+  <section class="panel" data-pane="conv">
+    <div class="seg scopeSeg">
+      <button type="button" data-v="cur" aria-pressed="true" data-en="Current slide">الشريحة الحالية</button>
+      <button type="button" data-v="all" aria-pressed="false" data-en="All slides">كل الشرائح</button>
     </div>
-    <button type="button" class="big" id="goBtn">تحويل</button>
-    <button type="button" class="sec" id="solBtn"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/><path id="solSlash" d="M2.5 13.5l11-11"/></svg><span id="solLbl">إخفاء الحلول</span></button>
-    <div class="sprow"><span class="splab">تنسيق المسافات</span>
-      <button type="button" class="sec" id="spV" title="ضبط المسافات بين الكائنات من الأعلى والأسفل"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 2v12M5 4.5 8 1.8l3 2.7M5 11.5 8 14.2l3-2.7"/></svg>رأسي</button>
-      <button type="button" class="sec" id="spH" title="محاذاة الكائنات إلى اليمين أو اليسار"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 8h12M4.5 5 1.8 8l2.7 3M11.5 5l2.7 3-2.7 3"/></svg>أفقي</button>
+    <button type="button" class="big" id="goBtn" data-en="Restyle">تحويل</button>
+    <div class="sprow"><span class="splab" data-en="Spacing">تنسيق المسافات</span>
+      <button type="button" class="sec" id="spV" data-ar-title="ضبط المسافات بين الكائنات من الأعلى والأسفل" data-en-title="Fix the vertical gaps between objects"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 2v12M5 4.5 8 1.8l3 2.7M5 11.5 8 14.2l3-2.7"/></svg><span data-en="Vertical">رأسي</span></button>
+      <button type="button" class="sec" id="spH" data-ar-title="محاذاة الكائنات إلى اليمين أو اليسار" data-en-title="Align objects to the right or left"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 8h12M4.5 5 1.8 8l2.7 3M11.5 5l2.7 3-2.7 3"/></svg><span data-en="Horizontal">أفقي</span></button>
     </div>
-    <div class="sprow2"><span class="splab">المحاذاة الأفقية</span><div class="seg seg3" id="hAlign" title="المحاذاة الأفقية">
-      <button type="button" data-v="auto" aria-pressed="true">تلقائي</button>
-      <button type="button" data-v="right" aria-pressed="false">يمين</button>
-      <button type="button" data-v="left" aria-pressed="false">يسار</button>
+    <div class="sprow2"><span class="splab" data-en="Alignment">المحاذاة الأفقية</span><div class="seg seg3" id="hAlign">
+      <button type="button" data-v="auto" aria-pressed="true" data-en="Auto">تلقائي</button>
+      <button type="button" data-v="right" aria-pressed="false" data-en="Right">يمين</button>
+      <button type="button" data-v="left" aria-pressed="false" data-en="Left">يسار</button>
     </div></div>
-    <div class="prog" id="prog" hidden><i></i></div>
-    <div class="status" id="status" role="status"></div>
-    <div class="res" id="res"></div>
   </section>
 
-  <section class="panel">
-    <button type="button" class="drop" data-drop="rolesBody" aria-expanded="false"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M4 3l11 6-5 1.5L8 16z"/></svg><b>تحويل عنصر محدد</b><svg class="chev" viewBox="0 0 12 12" width="10" height="10"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
-    <div id="rolesBody" hidden style="display:grid;gap:5px">
-      <span class="note">حدّد مربعًا في الشريحة، ثم اختر نوعه.</span>
-      <div id="roles" style="display:grid;gap:4px"></div>
-    </div>
-    <div class="status" id="rstatus" role="status"></div>
+  <section class="panel" data-pane="obj" hidden>
+    <span class="note" data-en="Select a box on the slide, then pick what it is.">حدّد مربعًا في الشريحة، ثم اختر نوعه.</span>
+    <div id="roles" style="display:grid;gap:4px"></div>
   </section>
 
-  <section class="panel">
-    <button type="button" class="drop" data-drop="tplsBody" aria-expanded="false"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="14" height="5" rx="1.2"/><rect x="3" y="10" width="6" height="7" rx="1.2"/><rect x="11" y="10" width="6" height="7" rx="1.2"/></svg><b>إدراج كائن</b><svg class="chev" viewBox="0 0 12 12" width="10" height="10"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
-    <div id="tplsBody" hidden style="display:grid;gap:5px">
-      <span class="note">يُضاف تحت آخر عنصر في الشريحة الحالية.</span>
-      <div id="tpls" style="display:grid;gap:4px"></div>
-    </div>
-    <div class="status" id="tstatus" role="status"></div>
+  <section class="panel" data-pane="ins" hidden>
+    <span class="note" data-en="Added under the last object on the current slide.">يُضاف تحت آخر عنصر في الشريحة الحالية.</span>
+    <div id="tpls" style="display:grid;gap:4px"></div>
   </section>
 
-  <section class="panel">
-    <button type="button" class="tog" id="setTog" aria-expanded="false"><svg viewBox="0 0 12 12" width="10" height="10"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>الإعدادات</button>
-    <div id="setBody" hidden style="display:grid;gap:9px">
-      <label class="chk"><input type="checkbox" id="numChk" checked> ترقيم الصفحات</label>
-      <div class="row" id="numRow"><span style="font-size:.84rem">يبدأ الترقيم من الشريحة</span><span style="display:flex;gap:6px;align-items:center"><input type="number" min="1" class="num" id="numStart" value="1"><button type="button" class="mini" id="numHere">الحالية</button></span></div>
-      <button type="button" class="mini" id="numAll" style="justify-self:start">تحديث أرقام الصفحات الآن</button>
-      <span class="note">الخلفية والعلامة المائية والتذييل تأتي من تخطيط الشريحة (Layout)، والأداة لا تغيّرها.</span>
+  <section class="panel" data-pane="set" hidden>
+    <div class="seg scopeSeg">
+      <button type="button" data-v="cur" aria-pressed="true" data-en="Current slide">الشريحة الحالية</button>
+      <button type="button" data-v="all" aria-pressed="false" data-en="All slides">كل الشرائح</button>
     </div>
+    <button type="button" class="sec" id="solBtn"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/><path id="solSlash" d="M2.5 13.5l11-11"/></svg><span id="solLbl">إخفاء الحلول</span></button>
+    <div class="sep"></div>
+    <label class="chk"><input type="checkbox" id="numChk" checked> <span data-en="Page numbers">ترقيم الصفحات</span></label>
+    <div class="row" id="numRow"><span style="font-size:.82rem" data-en="Numbering starts at slide">يبدأ الترقيم من الشريحة</span><span style="display:flex;gap:6px;align-items:center"><input type="number" min="1" class="num" id="numStart" value="1"><button type="button" class="mini" id="numHere" data-en="Current">الحالية</button></span></div>
+    <button type="button" class="mini" id="numAll" style="justify-self:start" data-en="Update page numbers now">تحديث أرقام الصفحات الآن</button>
+    <span class="note" data-en="The background, watermark and footer come from the slide layout; the tool leaves them as they are.">الخلفية والعلامة المائية والتذييل تأتي من تخطيط الشريحة (Layout)، والأداة لا تغيّرها.</span>
   </section>
-  <div class="modal" id="modal" hidden><div class="mbox" role="dialog" aria-modal="true"><h3 id="modalT"></h3><div id="modalB"></div><button type="button" class="mini" id="modalX" style="margin-top:10px">إغلاق</button></div></div>
+
+  <div class="prog" id="prog" hidden><i></i></div>
+  <div class="status" id="status" role="status"></div>
+  <div class="res" id="res"></div>
+  <div class="modal" id="modal" hidden><div class="mbox" role="dialog" aria-modal="true"><h3 id="modalT"></h3><div id="modalB"></div><button type="button" class="mini" id="modalX" style="margin-top:10px" data-en="Close">إغلاق</button></div></div>
   <footer class="credit" dir="ltr">By Zaher Alkablawi <span id="appVer">1.0</span></footer>
 </div>
 <script>/*JSZIP*/</script>

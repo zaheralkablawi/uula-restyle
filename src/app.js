@@ -5,13 +5,15 @@ const VER = '1.0';
 const PT = UR.PT;
 const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
 const load = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
+let lang = load('ur-lang', 'ar');
+const L = (ar, en) => lang === 'en' ? en : ar;
 let scope = load('ur-scope', 'cur'); if (scope !== 'all') scope = 'cur';
 let busy = false, supported = false;
 
 // ---------- status / results ----------
 const status = $('status'), res = $('res');
 const say = (m, cls) => { status.textContent = m || ''; status.className = 'status' + (cls ? ' ' + cls : ''); };
-const tsay = m => { $('tstatus').textContent = m || ''; };
+const tsay = m => say(m);
 const prog = f => { $('prog').hidden = f == null; if (f != null) $('prog').firstElementChild.style.width = Math.round(f * 100) + '%'; };
 function line(cls, html) { const d = document.createElement('div'); d.className = 'ln ' + cls; d.innerHTML = html; res.appendChild(d); return d; }
 const slideLinks = (ids, num) => ids.map(id => '<a data-id="' + id + '">' + num(id) + '</a>').join('، ');
@@ -20,7 +22,7 @@ res.addEventListener('click', e => {
   PowerPoint.run(async ctx => { ctx.presentation.setSelectedSlides([a.dataset.id]); await ctx.sync(); }).catch(() => {});
 });
 const errText = e => { const loc = e && e.debugInfo && e.debugInfo.errorLocation; return (e && (e.code || e.message) || String(e)) + (loc ? ' (' + loc + ')' : ''); };
-const cnt = n => n === 1 ? 'شريحة واحدة' : n === 2 ? 'شريحتان' : n <= 10 ? n + ' شرائح' : n + ' شريحة';
+const cnt = n => lang === 'en' ? (n === 1 ? '1 slide' : n + ' slides') : n === 1 ? 'شريحة واحدة' : n === 2 ? 'شريحتان' : n <= 10 ? n + ' شرائح' : n + ' شريحة';
 const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 
 // ---------- Office helpers ----------
@@ -118,10 +120,10 @@ async function convertOne(id, opts, rep) {
   const pkg = await UR.openPackage(b64);
   let r;
   try { r = UR.restyle(pkg, { watermark: opts.watermark }); }
-  catch (e) { throw new Error('تحليل الشريحة: ' + errText(e)); }
+  catch (e) { throw new Error(L('تحليل الشريحة: ', 'Reading the slide: ') + errText(e)); }
   let newId;
   try { newId = await insertAfter(await UR.buildPackage(pkg, r.xml, r.rels), id); }
-  catch (e) { throw new Error('إدراج الشريحة: ' + errText(e)); }
+  catch (e) { throw new Error(L('إدراج الشريحة: ', 'Inserting the slide: ') + errText(e)); }
   const lay = await refine(newId, r.plan);
   await unmark(newId);
   await deleteSlide(id);
@@ -158,45 +160,45 @@ async function askSplit(ids) {
   try {
     let added = 0;
     for (let k = 0; k < ids.length; k++) {
-      say('تقسيم الشريحة ' + (k + 1) + ' من ' + ids.length + '…');
+      say(L('تقسيم الشريحة ', 'Splitting slide ') + (k + 1) + L(' من ', ' of ') + ids.length + '…');
       const made = await splitSlide(ids[k]); added += made.length - 1;
     }
     if ($('numChk').checked) await renumber();
     const box = res.querySelector('.splitask'); if (box) box.remove();
-    say(added ? 'تم التقسيم، وأُضيفت ' + cnt(added) + '.' : 'تم.');
-  } catch (e) { say('تعذّر التقسيم: ' + errText(e)); }
+    say(added ? L('تم التقسيم، وأُضيفت ', 'Split; added ') + cnt(added) + '.' : L('تم.', 'Done.'));
+  } catch (e) { say(L('تعذّر التقسيم: ', 'Could not split: ') + errText(e)); }
   finally { busy = false; lock(); }
 }
 async function doConvert() {
   const ids = await targetIds();
-  if (!ids.length) { say('حدّد شريحة أولًا.'); return; }
+  if (!ids.length) { say(L('حدّد شريحة أولًا.', 'Select a slide first.')); return; }
   pendingSplit.clear();
   const rep = { done: [], full: [], tooLong: [], errs: [], boxes: 0, tables: 0, links: [], linkFail: [], qr: 0 };
   const opts = {};
   for (let k = 0; k < ids.length; k++) {
-    prog(k / ids.length); say('تحويل الشريحة ' + (k + 1) + ' من ' + ids.length + '…');
+    prog(k / ids.length); say(L('تحويل الشريحة ', 'Restyling slide ') + (k + 1) + L(' من ', ' of ') + ids.length + '…');
     try { const nid = await convertOne(ids[k], opts, rep); rep.done.push(nid); if (scope === 'cur') await run(async ctx => { ctx.presentation.setSelectedSlides([nid]); await ctx.sync(); }).catch(() => {}); }
     catch (e) { rep.errs.push(errText(e)); }
   }
   prog(null);
-  if ($('numChk').checked && rep.done.length) { say('ترقيم الصفحات…'); try { await renumber(); } catch (e) { rep.errs.push('الترقيم: ' + errText(e)); } }
+  if ($('numChk').checked && rep.done.length) { say(L('ترقيم الصفحات…', 'Numbering pages…')); try { await renumber(); } catch (e) { rep.errs.push(L('الترقيم: ', 'Numbering: ') + errText(e)); } }
   const all = await allIds(), num = i => all.indexOf(i) + 1;
   res.innerHTML = '';
-  if (rep.done.length) line('ok', '✓ تم تحويل ' + cnt(rep.done.length) + ': ' + slideLinks(rep.done, num));
+  if (rep.done.length) line('ok', L('✓ تم تحويل ', '✓ Restyled ') + cnt(rep.done.length) + ': ' + slideLinks(rep.done, num));
   if (rep.full.length) {
-    const d = line('warn splitask', '• أطول من الصفحة: ' + slideLinks(rep.full, num)
-      + '<br><span style="display:flex;gap:6px;margin-top:4px"><button type="button" class="mini" data-split="yes">قسّمها إلى شرائح جديدة</button><button type="button" class="mini" data-split="no">لا، اتركها</button></span>');
+    const d = line('warn splitask', L('• أطول من الصفحة: ', '• Longer than the page: ') + slideLinks(rep.full, num)
+      + '<br><span style="display:flex;gap:6px;margin-top:4px"><button type="button" class="mini" data-split="yes">' + L('قسّمها إلى شرائح جديدة', 'Split into new slides') + '</button><button type="button" class="mini" data-split="no">' + L('لا، اتركها', 'No, leave it') + '</button></span>');
     d.style.display = 'block';
     const list = rep.full.slice();
     d.querySelector('[data-split="yes"]').addEventListener('click', () => askSplit(list));
     d.querySelector('[data-split="no"]').addEventListener('click', () => { d.remove(); list.forEach(i => pendingSplit.delete(i)); });
   }
-  if (rep.tooLong.length) line('err', '• أطول من الصفحة ولا يمكن تقسيمها، راجعها: ' + slideLinks(rep.tooLong, num));
-  if (rep.qr) line('ok', '• استُبدل QR جديد: ' + rep.qr + (rep.links.length ? ' (رُبط الرابط)' : ''));
-  rep.linkFail.forEach(u => line('warn', '• أضف هذا الرابط للـQR يدويًا: <span dir="ltr">' + esc(u) + '</span>'));
+  if (rep.tooLong.length) line('err', L('• أطول من الصفحة ولا يمكن تقسيمها، راجعها: ', '• Too long and cannot be split, check: ') + slideLinks(rep.tooLong, num));
+  if (rep.qr) line('ok', L('• استُبدل QR جديد: ', '• New QR placed: ') + rep.qr + (rep.links.length ? L(' (رُبط الرابط)', ' (link added)') : ''));
+  rep.linkFail.forEach(u => line('warn', L('• أضف هذا الرابط للـQR يدويًا: ', '• Add this link to the QR yourself: ') + '<span dir="ltr">' + esc(u) + '</span>'));
   rep.errs.forEach(m => line('err', '✗ ' + esc(m)));
-  if (rep.done.length) line('', '<span class="note">يلزم تثبيت خط UULA Sans على الجهاز.</span>');
-  say(rep.done.length ? 'تم التحويل.' : 'لم يتم تحويل أي شريحة.');
+  if (rep.done.length) line('', '<span class="note">' + L('يلزم تثبيت خط UULA Sans على الجهاز.', 'The UULA Sans font must be installed.') + '</span>');
+  say(rep.done.length ? L('تم التحويل.', 'Restyled.') : L('لم يتم تحويل أي شريحة.', 'No slide was restyled.'));
 }
 
 // ---------- page numbers ----------
@@ -245,8 +247,8 @@ $('numChk').addEventListener('change', saveNum);
 $('numAll').addEventListener('click', async () => {
   if (busy || !supported) return;
   busy = true; lock();
-  try { say('ترقيم الصفحات…'); await renumber(); say('تم تحديث أرقام الصفحات.'); }
-  catch (e) { say('تعذّر الترقيم: ' + errText(e)); }
+  try { say(L('ترقيم الصفحات…', 'Numbering pages…')); await renumber(); say(L('تم تحديث أرقام الصفحات.', 'Page numbers updated.')); }
+  catch (e) { say(L('تعذّر الترقيم: ', 'Could not number pages: ') + errText(e)); }
   finally { busy = false; lock(); }
 });
 
@@ -259,11 +261,11 @@ function buildTemplateList() {
   for (const t of URT.LIST) { let g = groups.find(x => x.name === t.g); if (!g) groups.push(g = { name: t.g, items: [] }); g.items.push(t); }
   for (const g of groups) {
     const d = document.createElement('div'); d.className = 'tgroup';
-    d.innerHTML = '<div class="gt">' + g.name + '</div>';
+    d.innerHTML = '<div class="gt">' + L(g.name, URT.GROUP_EN[g.name] || g.name) + '</div>';
     const grid = document.createElement('div'); grid.className = 'tgrid';
     for (const t of g.items) {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'tbtn'; b.dataset.id = t.id;
-      b.title = t.full || t.name; b.innerHTML = '<i style="background:#' + (SW[t.id] || 'FFFFFF') + '"></i><span>' + t.name + '</span>';
+      b.title = L(t.full || t.name, t.en); b.innerHTML = '<i style="background:#' + (SW[t.id] || 'FFFFFF') + '"></i><span>' + L(t.name, t.en) + '</span>';
       grid.appendChild(b);
     }
     d.appendChild(grid); host.appendChild(d);
@@ -275,7 +277,7 @@ async function insertTemplate(tid) {
   busy = true; lock(); tsay('');
   try {
     const id = await currentId();
-    if (!id) { tsay('حدّد شريحة أولًا.'); return; }
+    if (!id) { tsay(L('حدّد شريحة أولًا.', 'Select a slide first.')); return; }
     const pkg = await UR.openPackage(await exportSlide(id));
     const r = URT.apply(pkg, tid);
     const newId = await insertAfter(await UR.buildPackage(pkg, r.xml, r.rels), id);
@@ -306,23 +308,26 @@ async function insertTemplate(tid) {
       } catch (e) {}
     });
     await unmark(newId);
-    tsay(r.fitsReal === false ? 'أُضيف القالب، لكنه تجاوز أسفل الصفحة.' : 'أُضيف القالب.');
-  } catch (e) { tsay('تعذّرت الإضافة: ' + errText(e)); }
+    tsay(r.fitsReal === false ? L('أُضيف القالب، لكنه تجاوز أسفل الصفحة.', 'Inserted, but it goes past the bottom of the page.') : L('أُضيف القالب.', 'Inserted.'));
+  } catch (e) { tsay(L('تعذّرت الإضافة: ', 'Could not insert: ') + errText(e)); }
   finally { busy = false; lock(); }
 }
 
 // ---------- one object at a time ----------
 const ROLES = [
-  { g: 'نصوص', items: [['chapter', 'اسم الوحدة', 'A6A6A6'], ['lesson', 'اسم الدرس', '1F71DD'], ['topic', 'موضوع', '000000'], ['body', 'فقرة', 'FFFFFF'], ['bullets', 'نقاط', 'FFFFFF'], ['qhead', 'عنوان أسئلة', 'FF0000'], ['question', 'سؤال', 'FF0000'], ['answer', 'حل', '1F71DE'], ['choice', 'خيارات', 'FFFFFF']] },
-  { g: 'حاويات', items: [['note', 'ملاحظة', 'FBEBD3'], ['quote', 'نص مقتطف', 'E2F0D9'], ['def', 'تعريف', 'E2F0D9'], ['formula', 'قوانين', 'D3E4F5'], ['other', 'صيغة أخرى', 'FBEBD3'], ['activity', 'نشاط', 'F1F1F1'], ['mars', 'من المريخ', 'F1F1F1']] }
+  { g: 'نصوص', ge: 'Text', items: [['chapter', 'اسم الوحدة', 'A6A6A6'], ['lesson', 'اسم الدرس', '1F71DD'], ['topic', 'موضوع', '000000'], ['body', 'فقرة', 'FFFFFF'], ['bullets', 'نقاط', 'FFFFFF'], ['qhead', 'عنوان أسئلة', 'FF0000'], ['question', 'سؤال', 'FF0000'], ['answer', 'حل', '1F71DE'], ['choice', 'خيارات', 'FFFFFF']] },
+  { g: 'حاويات', ge: 'Containers', items: [['note', 'ملاحظة', 'FBEBD3'], ['quote', 'نص مقتطف', 'E2F0D9'], ['def', 'تعريف', 'E2F0D9'], ['formula', 'قوانين', 'D3E4F5'], ['other', 'صيغة أخرى', 'FBEBD3'], ['activity', 'نشاط', 'F1F1F1'], ['mars', 'من المريخ', 'F1F1F1']] }
 ];
+const ROLE_EN = { chapter: 'Unit', lesson: 'Lesson', topic: 'Topic', body: 'Paragraph', bullets: 'Bullets', qhead: 'Q head', question: 'Question', answer: 'Solution', choice: 'Choices',
+  note: 'Note', quote: 'Quote', def: 'Definition', formula: 'Formulas', other: 'Other form', activity: 'Activity', mars: 'Challenge' };
 function buildRoleList() {
   const host = $('roles'); host.innerHTML = '';
   for (const g of ROLES) {
     const d = document.createElement('div'); d.className = 'tgroup';
-    d.innerHTML = '<div class="gt">' + g.g + '</div>';
+    d.innerHTML = '<div class="gt">' + L(g.g, g.ge) + '</div>';
     const grid = document.createElement('div'); grid.className = 'tgrid';
-    for (const [id, name, col] of g.items) {
+    for (const [id, nameAr, col] of g.items) {
+      const name = L(nameAr, ROLE_EN[id]);
       const b = document.createElement('button'); b.type = 'button'; b.className = 'tbtn'; b.dataset.role = id;
       b.title = name === 'موضوع' ? 'عنوان موضوع' : name; b.innerHTML = '<i style="background:#' + col + '"></i><span>' + name + '</span>';
       grid.appendChild(b);
@@ -331,7 +336,7 @@ function buildRoleList() {
   }
 }
 $('roles').addEventListener('click', e => { const b = e.target.closest('.tbtn'); if (b) pinRole(b.dataset.role); });
-const rsay = m => { $('rstatus').textContent = m || ''; };
+const rsay = m => say(m);
 async function clearSel(slideId) {
   await run(async ctx => {
     const sh = ctx.presentation.slides.getItem(slideId).shapes; sh.load('items/name'); await ctx.sync();
@@ -353,12 +358,12 @@ async function pinRole(role) {
       await ctx.sync();
       return { id: slides.items[0].id, n: shapes.items.length };
     });
-    if (!got) { rsay('حدّد مربعًا في الشريحة أولًا.'); return; }
+    if (!got) { rsay(L('حدّد مربعًا في الشريحة أولًا.', 'Select a box on the slide first.')); return; }
     slideId = got.id;
     const pkg = await UR.openPackage(await exportSlide(slideId));
     let r;
     try { r = UR.applyRole(pkg, role); }
-    catch (e) { await clearSel(slideId); rsay(e.message === 'nosel' ? 'حدّد مربعًا في الشريحة أولًا.' : 'تعذّر التحويل: ' + errText(e)); return; }
+    catch (e) { await clearSel(slideId); rsay(e.message === 'nosel' ? L('حدّد مربعًا في الشريحة أولًا.', 'Select a box on the slide first.') : L('تعذّر التحويل: ', 'Could not restyle: ') + errText(e)); return; }
     const newId = await insertAfter(await UR.buildPackage(pkg, r.xml, r.rels), slideId);
     await deleteSlide(slideId); slideId = null;
     // real text heights: fit the container around the text
@@ -400,8 +405,8 @@ async function pinRole(role) {
       try { const ids = r.targets.map(t => map[t.idx]).filter(Boolean).map(s => s.id); ctx.presentation.slides.getItem(newId).setSelectedShapes(ids); await ctx.sync(); } catch (e) {}
     });
     await unmark(newId);
-    rsay('تم.');
-  } catch (e) { if (slideId) await clearSel(slideId); rsay('تعذّر التحويل: ' + errText(e)); }
+    rsay(L('تم.', 'Done.'));
+  } catch (e) { if (slideId) await clearSel(slideId); rsay(L('تعذّر التحويل: ', 'Could not restyle: ') + errText(e)); }
   finally { busy = false; lock(); }
 }
 
@@ -469,19 +474,19 @@ async function spacingRun(kind) {
   busy = true; lock(); res.innerHTML = '';
   try {
     const ids = await targetIds();
-    if (!ids.length) { say('حدّد شريحة أولًا.'); return; }
+    if (!ids.length) { say(L('حدّد شريحة أولًا.', 'Select a slide first.')); return; }
     const over = [];
     for (let k = 0; k < ids.length; k++) {
-      prog(k / ids.length); say('تنسيق المسافات ' + (k + 1) + ' من ' + ids.length + '…');
+      prog(k / ids.length); say(L('تنسيق المسافات ', 'Spacing ') + (k + 1) + L(' من ', ' of ') + ids.length + '…');
       try {
         if (kind === 'v') { const r = await spaceSlide(ids[k]); if (r.over) over.push(ids[k]); }
         else await alignSlide(ids[k], hMode, scope === 'cur');
       } catch (e) { line('err', '✗ ' + esc(errText(e))); }
     }
     prog(null);
-    if (over.length) { const all = await allIds(); line('warn', '• المحتوى أطول من الصفحة: ' + slideLinks(over, i => all.indexOf(i) + 1)); }
-    say('تم تنسيق المسافات.');
-  } catch (e) { prog(null); say('حدث خطأ: ' + errText(e)); }
+    if (over.length) { const all = await allIds(); line('warn', L('• المحتوى أطول من الصفحة: ', '• Longer than the page: ') + slideLinks(over, i => all.indexOf(i) + 1)); }
+    say(L('تم تنسيق المسافات.', 'Spacing done.'));
+  } catch (e) { prog(null); say(L('حدث خطأ: ', 'Error: ') + errText(e)); }
   finally { busy = false; lock(); }
 }
 $('spV').addEventListener('click', () => spacingRun('v'));
@@ -528,7 +533,7 @@ async function emptyGrid(b64, ext) {
   return cv.toDataURL('image/png').split(',')[1];
 }
 function solHidden() { const s = docSettings(); return !!(s && s.get('urSolHidden')); }
-function solLabel() { const h = solHidden(); $('solLbl').textContent = h ? 'إظهار الحلول' : 'إخفاء الحلول'; $('solSlash').style.display = h ? 'none' : ''; }
+function solLabel() { const h = solHidden(); $('solLbl').textContent = h ? L('إظهار الحلول', 'Show solutions') : L('إخفاء الحلول', 'Hide solutions'); $('solSlash').style.display = h ? 'none' : ''; }
 async function solSlide(id, mode) {
   const pkg = await UR.openPackage(await exportSlide(id));
   let r;
@@ -556,18 +561,18 @@ $('solBtn').addEventListener('click', async () => {
   const mode = solHidden() ? 'show' : 'hide';
   try {
     const ids = await targetIds();
-    if (!ids.length) { say('حدّد شريحة أولًا.'); return; }
+    if (!ids.length) { say(L('حدّد شريحة أولًا.', 'Select a slide first.')); return; }
     let total = 0, slides = 0;
     for (let k = 0; k < ids.length; k++) {
-      prog(k / ids.length); say((mode === 'hide' ? 'إخفاء' : 'إظهار') + ' الحلول ' + (k + 1) + ' من ' + ids.length + '…');
+      prog(k / ids.length); say((mode === 'hide' ? L('إخفاء الحلول ', 'Hiding solutions ') : L('إظهار الحلول ', 'Showing solutions ')) + (k + 1) + L(' من ', ' of ') + ids.length + '…');
       try { const n = await solSlide(ids[k], mode); if (n) { total += n; slides++; } }
       catch (e) { line('err', '✗ ' + esc(errText(e))); }
     }
     prog(null);
     const s = docSettings(); if (s) { s.set('urSolHidden', mode === 'hide'); s.saveAsync(); }
     solLabel();
-    say(total ? (mode === 'hide' ? 'أُخفيت الحلول في ' : 'ظهرت الحلول في ') + cnt(slides) + '.' : (mode === 'hide' ? 'لم أجد حلولًا لإخفائها.' : 'لا توجد حلول مخفية.'));
-  } catch (e) { prog(null); say('حدث خطأ: ' + errText(e)); }
+    say(total ? (mode === 'hide' ? L('أُخفيت الحلول في ', 'Solutions hidden in ') : L('ظهرت الحلول في ', 'Solutions shown in ')) + cnt(slides) + '.' : (mode === 'hide' ? L('لم أجد حلولًا لإخفائها.', 'No solutions found to hide.') : L('لا توجد حلول مخفية.', 'No hidden solutions.')));
+  } catch (e) { prog(null); say(L('حدث خطأ: ', 'Error: ') + errText(e)); }
   finally { busy = false; lock(); }
 });
 
@@ -582,19 +587,29 @@ $('goBtn').addEventListener('click', async () => {
   if (busy || !supported) return;
   busy = true; lock(); res.innerHTML = '';
   try { await doConvert(); }
-  catch (e) { prog(null); say('حدث خطأ: ' + errText(e)); }
+  catch (e) { prog(null); say(L('حدث خطأ: ', 'Error: ') + errText(e)); }
   finally { busy = false; lock(); }
 });
-function setScope(v) { scope = v; save('ur-scope', v); $('scope').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v))); }
-$('scope').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setScope(b.dataset.v); });
+function setScope(v) { scope = v; save('ur-scope', v); document.querySelectorAll('.scopeSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v))); }
+document.querySelectorAll('.scopeSeg').forEach(sg => sg.addEventListener('click', e => { const b = e.target.closest('button'); if (b) setScope(b.dataset.v); }));
 setScope(scope);
-document.querySelectorAll('.drop').forEach(b => {
-  const body = $(b.dataset.drop), key = 'ur-open-' + b.dataset.drop;
-  const set = o => { b.setAttribute('aria-expanded', String(o)); body.hidden = !o; save(key, o); };
-  set(load(key, false));
-  b.addEventListener('click', () => set(body.hidden));
-});
-$('setTog').addEventListener('click', () => { const o = $('setTog').getAttribute('aria-expanded') !== 'true'; $('setTog').setAttribute('aria-expanded', String(o)); $('setBody').hidden = !o; });
+// tabs
+function setTab(t) {
+  document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
+  document.querySelectorAll('[data-pane]').forEach(s => { s.hidden = s.dataset.pane !== t; });
+  save('ur-tab', t);
+}
+$('tabs').addEventListener('click', e => { const b = e.target.closest('button[data-tab]'); if (b) setTab(b.dataset.tab); });
+setTab(load('ur-tab', 'conv'));
+// language
+function applyLang() {
+  document.documentElement.lang = lang; document.documentElement.dir = lang === 'en' ? 'ltr' : 'rtl';
+  document.querySelectorAll('[data-en]').forEach(el => { if (el.dataset.ar == null) el.dataset.ar = el.textContent; el.textContent = lang === 'en' ? el.dataset.en : el.dataset.ar; });
+  document.querySelectorAll('[data-en-title]').forEach(el => { el.title = lang === 'en' ? el.dataset.enTitle : el.dataset.arTitle; });
+  $('langBtn').textContent = lang === 'en' ? 'ع' : 'EN';
+  buildTemplateList(); buildRoleList(); solLabel(); lock();
+}
+$('langBtn').addEventListener('click', () => { lang = lang === 'en' ? 'ar' : 'en'; save('ur-lang', lang); applyLang(); say(''); });
 
 // ---------- menu / about ----------
 function menu(o) { $('appMenu').hidden = !o; $('menuBtn').setAttribute('aria-expanded', String(o)); }
@@ -606,11 +621,12 @@ $('modalX').addEventListener('click', () => { $('modal').hidden = true; });
 $('modal').addEventListener('click', e => { if (e.target === $('modal')) $('modal').hidden = true; });
 $('aboutBtn').addEventListener('click', () => {
   menu(false);
-  modal('حول الأداة', '<p>تحوّل شرائح A4 إلى ستايل مذكرات علا بضغطة زر، وتضيف قوالب المذكرة الجاهزة.</p>'
-    + '<ul><li>خط UULA Sans، والنص 11 على شبكة سطرها 13.3</li><li>العناوين والأسئلة والإجابات بألوان علا</li><li>حاويات بعرض الصفحة، وجداول وصور بالشكل الموحّد</li><li>تقسيم الشريحة تلقائيًا إذا طال المحتوى</li></ul>'
-    + '<p>لا يُحذف أي محتوى؛ تُحذف الزخارف القديمة فقط.</p>'
+  modal(L('حول الأداة', 'About'), (lang === 'en'
+    ? '<p>Restyles A4 slides into the UULA study-guide style with one click, and inserts the ready study-guide objects.</p><ul><li>UULA Sans font, 11pt text on the page grid</li><li>Headings, questions and answers in UULA colors</li><li>Full-width containers, tables and pictures in one style</li><li>Hide / show the solutions</li></ul><p>No content is deleted; only old decoration is removed.</p>'
+    : '<p>تحوّل شرائح A4 إلى ستايل مذكرات علا بضغطة زر، وتضيف قوالب المذكرة الجاهزة.</p><ul><li>خط UULA Sans، والنص 11 على شبكة الصفحة</li><li>العناوين والأسئلة والإجابات بألوان علا</li><li>حاويات بعرض الصفحة، وجداول وصور بالشكل الموحّد</li><li>إخفاء الحلول وإظهارها</li></ul><p>لا يُحذف أي محتوى؛ تُحذف الزخارف القديمة فقط.</p>')
     + '<p class="foot" dir="ltr">Developed by <b>Zaher Alkablawi</b> · Version ' + VER + '<br>© 2026 UULA. All rights reserved.</p>');
 });
+
 
 // ---------- updates (same method as UULA Arabic Math) ----------
 (function () {
@@ -620,9 +636,9 @@ $('aboutBtn').addEventListener('click', () => {
   const note = m => { if (busy) return; say(m); setTimeout(() => { if (status.textContent === m) say(''); }, 5000); };
   async function check(manual) {
     last = Date.now(); const t = await head();
-    if (!base) { base = t; if (manual) note(t ? 'لديك آخر إصدار.' : 'تعذّر الاتصال.'); return; }
-    if (t && t !== base) { $('updBtn').hidden = false; if (manual) note('يوجد تحديث.'); }
-    else if (manual) note(t ? 'لديك آخر إصدار.' : 'تعذّر الاتصال.');
+    if (!base) { base = t; if (manual) note(t ? L('لديك آخر إصدار.', 'You have the latest version.') : L('تعذّر الاتصال.', 'Could not connect.')); return; }
+    if (t && t !== base) { $('updBtn').hidden = false; if (manual) note(L('يوجد تحديث.', 'An update is available.')); }
+    else if (manual) note(t ? L('لديك آخر إصدار.', 'You have the latest version.') : L('تعذّر الاتصال.', 'Could not connect.'));
   }
   head().then(t => { base = t; });
   setInterval(() => check(false), 60 * 60 * 1000);
@@ -634,13 +650,11 @@ $('aboutBtn').addEventListener('click', () => {
 
 // ---------- start ----------
 $('appVer').textContent = VER;
-buildTemplateList();
-buildRoleList();
-lock();
+applyLang();
 const ready = (window.Office && Office.onReady) ? Office.onReady() : Promise.resolve({});
 ready.then(info => {
-  if (!window.PowerPoint || (info && info.host && info.host !== Office.HostType.PowerPoint)) { say('هذه الأداة تعمل داخل PowerPoint فقط.'); return; }
-  if (!Office.context.requirements.isSetSupported('PowerPointApi', '1.8')) { say('حدّث برنامج PowerPoint لاستخدام الأداة.'); return; }
+  if (!window.PowerPoint || (info && info.host && info.host !== Office.HostType.PowerPoint)) { say(L('هذه الأداة تعمل داخل PowerPoint فقط.', 'This tool works inside PowerPoint only.')); return; }
+  if (!Office.context.requirements.isSetSupported('PowerPointApi', '1.8')) { say(L('حدّث برنامج PowerPoint لاستخدام الأداة.', 'Update PowerPoint to use this tool.')); return; }
   supported = true;
   const s = docSettings();
   if (s) {

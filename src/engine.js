@@ -657,6 +657,8 @@ function styleTable(it, ctx, W) {
       }
     });
   });
+  it.tableRows = rows.length; it.sol = sol;
+  if (!it.fullW) return;                     // something sits beside the table: keep its size
   // width = content width, keeping the column ratios
   const CW = W - 2 * M;
   const tot = grid.reduce((s, g) => s + (+g.getAttribute('w') || 0), 0) || 1;
@@ -838,6 +840,13 @@ function restyle(pkg, opts) {
   }
   const live = items.filter(t => !t.drop);
 
+  // a table becomes full width only when nothing sits beside it
+  for (const t of live.filter(x => x.kind === 'table')) {
+    const g = t.g;
+    t.fullW = !live.some(o => o !== t && !o.drop && o.kind !== 'card' && !o.boxText && o.box === t.box && o.kind !== 'line'
+      && Math.min(o.g.y + o.g.h, g.y + g.h) - Math.max(o.g.y, g.y) > Math.min(o.g.h, g.h) * 0.3
+      && (o.g.x + o.g.w <= g.x + 2 * PT || o.g.x >= g.x + g.w - 2 * PT));
+  }
   // 3) style each item
   for (const t of live) {
     if (t.kind === 'text' || (t.kind === 'chip')) {
@@ -998,7 +1007,7 @@ function buildPlan(doc, live, cards, pkg) {
   for (const b of blocks) if (b.type === 'row') b.cols = makeCols(b.items);
   const mapItem = t => ({
     idx: idxOf(t.el), kind: t.kind, role: t.role || null, roles: t.roles || null,
-    g0: t.g, text: t.text ? t.text.slice(0, 40) : '', est: 0, inBox: !!t.box,
+    g0: t.g, text: t.text ? t.text.slice(0, 40) : '', est: 0, inBox: !!t.box, fullW: !!t.fullW,
     pill: t.pill ? { idx: idxOf(t.pill.el), w: t.pill.w } : null,
     paras: t.kind === 'text' ? kids(kid(t.c, 'txBody', 'p'), 'p', 'a').map(p => { const pPr = kid(p, 'pPr', 'a'); return [paraText(p).length, (runSz(p) || 1100) / 100, pPr ? Math.max(0, +(pPr.getAttribute('marL') || 0)) : 0, desc(p, 'm', 'oMath').length + desc(p, 'm', 'f').length * 2]; }) : null
   });
@@ -1097,11 +1106,12 @@ function layoutPass(plan, heights, mode) {
     const placed = [];
     for (const it of [...items].sort((a, b) => a.g0.y - b.g0.y)) {
       let x, w;
-      const wide = it.kind === 'table' || (it.kind === 'text' && (it.g0.w > W * 0.45 || (single && TEXTY.includes(it.role))));
+      const wide = (it.kind === 'table' && it.fullW) || (it.kind === 'text' && (it.g0.w > W * 0.45 || (single && TEXTY.includes(it.role))));
       if (wide && cols.length === 1) { x = x0; w = x1 - x0; }
       else if (inside) { x = Math.max(x0, it.g0.x); w = Math.min(it.g0.w, x1 - x); }
       else { w = Math.round(it.g0.w * k); x = Math.round(x1 - (maxX - it.g0.x - it.g0.w) * k - w); x = Math.max(x0, Math.min(x, x1 - w)); }
-      if (it.kind === 'table') { x = x0; w = x1 - x0; }
+      if (it.kind === 'table' && it.fullW) { x = x0; w = x1 - x0; }
+      if (it.kind === 'table' && !it.fullW) { w = it.g0.w; x = Math.max(x0, Math.min(inside ? it.g0.x : x, x1 - w)); }
       if (it.kind === 'qr') { x = x0; w = it.g0.w; }
       let y = top + (it.g0.y - rt);
       // keep clear of what was above it (and overlaps it horizontally): text may have grown
@@ -1127,10 +1137,31 @@ function layoutPass(plan, heights, mode) {
         pos[it.idx] = p;
         bottomNow = y + (it.kind === 'text' ? hOf(it, p.w) : it.kind === 'table' ? hOf(it) : (p.h != null ? p.h : hOf(it)));
       }
-      placed.push({ it, bottom: bottomNow });
+      placed.push({ it, bottom: bottomNow, h: bottomNow - y });
       rb = Math.max(rb, bottomNow);
     }
     if (hasQr) shiftForQr(cols, pos, x1);
+    // nothing may overlap now that did not overlap before: move the lower one down
+    const R = q => { const p = pos[q.it.idx]; const pp = q.it.pill ? pos[q.it.pill.idx] : null;
+      const x = pp ? Math.min(p.x, pp.x) : p.x, r = pp ? Math.max(p.x + p.w, pp.x + pp.w) : p.x + p.w;
+      const y = pp ? Math.min(p.y, pp.y) : p.y; return { x, y, w: r - x, h: q.h }; };
+    const hit = (a, b, tol) => a.x < b.x + b.w - tol && b.x < a.x + a.w - tol && a.y < b.y + b.h - tol && b.y < a.y + a.h - tol;
+    for (let pass = 0; pass < 4; pass++) {
+      let moved = false;
+      for (let i = 1; i < placed.length; i++) for (let j = 0; j < i; j++) {
+        const a = placed[j], b = placed[i];
+        if (a.it.kind === 'line' || b.it.kind === 'line') continue;
+        const na = R(a), nb = R(b);
+        if (!hit(na, nb, PT) || hit(a.it.g0, b.it.g0, PT)) continue;
+        const dy = na.y + na.h + ((a.it.role === 'question' && (b.it.role === 'answer' || b.it.role === 'choice')) ? 0 : 4 * PT) - nb.y;
+        if (dy <= 0) continue;
+        pos[b.it.idx].y = Math.round(pos[b.it.idx].y + dy);
+        if (b.it.pill) pos[b.it.pill.idx].y = Math.round(pos[b.it.pill.idx].y + dy);
+        b.bottom += dy; moved = true;
+      }
+      if (!moved) break;
+    }
+    for (const q of placed) rb = Math.max(rb, q.bottom);
     return rb;
   }
   let y = afterHeader != null ? afterHeader : 0, first = true, prevItems = null, prevBox = false, bottom = afterHeader || 0;

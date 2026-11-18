@@ -1,7 +1,7 @@
 (() => {
 'use strict';
 const $ = id => document.getElementById(id);
-const VER = '1.0';
+const VER = '1.1';
 const PT = UR.PT;
 const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
 const load = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
@@ -621,12 +621,296 @@ $('solBtn').addEventListener('click', async () => {
   finally { busy = false; lock(); }
 });
 
+// ---------- Word file → slides ----------
+// every tagged part of the Word file becomes its own text box (named "UULA:<type>"), then the slide is restyled
+function slideEmpty(pkg) {
+  const doc = UR.parseXml(pkg.files.slide), U = UR.util;
+  return !U.topItems(doc).some(el => { const c = U.core(el), n = U.cnvOf(c), nm = n ? n.getAttribute('name') || '' : ''; if (/^CustomPageNumber_/.test(nm)) return false; return c.localName !== 'sp' || /\S/.test([...c.getElementsByTagNameNS(UR.NS.a, 't')].map(t => t.textContent).join('')); });
+}
+let docxPending = null;
+async function importDocx(file) {
+  res.innerHTML = '';
+  say(L('قراءة ملف الوورد…', 'Reading the Word file…'));
+  const parsed = await UW.read(await file.arrayBuffer());
+  const units = parsed.units;
+  if (!units.length) { say(L('لم أجد محتوى في الملف.', 'No content found in the file.')); return; }
+  const id = await currentId();
+  if (!id) { say(L('حدّد شريحة أولًا.', 'Select a slide first.')); return; }
+  const b64 = await exportSlide(id);
+  const pkg0 = await UR.openPackage(b64);
+  const parts = UW.batches(units, pkg0.slideW, pkg0.slideH);
+  const empty = slideEmpty(pkg0);
+  const adds = parts.length - (empty ? 1 : 0);
+  const rp = parsed.report;
+  const info = L('في الملف: ', 'In the file: ') + (rp.tagged + rp.untagged) + L(' جزء نصي', ' text parts') + (rp.untagged ? L(' (منها ' + rp.untagged + ' غير مميز)', ' (' + rp.untagged + ' untagged)') : '')
+    + (rp.tables ? L('، ' + rp.tables + ' جدول', ', ' + rp.tables + ' tables') : '') + (rp.pics ? L('، ' + rp.pics + ' صورة', ', ' + rp.pics + ' pictures') : '') + '.';
+  line('', esc(info));
+  if (adds > 0) {
+    docxPending = { units, parts, b64, id, empty, report: rp };
+    const d = line('warn splitask', L('سيُضاف تقريبًا ', 'About ') + cnt(adds) + L(' بعد الشريحة الحالية' + (empty ? ' (والشريحة الحالية الفارغة تُستخدم أولًا)' : '') + '.', ' will be added after the current slide' + (empty ? ' (the empty current slide is used first)' : '') + '.')
+      + '<br><span style="display:flex;gap:6px;margin-top:4px"><button type="button" class="mini" data-dx="yes">' + L('موافق، أضفها', 'OK, add them') + '</button><button type="button" class="mini" data-dx="no">' + L('إلغاء', 'Cancel') + '</button></span>');
+    d.style.display = 'block';
+    d.querySelector('[data-dx="yes"]').addEventListener('click', () => { d.remove(); runDocx(); });
+    d.querySelector('[data-dx="no"]').addEventListener('click', () => { d.remove(); docxPending = null; say(L('أُلغي الإدراج.', 'Cancelled.')); });
+    say(L('بانتظار موافقتك.', 'Waiting for your OK.'));
+    return;
+  }
+  docxPending = { units, parts, b64, id, empty, report: rp };
+  await runDocx(true);
+}
+async function runDocx(already) {
+  const st = docxPending; if (!st) return;
+  if (!already) { if (busy) return; busy = true; lock(); }
+  try {
+    let prev = st.id, made = [], mediaKey = 1, first = true;
+    for (let k = 0; k < st.parts.length; k++) {
+      prog(k / st.parts.length); say(L('إنشاء الشريحة ', 'Building slide ') + (k + 1) + L(' من ', ' of ') + st.parts.length + '…');
+      const pkg = await UR.openPackage(st.b64);
+      UW.fillSlide(pkg, st.parts[k], { clear: true, mediaKey });
+      mediaKey += st.parts[k].length + 1;
+      const r = UR.restyle(pkg, {});
+      r.xml = UW.syncFallback(r.xml);
+      const newId = await insertAfter(await UR.buildPackage(pkg, r.xml, r.rels), prev);
+      if (first && st.empty) await deleteSlide(st.id);
+      first = false;
+      const lay = await refine(newId, r.plan);
+      await unmark(newId);
+      // still longer than the page: split it (already agreed)
+      if (lay.overflow >= 0 && UR.splitPoint(r.plan, lay) > 0) {
+        pendingSplit.set(newId, { pkg, rels: r.rels, xml: r.xml, plan: r.plan });
+        const ids = await splitSlide(newId);
+        made.push(...ids); prev = ids[ids.length - 1];
+      } else { made.push(newId); prev = newId; }
+    }
+    prog(null);
+    if ($('numChk').checked) { try { await renumber(); } catch (e) {} }
+    await run(async ctx => { ctx.presentation.setSelectedSlides([made[0]]); await ctx.sync(); }).catch(() => {});
+    const all = await allIds(), num = i => all.indexOf(i) + 1;
+    line('ok', L('✓ أُدرج ملف الوورد في ', '✓ The Word file was inserted in ') + cnt(made.length) + ': ' + slideLinks(made, num));
+    if (st.report.inlineObj) line('warn', L('• ' + st.report.inlineObj + ' معادلة كصورة داخل السطر وُضعت كصورة مستقلة، راجعها.', '• ' + st.report.inlineObj + ' inline equation pictures were placed as separate pictures; check them.'));
+    line('', '<span class="note">' + L('يلزم تثبيت خط UULA Sans على الجهاز.', 'The UULA Sans font must be installed.') + '</span>');
+    say(L('تم إدراج ملف الوورد.', 'The Word file was inserted.'));
+  } catch (e) { prog(null); say(L('تعذّر الإدراج: ', 'Could not insert: ') + errText(e)); }
+  finally { docxPending = null; busy = false; lock(); }
+}
+$('docxBtn').addEventListener('click', () => { if (!busy && supported) $('docxFile').click(); });
+$('docxFile').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f || busy) return;
+  busy = true; lock();
+  try { await importDocx(f); }
+  catch (e2) { prog(null); say(L('تعذّر قراءة الملف: ', 'Could not read the file: ') + errText(e2)); }
+  finally { busy = false; lock(); }
+});
+
+// ---------- Word: tagging ----------
+let isWord = false;
+const wtype = id => UW.TYPE[id];
+const wname = id => { const t = wtype(id); return t ? L(t.ar, t.en) : id; };
+function buildWordRoles() {
+  const host = $('wroles'); host.innerHTML = '';
+  for (const g of UW.TYPES) {
+    const d = document.createElement('div'); d.className = 'tgroup';
+    d.innerHTML = '<div class="gt">' + L(g.g, g.ge) + '</div>';
+    const grid = document.createElement('div'); grid.className = 'tgrid';
+    for (const [id, ar, en, col] of g.items) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'tbtn'; b.dataset.wrole = id;
+      b.title = L(ar, en); b.innerHTML = '<i style="background:#' + col + '"></i><span>' + L(ar, en) + '</span>';
+      grid.appendChild(b);
+    }
+    d.appendChild(grid); host.appendChild(d);
+  }
+}
+function styleCC(cc, type) {
+  const t = wtype(type);
+  cc.tag = 'UULA:' + type; cc.title = L(t.ar, t.en); cc.color = '#' + t.col; cc.appearance = 'BoundingBox';
+}
+const isUula = cc => cc && !cc.isNullObject && /^UULA:/.test(cc.tag || '');
+// an empty line between two tagged parts that touch (so their frames do not stick together)
+function spacer(par, where) {
+  const s = par.insertParagraph('', where);
+  try { s.spaceAfter = 0; s.spaceBefore = 0; s.font.size = 6; } catch (e) {}
+  return s;
+}
+async function tagSelection(type) {
+  return Word.run(async ctx => {
+    const sel = ctx.document.getSelection();
+    sel.load('text,isEmpty');
+    const pcc = sel.parentContentControlOrNullObject; pcc.load('isNullObject,tag,text');
+    await ctx.sync();
+    // inside a tagged part with nothing (or all of it) selected: change its type
+    if (isUula(pcc) && (sel.isEmpty || sel.text.trim() === (pcc.text || '').trim())) { styleCC(pcc, type); await ctx.sync(); return 'retag'; }
+    if (sel.isEmpty || !sel.text.trim()) {
+      // the cursor in a paragraph: that whole paragraph
+      const ps = sel.paragraphs; ps.load('items/text'); await ctx.sync();
+      if (!ps.items.length || !ps.items[0].text.trim()) return 'empty';
+    }
+    const ps = sel.paragraphs; ps.load('items/text,items/tableNestingLevel'); await ctx.sync();
+    const first = ps.items[0], last = ps.items[ps.items.length - 1];
+    const partial = !sel.isEmpty && ps.items.length === 1 && sel.text.trim().length < first.text.trim().length - 1;
+    let range;
+    if (partial) range = sel;                       // part of one paragraph: an inline frame
+    else if (first.tableNestingLevel > 0 && ps.items.every(p => p.tableNestingLevel > 0)) { const tb = first.parentTable; range = tb.getRange('Whole'); }
+    else {
+      const prev = first.getPreviousOrNullObject(), next = last.getNextOrNullObject();
+      prev.load('isNullObject,text'); next.load('isNullObject,text');
+      await ctx.sync();
+      const pc = prev.isNullObject ? null : prev.parentContentControlOrNullObject, nc = next.isNullObject ? null : next.parentContentControlOrNullObject;
+      if (pc) pc.load('isNullObject,tag'); if (nc) nc.load('isNullObject,tag');
+      await ctx.sync();
+      const inPrev = isUula(pc) && !(isUula(pcc) && pc.tag === pcc.tag), inNext = isUula(nc) && !(isUula(pcc) && nc.tag === pcc.tag);
+      if (inPrev && prev.text.trim()) spacer(first, 'Before');
+      if (inNext && next.text.trim()) spacer(last, 'After');
+      range = first.getRange('Whole').expandTo(last.getRange('Whole'));
+    }
+    const cc = range.insertContentControl();
+    styleCC(cc, type);
+    await ctx.sync();
+    return partial ? 'inline' : 'new';
+  });
+}
+async function untagSelection() {
+  return Word.run(async ctx => {
+    const sel = ctx.document.getSelection();
+    const pcc = sel.parentContentControlOrNullObject; pcc.load('isNullObject,tag');
+    const inside = sel.contentControls; inside.load('items/tag');
+    await ctx.sync();
+    let n = 0;
+    for (const c of inside.items) if (/^UULA:/.test(c.tag || '')) { c.delete(true); n++; }
+    if (isUula(pcc)) { pcc.delete(true); n++; }
+    await ctx.sync();
+    return n;
+  });
+}
+async function autoTag() {
+  return Word.run(async ctx => {
+    const ps = ctx.document.body.paragraphs;
+    ps.load('items/text,items/style,items/tableNestingLevel');
+    await ctx.sync();
+    const extra = ps.items.map(p => {
+      const cc = p.parentContentControlOrNullObject; cc.load('isNullObject,tag');
+      const pics = p.inlinePictures; pics.load('items/width');
+      p.font.load('color,bold,size');
+      return { cc, pics };
+    });
+    await ctx.sync();
+    const paras = ps.items.map((p, i) => {
+      const e = extra[i];
+      const tagged = !e.cc.isNullObject;
+      const table = p.tableNestingLevel > 0;
+      const pic = e.pics.items.length > 0;
+      const o = { text: p.text, style: p.style, color: p.font.color || '', bold: p.font.bold === true, size: p.font.size || 0, table, pic, big: pic && Math.max(...e.pics.items.map(x => x.width)) > 230 };
+      o.type = tagged ? null : UW.guess(o);
+      o.skip = tagged;
+      return o;
+    });
+    // table paragraphs: one group per table
+    const groups = [];
+    const plain = paras.map((p, i) => p.table ? Object.assign({}, p, { skip: true }) : p);
+    UW.group(plain).forEach(g => groups.push(g));
+    for (let i = 0; i < paras.length; i++) {
+      if (!paras[i].table || paras[i].skip) continue;
+      let j = i; while (j + 1 < paras.length && paras[j + 1].table) j++;
+      groups.push({ type: 'table', from: i, to: j, table: true });
+      i = j;
+    }
+    groups.sort((a, b) => a.from - b.from);
+    // ranges first (before anything moves), then spacers, then the frames
+    const plans = groups.map(g => ({ g, range: g.table ? ps.items[g.from].parentTable.getRange('Whole') : ps.items[g.from].getRange('Whole').expandTo(ps.items[g.to].getRange('Whole')) }));
+    let prevEnd = -10, prevTagged = false;
+    for (let k = 0; k < plans.length; k++) {
+      const g = plans[k].g;
+      const touch = g.from === prevEnd + 1 || (g.from > 0 && paras[g.from - 1].skip && paras[g.from - 1].text.trim() && !paras[g.from - 1].table);
+      if (touch && !g.table) spacer(ps.items[g.from], 'Before');
+      // a part tagged before, right after this one
+      const nx = paras[g.to + 1];
+      if (nx && nx.skip && (nx.text.trim() || nx.table) && !g.table && !(plans[k + 1] && plans[k + 1].g.from === g.to + 1)) spacer(ps.items[g.to], 'After');
+      prevEnd = g.to;
+    }
+    let n = 0;
+    for (const pl of plans) { const cc = pl.range.insertContentControl(); styleCC(cc, pl.g.type); n++; if (n % 40 === 0) await ctx.sync(); }
+    await ctx.sync();
+    return n;
+  });
+}
+async function clearAllTags() {
+  return Word.run(async ctx => {
+    const ccs = ctx.document.contentControls; ccs.load('items/tag'); await ctx.sync();
+    let n = 0;
+    for (const c of ccs.items) if (/^UULA:/.test(c.tag || '')) { c.delete(true); n++; }
+    await ctx.sync();
+    return n;
+  });
+}
+async function reviewList() {
+  const items = await Word.run(async ctx => {
+    const ccs = ctx.document.contentControls; ccs.load('items/id,items/tag,items/text'); await ctx.sync();
+    return ccs.items.filter(c => /^UULA:[a-z]+$/.test(c.tag || '')).map(c => ({ id: c.id, type: c.tag.slice(5), text: (c.text || '').replace(/\s+/g, ' ').trim().slice(0, 70) }));
+  });
+  const list = $('wlist'), sum = $('wsum');
+  list.innerHTML = ''; sum.innerHTML = '';
+  const counts = {};
+  for (const it of items) {
+    counts[it.type] = (counts[it.type] || 0) + 1;
+    const t = wtype(it.type) || { col: '999999' };
+    const d = document.createElement('div'); d.className = 'witem'; d.dataset.id = it.id;
+    d.innerHTML = '<i style="background:#' + t.col + '"></i><b>' + esc(wname(it.type)) + '</b><span>' + esc(it.text || '—') + '</span><button type="button" class="x" title="' + L('إزالة التمييز', 'Remove tag') + '">×</button>';
+    list.appendChild(d);
+  }
+  for (const [k, v] of Object.entries(counts)) { const s = document.createElement('span'); s.textContent = wname(k) + ' ' + v; sum.appendChild(s); }
+  if (!items.length) list.innerHTML = '<span class="note">' + L('لا توجد أجزاء مميزة بعد.', 'No tagged parts yet.') + '</span>';
+}
+$('wlist').addEventListener('click', e => {
+  const it = e.target.closest('.witem'); if (!it) return;
+  const id = +it.dataset.id;
+  if (e.target.closest('.x')) {
+    Word.run(async ctx => { ctx.document.contentControls.getById(id).delete(true); await ctx.sync(); }).then(reviewList).catch(er => say(errText(er)));
+    return;
+  }
+  Word.run(async ctx => { ctx.document.contentControls.getById(id).select('Select'); await ctx.sync(); }).catch(() => {});
+});
+$('wroles').addEventListener('click', async e => {
+  const b = e.target.closest('.tbtn'); if (!b || busy || !supported) return;
+  busy = true; lock();
+  try {
+    const r = await tagSelection(b.dataset.wrole);
+    if (r === 'empty') say(L('حدّد المحتوى أولًا.', 'Select the content first.'));
+    else say((r === 'retag' ? L('تغيّر النوع إلى: ', 'Type changed to: ') : L('مُيّز كـ: ', 'Tagged as: ')) + wname(b.dataset.wrole));
+  } catch (er) { say(L('تعذّر التمييز: ', 'Could not tag: ') + errText(er)); }
+  finally { busy = false; lock(); }
+});
+$('wUntag').addEventListener('click', async () => {
+  if (busy || !supported) return; busy = true; lock();
+  try { const n = await untagSelection(); say(n ? L('أُزيل التمييز.', 'Tag removed.') : L('لا يوجد تمييز في المحدد.', 'Nothing tagged in the selection.')); }
+  catch (er) { say(errText(er)); } finally { busy = false; lock(); }
+});
+$('wAuto').addEventListener('click', async () => {
+  if (busy || !supported) return; busy = true; lock();
+  try { say(L('تمييز المستند…', 'Tagging the document…')); const n = await autoTag(); say(n ? L('مُيّز ', 'Tagged ') + n + L(' جزءًا. راجعها في «مراجعة».', ' parts. Check them in Review.') : L('كل المحتوى مميز.', 'Everything is already tagged.')); }
+  catch (er) { say(L('تعذّر التمييز التلقائي: ', 'Auto-tag failed: ') + errText(er)); } finally { busy = false; lock(); }
+});
+$('wRefresh').addEventListener('click', () => { if (supported) reviewList().catch(er => say(errText(er))); });
+$('wClear').addEventListener('click', () => {
+  if (busy || !supported) return;
+  res.innerHTML = '';
+  const d = line('warn', L('إزالة كل التمييز من المستند؟ (يبقى النص كما هو)', 'Remove all tags from the document? (the text stays)')
+    + '<br><span style="display:flex;gap:6px;margin-top:4px"><button type="button" class="mini" data-c="yes">' + L('نعم، أزلها', 'Yes, remove') + '</button><button type="button" class="mini" data-c="no">' + L('لا', 'No') + '</button></span>');
+  d.style.display = 'block';
+  d.querySelector('[data-c="no"]').addEventListener('click', () => d.remove());
+  d.querySelector('[data-c="yes"]').addEventListener('click', async () => {
+    d.remove(); busy = true; lock();
+    try { const n = await clearAllTags(); say(L('أُزيل ', 'Removed ') + n + L(' تمييز.', ' tags.')); await reviewList(); }
+    catch (er) { say(errText(er)); } finally { busy = false; lock(); }
+  });
+});
+
 // ---------- main button ----------
 function lock() {
   $('goBtn').disabled = busy || !supported;
   $('solBtn').disabled = busy || !supported;
   $('spV').disabled = busy || !supported; $('spH').disabled = busy || !supported;
   document.querySelectorAll('.tbtn').forEach(b => { b.disabled = busy || !supported; });
+  ['docxBtn', 'wAuto', 'wUntag', 'wClear'].forEach(k => { if ($(k)) $(k).disabled = busy || !supported; });
 }
 $('goBtn').addEventListener('click', async () => {
   if (busy || !supported) return;
@@ -640,11 +924,13 @@ document.querySelectorAll('.scopeSeg').forEach(sg => sg.addEventListener('click'
 setScope(scope);
 // tabs
 function setTab(t) {
-  document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
+  document.querySelectorAll('#tabs button, #wtabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
   document.querySelectorAll('[data-pane]').forEach(s => { s.hidden = s.dataset.pane !== t; });
-  save('ur-tab', t);
+  save(isWord ? 'ur-wtab' : 'ur-tab', t);
+  if (t === 'wrev' && supported) reviewList().catch(() => {});
 }
 $('tabs').addEventListener('click', e => { const b = e.target.closest('button[data-tab]'); if (b) setTab(b.dataset.tab); });
+$('wtabs').addEventListener('click', e => { const b = e.target.closest('button[data-tab]'); if (b) setTab(b.dataset.tab); });
 setTab(load('ur-tab', 'conv'));
 // language
 function applyLang() {
@@ -652,7 +938,8 @@ function applyLang() {
   document.querySelectorAll('[data-en]').forEach(el => { if (el.dataset.ar == null) el.dataset.ar = el.textContent; el.textContent = lang === 'en' ? el.dataset.en : el.dataset.ar; });
   document.querySelectorAll('[data-en-title]').forEach(el => { el.title = lang === 'en' ? el.dataset.enTitle : el.dataset.arTitle; });
   $('langBtn').textContent = lang === 'en' ? 'ع' : 'EN';
-  buildTemplateList(); buildRoleList(); solLabel(); lock();
+  buildTemplateList(); buildRoleList(); buildWordRoles(); solLabel(); lock();
+  if (isWord && supported && !$('wlist').closest('[data-pane]').hidden) reviewList().catch(() => {});
 }
 $('langBtn').addEventListener('click', () => { lang = lang === 'en' ? 'ar' : 'en'; save('ur-lang', lang); applyLang(); say(''); });
 
@@ -667,8 +954,8 @@ $('modal').addEventListener('click', e => { if (e.target === $('modal')) $('moda
 $('aboutBtn').addEventListener('click', () => {
   menu(false);
   modal(L('حول الأداة', 'About'), (lang === 'en'
-    ? '<p>Restyles A4 slides into the UULA study-guide style with one click, and inserts the ready study-guide objects.</p><ul><li>UULA Sans font, 11pt text on the page grid</li><li>Headings, questions and answers in UULA colors</li><li>Full-width containers, tables and pictures in one style</li><li>Hide / show the solutions</li></ul><p>No content is deleted; only old decoration is removed.</p>'
-    : '<p>تحوّل شرائح A4 إلى ستايل مذكرات علا بضغطة زر، وتضيف قوالب المذكرة الجاهزة.</p><ul><li>خط UULA Sans، والنص 11 على شبكة الصفحة</li><li>العناوين والأسئلة والإجابات بألوان علا</li><li>حاويات بعرض الصفحة، وجداول وصور بالشكل الموحّد</li><li>إخفاء الحلول وإظهارها</li></ul><p>لا يُحذف أي محتوى؛ تُحذف الزخارف القديمة فقط.</p>')
+    ? '<p>Restyles A4 slides into the UULA study-guide style with one click, and inserts the ready study-guide objects.</p><ul><li>UULA Sans font, 11pt text on the page grid</li><li>Headings, questions and answers in UULA colors</li><li>Full-width containers, tables and pictures in one style</li><li>Hide / show the solutions</li><li>In Word: tag the parts (question, solution, definition…), then insert the Word file into PowerPoint</li></ul><p>No content is deleted; only old decoration is removed.</p>'
+    : '<p>تحوّل شرائح A4 إلى ستايل مذكرات علا بضغطة زر، وتضيف قوالب المذكرة الجاهزة.</p><ul><li>خط UULA Sans، والنص 11 على شبكة الصفحة</li><li>العناوين والأسئلة والإجابات بألوان علا</li><li>حاويات بعرض الصفحة، وجداول وصور بالشكل الموحّد</li><li>إخفاء الحلول وإظهارها</li><li>في الوورد: تمييز الأجزاء (سؤال، حل، تعريف…) ثم إدراج ملف الوورد في الباوربوينت</li></ul><p>لا يُحذف أي محتوى؛ تُحذف الزخارف القديمة فقط.</p>')
     + '<p class="foot" dir="ltr">Developed by <b>Zaher Alkablawi</b> · Version ' + VER + '<br>© 2026 UULA. All rights reserved.</p>');
 });
 
@@ -698,7 +985,15 @@ $('appVer').textContent = VER;
 applyLang();
 const ready = (window.Office && Office.onReady) ? Office.onReady() : Promise.resolve({});
 ready.then(info => {
-  if (!window.PowerPoint || (info && info.host && info.host !== Office.HostType.PowerPoint)) { say(L('هذه الأداة تعمل داخل PowerPoint فقط.', 'This tool works inside PowerPoint only.')); return; }
+  if (info && info.host === Office.HostType.Word) {
+    isWord = true;
+    $('tabs').hidden = true; $('wtabs').hidden = false;
+    let wt = load('ur-wtab', 'wtag'); if (!['wtag', 'wrev'].includes(wt)) wt = 'wtag';
+    if (!Office.context.requirements.isSetSupported('WordApi', '1.3')) { setTab(wt); say(L('حدّث برنامج Word لاستخدام الأداة.', 'Update Word to use this tool.')); return; }
+    supported = true; lock(); setTab(wt);
+    return;
+  }
+  if (!window.PowerPoint || (info && info.host && info.host !== Office.HostType.PowerPoint)) { say(L('هذه الأداة تعمل داخل PowerPoint وWord فقط.', 'This tool works inside PowerPoint and Word only.')); return; }
   if (!Office.context.requirements.isSetSupported('PowerPointApi', '1.8')) { say(L('حدّث برنامج PowerPoint لاستخدام الأداة.', 'Update PowerPoint to use this tool.')); return; }
   supported = true;
   const s = docSettings();

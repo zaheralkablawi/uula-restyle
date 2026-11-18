@@ -79,6 +79,17 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
 .ib.lang{font:inherit;font-size:.72rem;font-weight:700;width:30px}
 .gt2{font-size:.84rem;font-weight:600}
 .sep{height:1px;background:var(--line);margin:2px 0}
+.wlist{display:grid;gap:3px;max-height:340px;overflow:auto}
+.witem{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:7px;padding:3px 6px;font-size:.74rem;cursor:pointer;background:var(--panel)}
+.witem:hover{border-color:var(--accent);background:var(--accent-soft)}
+.witem i{flex:none;width:9px;height:9px;border-radius:2px}
+.witem b{flex:none;font-weight:600}
+.witem span{flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--muted)}
+.witem .x{flex:none;border:0;background:none;color:var(--muted);cursor:pointer;font-size:.9rem;padding:0 2px;line-height:1}
+.witem .x:hover{color:var(--err)}
+.wsum{display:flex;flex-wrap:wrap;gap:4px}
+.wsum span{font-size:.7rem;border-radius:10px;padding:0 7px;background:var(--bg);border:1px solid var(--line)}
+.btnrow{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .credit{text-align:center;font-size:.72rem;color:var(--muted);padding:6px 0 0}
 </style></head><body>
 <div class="wrap">
@@ -102,6 +113,11 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
     <button type="button" role="tab" data-tab="ins" aria-selected="false"><svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="14" height="5" rx="1.2"/><rect x="3" y="10" width="6" height="7" rx="1.2"/><rect x="11" y="10" width="6" height="7" rx="1.2"/></svg><span data-en="Insert">إدراج</span></button>
     <button type="button" role="tab" data-tab="set" aria-selected="false"><svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="2.6"/><path d="M10 2.5v2.2M10 15.3v2.2M2.5 10h2.2M15.3 10h2.2M4.7 4.7l1.6 1.6M13.7 13.7l1.6 1.6M4.7 15.3l1.6-1.6M13.7 6.3l1.6-1.6"/></svg><span data-en="Options">الخيارات</span></button>
   </nav>
+  <nav class="tabs" id="wtabs" role="tablist" hidden style="grid-template-columns:1fr 1fr">
+    <button type="button" role="tab" data-tab="wtag" aria-selected="true"><svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="14" height="12" rx="1.5" stroke-dasharray="3 2"/><path d="M6.5 8h7M6.5 11h5" stroke-linecap="round"/></svg><span data-en="Tag">تمييز</span></button>
+    <button type="button" role="tab" data-tab="wrev" aria-selected="false"><svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M7 5h10M7 10h10M7 15h10"/><circle cx="3.5" cy="5" r="1"/><circle cx="3.5" cy="10" r="1"/><circle cx="3.5" cy="15" r="1"/></svg><span data-en="Review">مراجعة</span></button>
+  </nav>
+
 
   <section class="panel" data-pane="conv">
     <div class="seg scopeSeg">
@@ -133,6 +149,9 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
   </section>
 
   <section class="panel" data-pane="ins" hidden>
+    <button type="button" class="sec" id="docxBtn" data-ar-title="كل جزء مميز في ملف الوورد يصبح مربعًا مستقلًا بستايل علا" data-en-title="Every tagged part of the Word file becomes its own UULA box"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3.5 1.5h6l3 3v10h-9z"/><path d="M5.5 7.5l1 4 1.5-3 1.5 3 1-4" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-en="Insert a Word file…">إدراج ملف وورد…</span></button>
+    <input type="file" id="docxFile" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>
+    <div class="sep"></div>
     <span class="note" data-en="Added under the last object on the current slide.">يُضاف تحت آخر عنصر في الشريحة الحالية.</span>
     <div id="tpls" style="display:grid;gap:4px"></div>
   </section>
@@ -150,15 +169,34 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
     <span class="note" data-en="The background, watermark and footer come from the slide layout; the tool leaves them as they are.">الخلفية والعلامة المائية والتذييل تأتي من تخطيط الشريحة (Layout)، والأداة لا تغيّرها.</span>
   </section>
 
+  <section class="panel" data-pane="wtag" hidden>
+    <span class="note" data-en="Select content in the document, then pick its type. A coloured frame goes around it.">حدّد المحتوى في المستند، ثم اختر نوعه، فيظهر حوله إطار ملوّن.</span>
+    <div id="wroles" style="display:grid;gap:4px"></div>
+    <div class="sep"></div>
+    <div class="btnrow">
+      <button type="button" class="sec" id="wAuto" data-ar-title="تمييز كل المحتوى غير المميز حسب كلماته وألوانه" data-en-title="Tag all untagged content by its words and colours"><span data-en="Auto-tag">تمييز تلقائي</span></button>
+      <button type="button" class="sec" id="wUntag" data-ar-title="إزالة التمييز عن المحتوى المحدد (يبقى النص)" data-en-title="Remove the tag from the selected content (the text stays)"><span data-en="Remove tag">إزالة التمييز</span></button>
+    </div>
+  </section>
+
+  <section class="panel" data-pane="wrev" hidden>
+    <div class="row"><span class="gt2" data-en="Tagged parts">الأجزاء المميزة</span><button type="button" class="mini" id="wRefresh" data-en="Refresh">تحديث</button></div>
+    <div class="wsum" id="wsum"></div>
+    <div class="wlist" id="wlist"></div>
+    <span class="note" data-en="Click a part to go to it. To change its type, click it and pick the new type in Tag.">اضغط جزءًا للانتقال إليه. لتغيير نوعه اضغطه ثم اختر النوع الجديد من «تمييز».</span>
+    <button type="button" class="mini" id="wClear" style="justify-self:start" data-en="Remove all tags">إزالة كل التمييز</button>
+  </section>
+
   <div class="prog" id="prog" hidden><i></i></div>
   <div class="status" id="status" role="status"></div>
   <div class="res" id="res"></div>
   <div class="modal" id="modal" hidden><div class="mbox" role="dialog" aria-modal="true"><h3 id="modalT"></h3><div id="modalB"></div><button type="button" class="mini" id="modalX" style="margin-top:10px" data-en="Close">إغلاق</button></div></div>
-  <footer class="credit" dir="ltr">By Zaher Alkablawi <span id="appVer">1.0</span></footer>
+  <footer class="credit" dir="ltr">By Zaher Alkablawi <span id="appVer">1.1</span></footer>
 </div>
 <script>/*JSZIP*/</script>
 <script>/*ASSETS*/</script>
 <script>/*ENGINE*/</script>
 <script>/*TEMPLATES*/</script>
+<script>/*WORD*/</script>
 <script>/*APP*/</script>
 </body></html>

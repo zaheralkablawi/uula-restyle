@@ -79,6 +79,17 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
 .ib.lang{font:inherit;font-size:.72rem;font-weight:700;width:30px}
 .gt2{font-size:.84rem;font-weight:600}
 .sep{height:1px;background:var(--line);margin:2px 0}
+.wlist{display:grid;gap:3px;max-height:340px;overflow:auto}
+.witem{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:7px;padding:3px 6px;font-size:.74rem;cursor:pointer;background:var(--panel)}
+.witem:hover{border-color:var(--accent);background:var(--accent-soft)}
+.witem i{flex:none;width:9px;height:9px;border-radius:2px}
+.witem b{flex:none;font-weight:600}
+.witem span{flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--muted)}
+.witem .x{flex:none;border:0;background:none;color:var(--muted);cursor:pointer;font-size:.9rem;padding:0 2px;line-height:1}
+.witem .x:hover{color:var(--err)}
+.wsum{display:flex;flex-wrap:wrap;gap:4px}
+.wsum span{font-size:.7rem;border-radius:10px;padding:0 7px;background:var(--bg);border:1px solid var(--line)}
+.btnrow{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .credit{text-align:center;font-size:.72rem;color:var(--muted);padding:6px 0 0}
 </style></head><body>
 <div class="wrap">
@@ -102,6 +113,11 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
     <button type="button" role="tab" data-tab="ins" aria-selected="false"><svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="14" height="5" rx="1.2"/><rect x="3" y="10" width="6" height="7" rx="1.2"/><rect x="11" y="10" width="6" height="7" rx="1.2"/></svg><span data-en="Insert">إدراج</span></button>
     <button type="button" role="tab" data-tab="set" aria-selected="false"><svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="2.6"/><path d="M10 2.5v2.2M10 15.3v2.2M2.5 10h2.2M15.3 10h2.2M4.7 4.7l1.6 1.6M13.7 13.7l1.6 1.6M4.7 15.3l1.6-1.6M13.7 6.3l1.6-1.6"/></svg><span data-en="Options">الخيارات</span></button>
   </nav>
+  <nav class="tabs" id="wtabs" role="tablist" hidden style="grid-template-columns:1fr 1fr">
+    <button type="button" role="tab" data-tab="wtag" aria-selected="true"><svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="14" height="12" rx="1.5" stroke-dasharray="3 2"/><path d="M6.5 8h7M6.5 11h5" stroke-linecap="round"/></svg><span data-en="Tag">تمييز</span></button>
+    <button type="button" role="tab" data-tab="wrev" aria-selected="false"><svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M7 5h10M7 10h10M7 15h10"/><circle cx="3.5" cy="5" r="1"/><circle cx="3.5" cy="10" r="1"/><circle cx="3.5" cy="15" r="1"/></svg><span data-en="Review">مراجعة</span></button>
+  </nav>
+
 
   <section class="panel" data-pane="conv">
     <div class="seg scopeSeg">
@@ -133,6 +149,9 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
   </section>
 
   <section class="panel" data-pane="ins" hidden>
+    <button type="button" class="sec" id="docxBtn" data-ar-title="كل جزء مميز في ملف الوورد يصبح مربعًا مستقلًا بستايل علا" data-en-title="Every tagged part of the Word file becomes its own UULA box"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3.5 1.5h6l3 3v10h-9z"/><path d="M5.5 7.5l1 4 1.5-3 1.5 3 1-4" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-en="Insert a Word file…">إدراج ملف وورد…</span></button>
+    <input type="file" id="docxFile" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>
+    <div class="sep"></div>
     <span class="note" data-en="Added under the last object on the current slide.">يُضاف تحت آخر عنصر في الشريحة الحالية.</span>
     <div id="tpls" style="display:grid;gap:4px"></div>
   </section>
@@ -150,11 +169,29 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
     <span class="note" data-en="The background, watermark and footer come from the slide layout; the tool leaves them as they are.">الخلفية والعلامة المائية والتذييل تأتي من تخطيط الشريحة (Layout)، والأداة لا تغيّرها.</span>
   </section>
 
+  <section class="panel" data-pane="wtag" hidden>
+    <span class="note" data-en="Select content in the document, then pick its type. A coloured frame goes around it.">حدّد المحتوى في المستند، ثم اختر نوعه، فيظهر حوله إطار ملوّن.</span>
+    <div id="wroles" style="display:grid;gap:4px"></div>
+    <div class="sep"></div>
+    <div class="btnrow">
+      <button type="button" class="sec" id="wAuto" data-ar-title="تمييز كل المحتوى غير المميز حسب كلماته وألوانه" data-en-title="Tag all untagged content by its words and colours"><span data-en="Auto-tag">تمييز تلقائي</span></button>
+      <button type="button" class="sec" id="wUntag" data-ar-title="إزالة التمييز عن المحتوى المحدد (يبقى النص)" data-en-title="Remove the tag from the selected content (the text stays)"><span data-en="Remove tag">إزالة التمييز</span></button>
+    </div>
+  </section>
+
+  <section class="panel" data-pane="wrev" hidden>
+    <div class="row"><span class="gt2" data-en="Tagged parts">الأجزاء المميزة</span><button type="button" class="mini" id="wRefresh" data-en="Refresh">تحديث</button></div>
+    <div class="wsum" id="wsum"></div>
+    <div class="wlist" id="wlist"></div>
+    <span class="note" data-en="Click a part to go to it. To change its type, click it and pick the new type in Tag.">اضغط جزءًا للانتقال إليه. لتغيير نوعه اضغطه ثم اختر النوع الجديد من «تمييز».</span>
+    <button type="button" class="mini" id="wClear" style="justify-self:start" data-en="Remove all tags">إزالة كل التمييز</button>
+  </section>
+
   <div class="prog" id="prog" hidden><i></i></div>
   <div class="status" id="status" role="status"></div>
   <div class="res" id="res"></div>
   <div class="modal" id="modal" hidden><div class="mbox" role="dialog" aria-modal="true"><h3 id="modalT"></h3><div id="modalB"></div><button type="button" class="mini" id="modalX" style="margin-top:10px" data-en="Close">إغلاق</button></div></div>
-  <footer class="credit" dir="ltr">By Zaher Alkablawi <span id="appVer">1.0</span></footer>
+  <footer class="credit" dir="ltr">By Zaher Alkablawi <span id="appVer">1.1</span></footer>
 </div>
 <script>/*!
 
@@ -218,7 +255,8 @@ const STY = {
   question: { sz: 1100, c: '000000', keepB: 1, q: 1 },
   answer: { sz: 1100, c: C.answer, keepB: 1, ind: 1 },
   source: { sz: 1100, b: 1, c: '000000' },
-  label: { sz: 1100, c: '000000', keepB: 1 }          // small labels beside pictures / inside groups
+  label: { sz: 1100, c: '000000', keepB: 1 },         // small labels beside pictures / inside groups
+  qcont: { sz: 1100, c: '000000', keepB: 1 }          // the lines that continue a question
 };
 // containers: fill, icon, icon tint (for the vertical line)
 const BOX = {
@@ -361,7 +399,7 @@ function makeRels(pkg) {
     image(key, data) {
       if (media[key]) return media[key];
       let id; do { id = 'rIdUR' + (n++); } while (used.has(id)); used.add(id);
-      const file = 'ur_' + key + '.png';
+      const file = 'ur_' + key + (/\.[a-z0-9]+$/i.test(key) ? '' : '.png');
       pkg.zip.file('ppt/media/' + file, data || UR_ASSETS[key], { base64: true });
       const r = doc.createElementNS(NS.rel, 'Relationship');
       r.setAttribute('Id', id); r.setAttribute('Type', REL_IMG); r.setAttribute('Target', '../media/' + file);
@@ -384,7 +422,12 @@ async function buildPackage(pkg, slideXml, rels) {
   pkg.zip.file(pkg.slidePath, utf8(slideXml));
   if (rels) pkg.zip.file(pkg.relsPath, utf8(serialize(rels.doc)));
   let ct = await pkg.zip.file('[Content_Types].xml').async('string');
-  if (!/Extension="png"/i.test(ct)) { ct = ct.replace(/<Default /, '<Default Extension="png" ContentType="image/png"/><Default '); pkg.zip.file('[Content_Types].xml', utf8(ct)); }
+  const TYPES = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', bmp: 'image/bmp', tif: 'image/tiff', tiff: 'image/tiff', emf: 'image/x-emf', wmf: 'image/x-wmf', svg: 'image/svg+xml', wdp: 'image/vnd.ms-photo' };
+  const exts = new Set(['png']);
+  pkg.zip.forEach(n => { const m = /^ppt\/media\/.+\.([a-z0-9]+)$/i.exec(n); if (m) exts.add(m[1].toLowerCase()); });
+  let changed = false;
+  for (const e of exts) if (TYPES[e] && !new RegExp('Extension="' + e + '"', 'i').test(ct)) { ct = ct.replace(/<Default /, '<Default Extension="' + e + '" ContentType="' + TYPES[e] + '"/><Default '); changed = true; }
+  if (changed) pkg.zip.file('[Content_Types].xml', utf8(ct));
   return pkg.zip.generateAsync({ type: 'base64', compression: 'DEFLATE' });
 }
 
@@ -778,13 +821,21 @@ function styleText(it, ctx, pkg, forcedRole) {
   if (forcedRole === 'question') {
     const auto = paraRoles(it, ctx, pkg);
     let seenQ = false;
-    roles.forEach((r, k) => { if (!r.text) return; if (seenQ && auto[k] && ['answer', 'choice'].includes(auto[k].role)) r.role = auto[k].role; if (r.role === 'question') seenQ = true; });
+    roles.forEach((r, k) => {
+      if (!r.text && !desc(r.p, 'm', 'oMath').length) return;
+      if (seenQ && auto[k] && ['answer', 'choice'].includes(auto[k].role)) r.role = auto[k].role;
+      // the lines that continue a question (an equation, the rest of the sentence) sit under it without a new Q
+      else if (seenQ && !(auto[k] && auto[k].role === 'question') && !Q_START.test(r.text) && !Q_NUM.test(r.text)) r.role = 'qcont';
+      if (r.role === 'question') seenQ = true;
+    });
   }
   const arAll = AR.test(it.text);
   let stripped = false;
   for (const pr of roles) {
     const st = STY[pr.role] || STY.body;
     let ar = pr.text ? AR.test(pr.text) : arAll;
+    // an equation line inside an Arabic box stays on the right with the text around it
+    if (!ar && arAll && pr.role !== 'question' && desc(pr.p, 'm', 'oMath').length && !desc(pr.p, 'a', 't').some(x => /[A-Za-z]{3,}/.test(x.textContent))) ar = true;
     let bullet = null, marL = 0, indent = 0;
     if (st.q) {
       bullet = 'Q'; marL = 182880; indent = -182880;
@@ -796,14 +847,14 @@ function styleText(it, ctx, pkg, forcedRole) {
         const ts = desc(pr.p, 'a', 't').filter(x => !inMath(x));
         if (ts.length && !/^\u202A/.test(ts[0].textContent)) { ts[0].textContent = '\u202A' + ts[0].textContent; ts[ts.length - 1].textContent += '\u202C'; }
       }
-    } else if (pr.role === 'answer' || pr.role === 'choice') { marL = 182880; }
+    } else if (pr.role === 'answer' || pr.role === 'choice' || pr.role === 'qcont') { marL = 182880; }
     else if (pr.bullet && (pr.role === 'body')) {
       const auto = desc(kid(pr.p, 'pPr', 'a'), 'a', 'buAutoNum')[0];
       bullet = auto ? { auto: auto.getAttribute('type'), start: auto.getAttribute('startAt') } : '§';
       marL = 182880; indent = -182880;
     }
     setPPr(pr.p, { algn: (pr.role === 'pill' ? 'ctr' : ar ? 'r' : 'l'), rtl: ar, marL, indent, bullet });
-    const keepCol = ['body', 'answer', 'question', 'label', 'choice'].includes(pr.role);
+    const keepCol = ['body', 'answer', 'question', 'label', 'choice', 'qcont'].includes(pr.role);
     for (const r of desc(pr.p, 'a', 'r')) { let rPr = kid(r, 'rPr', 'a'); if (!rPr) { rPr = mk(r.ownerDocument, 'a', 'rPr'); rPr.setAttribute('lang', ar ? 'ar-KW' : 'en-US'); r.insertBefore(rPr, r.firstChild); } styleRPr(rPr, st, pr.role, keepCol ? (rPr.querySelector && kid(rPr, 'solidFill', 'a') ? colorOf(kid(rPr, 'solidFill', 'a'), ctx) : null) : null, false); }
     for (const r of desc(pr.p, 'a', 'fld')) { let rPr = kid(r, 'rPr', 'a'); if (rPr) styleRPr(rPr, st, pr.role, null, false); }
     for (const rPr of desc(pr.p, 'a', 'rPr').filter(x => inMath(x))) styleRPr(rPr, st, pr.role, keepCol ? colorOf(kid(rPr, 'solidFill', 'a'), ctx) : null, true);
@@ -2299,10 +2350,575 @@ return { LIST, GROUP_EN, spec, build, place, freeTop, apply };
 })();
 if (typeof module !== 'undefined') module.exports = URT;
 </script>
+<script>// UULA Restyle — Word side
+// 1) the types a Word user can tag (shared by the Word pane and the PowerPoint import)
+// 2) reading a .docx: every tagged part (content control "UULA:<type>") becomes one unit
+// 3) turning units into raw slide shapes named "UULA:<type> …", which UR.restyle then styles and lays out
+const UW = (() => {
+'use strict';
+const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const M_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
+const A_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+const WP_NS = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
+const V_NS = 'urn:schemas-microsoft-com:vml';
+const PT = 12700;
+
+// ---------- the types ----------
+// id, Arabic, English, frame colour in Word (and the swatch in the pane)
+const TYPES = [
+  { g: 'نصوص', ge: 'Text', items: [
+    ['chapter', 'اسم الوحدة', 'Unit', 'A6A6A6'], ['lesson', 'اسم الدرس', 'Lesson', '1F71DD'], ['topic', 'موضوع', 'Topic', '404040'],
+    ['body', 'فقرة', 'Paragraph', '8C8C8C'], ['bullets', 'نقاط', 'Bullets', '8C8C8C'], ['qhead', 'عنوان أسئلة', 'Q head', 'C00000'],
+    ['question', 'سؤال', 'Question', 'FF0000'], ['choice', 'خيارات', 'Choices', '7030A0'], ['answer', 'حل', 'Solution', '1F71DE'],
+    ['correct', 'الخيار الصحيح', 'Correct choice', '2070DF']] },
+  { g: 'حاويات', ge: 'Containers', items: [
+    ['note', 'ملاحظة', 'Note', 'E69138'], ['def', 'تعريف', 'Definition', '2AB672'], ['quote', 'نص مقتطف', 'Quote', '2AB672'],
+    ['formula', 'قوانين', 'Formulas', '5B9BD5'], ['other', 'صيغة أخرى', 'Other form', 'C45A11'], ['activity', 'نشاط', 'Activity', '7F7F7F'],
+    ['mars', 'من المريخ', 'Challenge', '595959']] },
+  { g: 'أخرى', ge: 'Other', items: [['table', 'جدول', 'Table', '44546A'], ['figure', 'شكل', 'Figure', '00B050'], ['given', 'شكل من السؤال', 'Part of question', 'A6A6A6']] }
+];
+const TYPE = {};
+TYPES.forEach(g => g.items.forEach(([id, ar, en, col]) => { TYPE[id] = { id, ar, en, col }; }));
+const TAG = /^UULA:([a-z]+)$/;
+
+// ---------- guessing a type from a paragraph (auto-tag in Word) ----------
+const RX = {
+  q: /^\s*(س\s*[0-9٠-٩]+|سؤال|السؤال|مثال\s*[0-9٠-٩]*\s*[:：]|علل|اذكر|اُذكر|عرّف|قارن|وضّح|وضح|اشرح|بيّن|ماذا|لماذا|كيف|هل\s|أوجد|اوجد|احسب|بسّط|بسط|حلّ|أثبت|اثبت|ارسم|أكمل|اكمل|اختر|ضع\s|صحح|Q\s*[0-9]|Find|Solve|Prove|Simplify|Evaluate)/i,
+  qnum: /^\s*([0-9٠-٩]{1,2}\s*[-.)]|[(]\s*[0-9٠-٩]{1,2}\s*[)])\s*\S/,
+  a: /^\s*(ج\s*[0-9٠-٩]*\s*[:/\-]|الجواب|الإجابة|الاجابة|الحل\s*[:：]?|Answer|Solution)/i,
+  qhead: /^\s*(أجب|اجب|أمثلة|حاول أن تحل|حاول ان تحل|تدريب|تمارين|التمارين|أسئلة|اسئلة|تحقق من فهمك|Exercises?|Try)/i,
+  def: /^\s*(تعريف|المفهوم|Definition)/i,
+  formula: /^\s*(قانون|القانون|القوانين|نظرية|النظرية|قاعدة|القاعدة|الصيغة|خاصية|Formula|Theorem|Rule|Property)/i,
+  note: /^\s*(ملاحظة|ملاحظه|تنبيه|انتبه|تذكّر|تذكر|هام|مهم|Note|Important|Remember)/i,
+  activity: /^\s*(نشاط|Activity)/i,
+  mars: /^\s*(إثراء|اثراء|تحدي|تحدٍّ|فكّر|سؤال ذكاء|من المريخ|Challenge)/i,
+  quote: /^\s*(قال تعالى|قال رسول الله|قال الشاعر|﴿)/,
+  choice: /^\s*([Ⓐ-ⓩ]|[(]?[a-dA-Dأبجد]\s*[)]\s)/,
+  other: /^\s*(صيغة أخرى|طريقة أخرى|حل آخر)/
+};
+// p: { text, style, color (hex or ''), table, pic, bold, size }
+function guess(p) {
+  const t = (p.text || '').replace(/ـ/g, '').trim();
+  const st = (p.style || '').toLowerCase();
+  if (p.table) return 'table';
+  if (p.pic && !t) return 'figure';
+  if (!t) return null;
+  if (/^(title|العنوان)$/.test(st) || /heading 1|عنوان 1/.test(st)) return 'lesson';
+  if (/heading [23]|عنوان [23]/.test(st)) return 'topic';
+  if (RX.a.test(t)) return 'answer';
+  if (RX.qhead.test(t)) return 'qhead';
+  if (RX.def.test(t)) return 'def';
+  if (RX.formula.test(t)) return 'formula';
+  if (RX.note.test(t)) return 'note';
+  if (RX.activity.test(t)) return 'activity';
+  if (RX.mars.test(t)) return 'mars';
+  if (RX.quote.test(t)) return 'quote';
+  if (RX.other.test(t)) return 'other';
+  if (RX.choice.test(t)) return 'choice';
+  if (RX.q.test(t) || RX.qnum.test(t)) return 'question';
+  const c = (p.color || '').toUpperCase();
+  if (c && isBlue(c)) return 'answer';
+  if (c && isRed(c) && t.length < 60) return 'qhead';
+  if (p.bold && t.length < 50 && (p.size || 0) >= 14) return 'topic';
+  return 'body';
+}
+function rgb(h) { const n = parseInt(h.replace('#', ''), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+function isBlue(h) { if (!/^#?[0-9A-F]{6}$/i.test(h)) return false; const [r, g, b] = rgb(h); return b > 150 && b > r + 60 && b > g + 30; }
+function isRed(h) { if (!/^#?[0-9A-F]{6}$/i.test(h)) return false; const [r, g, b] = rgb(h); return r > 170 && g < 90 && b < 90; }
+// paragraphs (with guessed types) → groups [{ type, from, to }]: what follows a question / answer / container stays with it
+function group(paras) {
+  const out = [];
+  let cur = null;
+  const CONT = { answer: ['body', 'bullets', 'figure', 'choice'], question: ['choice', 'figure', 'given'], note: [], def: [], formula: ['body'], quote: [], other: ['body'], activity: ['body', 'bullets', 'figure'], mars: ['body', 'choice', 'figure'], body: ['bullets'], bullets: ['body', 'bullets'] };
+  paras.forEach((p, i) => {
+    if (p.skip) return;                                   // already tagged / inside a table handled elsewhere
+    const g = p.type;
+    if (!g) { if (cur && cur.type !== 'answer') cur = null; return; }   // an empty line ends a group (an answer may hold empty lines)
+    if (cur && i === cur.to + 1 && g === cur.type && !['question', 'lesson', 'topic', 'chapter', 'qhead', 'table', 'figure'].includes(g)) { cur.to = i; return; }
+    if (cur && i <= cur.to + 2 && (CONT[cur.type] || []).includes(g) && !(cur.type === 'question' && g === 'figure' && p.big)) { cur.to = i; if (g === 'choice' && cur.type === 'question') cur.choices = true; return; }
+    cur = { type: g, from: i, to: i };
+    out.push(cur);
+  });
+  return out;
+}
+
+// ---------- reading a .docx ----------
+const parse = s => new DOMParser().parseFromString(s, 'application/xml');
+const wk = (el, name) => { for (let c = el && el.firstElementChild; c; c = c.nextElementSibling) if (c.localName === name && c.namespaceURI === W_NS) return c; return null; };
+const wa = (el, name) => el ? el.getAttributeNS(W_NS, name) || el.getAttribute('w:' + name) : null;
+const isW = (el, name) => el && el.namespaceURI === W_NS && el.localName === name;
+
+// numbering: numId → abstract levels { fmt, text, start }
+function readNumbering(xml) {
+  const out = { num: {}, abs: {} };
+  if (!xml) return out;
+  const d = parse(xml);
+  for (const a of d.getElementsByTagNameNS(W_NS, 'abstractNum')) {
+    const lv = {};
+    for (const l of a.getElementsByTagNameNS(W_NS, 'lvl')) {
+      lv[wa(l, 'ilvl')] = { fmt: wa(wk(l, 'numFmt'), 'val') || 'decimal', text: wa(wk(l, 'lvlText'), 'val') || '', start: +(wa(wk(l, 'start'), 'val') || 1) };
+    }
+    out.abs[wa(a, 'abstractNumId')] = lv;
+  }
+  for (const n of d.getElementsByTagNameNS(W_NS, 'num')) out.num[wa(n, 'numId')] = wa(wk(n, 'abstractNumId'), 'val');
+  return out;
+}
+const ABJAD = 'أبجدهوزحطيكلمنسعفصقرشتثخذضظغ';
+const ALPHA = 'أبتثجحخدذرزسشصضطظعغفقكلمنهوي';
+function fmtNum(n, fmt) {
+  if (fmt === 'lowerLetter') return String.fromCharCode(96 + ((n - 1) % 26) + 1);
+  if (fmt === 'upperLetter') return String.fromCharCode(64 + ((n - 1) % 26) + 1);
+  if (fmt === 'arabicAbjad') return ABJAD[(n - 1) % ABJAD.length];
+  if (fmt === 'arabicAlpha') return ALPHA[(n - 1) % ALPHA.length];
+  if (fmt === 'hindiNumbers' || fmt === 'arabicNumbers') return String(n).replace(/\d/g, d => '٠١٢٣٤٥٦٧٨٩'[d]);
+  if (fmt === 'lowerRoman' || fmt === 'upperRoman') { const r = ['', 'i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x', 'xi', 'xii'][n] || String(n); return fmt === 'upperRoman' ? r.toUpperCase() : r; }
+  return String(n);
+}
+
+// reads the docx (ArrayBuffer / base64) → { units, report }
+// unit: { kind: 'text', role, paras: [{ runs: xml, rtl, math }], math } | { kind: 'table', role, rows } | { kind: 'pic', role, media, ext, cx, cy, inline }
+async function read(data, opts) {
+  opts = opts || {};
+  const zip = await JSZip.loadAsync(data, typeof data === 'string' ? { base64: true } : {});
+  const docXml = zip.file('word/document.xml');
+  if (!docXml) throw new Error('not a Word file');
+  const doc = parse(await docXml.async('string'));
+  const relsF = zip.file('word/_rels/document.xml.rels');
+  const rels = {};
+  if (relsF) for (const r of parse(await relsF.async('string')).getElementsByTagName('Relationship')) rels[r.getAttribute('Id')] = { target: r.getAttribute('Target'), ext: r.getAttribute('TargetMode') === 'External' };
+  const numF = zip.file('word/numbering.xml');
+  const numbering = readNumbering(numF ? await numF.async('string') : null);
+  const counters = {};
+  const report = { tagged: 0, untagged: 0, pics: 0, tables: 0, math: 0, inlineObj: 0, skipped: 0 };
+  const units = [];
+  const media = {};      // rId → { path, ext }
+  const mediaOf = rid => {
+    if (!rid || !rels[rid] || rels[rid].ext) return null;
+    if (media[rid]) return media[rid];
+    const path = 'word/' + rels[rid].target.replace(/^\.?\//, '').replace(/^\/?word\//, '');
+    const f = zip.file(path) || zip.file(rels[rid].target.replace(/^\//, ''));
+    if (!f) return null;
+    return (media[rid] = { file: f, ext: (path.split('.').pop() || 'png').toLowerCase() });
+  };
+  let curText = null;      // the open text unit (paragraphs of the same group join it)
+  let gkey = 0;
+  const close = () => { curText = null; };
+  const pushText = (role, key, para) => {
+    if (!curText || curText.key !== key) { curText = { kind: 'text', role, key, paras: [] }; units.push(curText); if (role) report.tagged++; else report.untagged++; }
+    curText.paras.push(para);
+    if (para.math) curText.math = true;
+  };
+
+  // paragraph → runs xml (DrawingML) + found pictures
+  function convP(p) {
+    const pPr = wk(p, 'pPr');
+    const rtl = !!(pPr && wk(pPr, 'bidi') && wa(wk(pPr, 'bidi'), 'val') !== '0');
+    const jc = pPr && wa(wk(pPr, 'jc'), 'val');
+    let out = '', text = '', math = false;
+    const pics = [];
+    // numbering label
+    const numPr = pPr && wk(pPr, 'numPr');
+    let label = '';
+    if (numPr) {
+      const id = wa(wk(numPr, 'numId'), 'val'), lvl = wa(wk(numPr, 'ilvl'), 'val') || '0';
+      const abs = numbering.abs[numbering.num[id]];
+      const L = abs && abs[lvl];
+      if (L && L.fmt !== 'none') {
+        const key = id + ':' + lvl;
+        counters[key] = (counters[key] || (L.start - 1)) + 1;
+        for (const k of Object.keys(counters)) if (k.startsWith(id + ':') && +k.split(':')[1] > +lvl) delete counters[k];
+        if (L.fmt === 'bullet') label = '• ';
+        else label = L.text.replace(/%(\d)/g, (m, d) => { const lv = abs[String(+d - 1)]; return fmtNum(counters[id + ':' + (+d - 1)] || (lv ? lv.start : 1), lv ? lv.fmt : 'decimal'); }) + ' ';
+      }
+    }
+    if (label) { out += runX(label, {}); text += label; }
+    const walkRuns = (el, inherit) => {
+      for (let c = el.firstElementChild; c; c = c.nextElementSibling) {
+        const ln = c.localName, ns = c.namespaceURI;
+        if (ns === W_NS && ln === 'r') {
+          const rPr = wk(c, 'rPr');
+          const st = runStyle(rPr);
+          for (let k = c.firstElementChild; k; k = k.nextElementSibling) {
+            if (k.namespaceURI !== W_NS && k.localName !== 'AlternateContent') continue;
+            const kn = k.localName;
+            if (kn === 't') { out += runX(k.textContent, st); text += k.textContent; }
+            else if (kn === 'tab') { out += runX('\t', st); text += '\t'; }
+            else if (kn === 'br' && wa(k, 'type') !== 'page') out += '<a:br><a:rPr lang="ar-SA"/></a:br>';
+            else if (kn === 'sym') { const ch = wa(k, 'char'); if (ch) { const s = String.fromCharCode(parseInt(ch, 16) > 0xF000 ? parseInt(ch, 16) - 0xF000 : parseInt(ch, 16)); out += runX(s, st); text += s; } }
+            else if (kn === 'noBreakHyphen') { out += runX('-', st); text += '-'; }
+            else if (kn === 'drawing' || kn === 'AlternateContent') { const pc = picOf(k); if (pc) pics.push(pc); }
+            else if (kn === 'object' || kn === 'pict') { const pc = vmlPic(k); if (pc) { pc.obj = kn === 'object'; pics.push(pc); } }
+          }
+        } else if (ns === M_NS && (ln === 'oMath' || ln === 'oMathPara')) {
+          const mx = mathX(c);
+          if (mx) { out += '<a14:m>' + mx + '</a14:m>'; text += mathText(c); math = true; }
+        } else if (ns === W_NS && ['hyperlink', 'ins', 'smartTag', 'customXml', 'fldSimple', 'dir', 'bdo', 'moveTo'].includes(ln)) walkRuns(c, inherit);
+        else if (ns === W_NS && ln === 'sdt') {
+          // an inline content control: a tagged part splits the paragraph
+          const tag = sdtTag(c);
+          const body = wk(c, 'sdtContent');
+          if (tag && body && opts.splitInline !== false) { inlineSplits.push({ at: out.length, tag, body }); }
+          else if (body) walkRuns(body, inherit);
+        }
+      }
+    };
+    const inlineSplits = [];
+    walkRuns(p);
+    return { runs: out, text, rtl: rtl || /[؀-ۿ]/.test(text), jc, math, pics, inlineSplits };
+  }
+  function runStyle(rPr) {
+    const st = {};
+    if (!rPr) return st;
+    const on = n => { const e = wk(rPr, n); return e && !['0', 'false', 'off'].includes(wa(e, 'val') || ''); };
+    if (on('b') || on('bCs')) st.b = 1;
+    if (on('i') || on('iCs')) st.i = 1;
+    if (wk(rPr, 'u') && wa(wk(rPr, 'u'), 'val') !== 'none') st.u = 1;
+    const col = wa(wk(rPr, 'color'), 'val');
+    if (col && /^[0-9A-F]{6}$/i.test(col)) st.c = col.toUpperCase();
+    const sz = wa(wk(rPr, 'sz'), 'val') || wa(wk(rPr, 'szCs'), 'val');
+    if (sz) st.sz = +sz * 50;
+    const va = wa(wk(rPr, 'vertAlign'), 'val');
+    if (va === 'superscript') st.base = 30000; else if (va === 'subscript') st.base = -25000;
+    return st;
+  }
+  function picOf(el) {
+    const blip = el.getElementsByTagNameNS(A_NS, 'blip')[0];
+    if (!blip) return null;
+    const rid = blip.getAttributeNS(R_NS, 'embed') || blip.getAttribute('r:embed');
+    const m = mediaOf(rid); if (!m) return null;
+    const ext = el.getElementsByTagNameNS(WP_NS, 'extent')[0];
+    const anchor = el.getElementsByTagNameNS(WP_NS, 'anchor')[0];
+    return { media: m, cx: ext ? +ext.getAttribute('cx') : 2000000, cy: ext ? +ext.getAttribute('cy') : 1500000, floating: !!anchor };
+  }
+  function vmlPic(el) {
+    const im = el.getElementsByTagNameNS(V_NS, 'imagedata')[0];
+    if (!im) return null;
+    const rid = im.getAttributeNS(R_NS, 'id') || im.getAttribute('r:id');
+    const m = mediaOf(rid); if (!m) return null;
+    const sh = el.getElementsByTagNameNS(V_NS, 'shape')[0];
+    const style = sh ? sh.getAttribute('style') || '' : '';
+    const dim = n => { const r = new RegExp(n + ':\\s*([\\d.]+)(pt|in|px)?').exec(style); if (!r) return null; const v = +r[1]; return Math.round(r[2] === 'in' ? v * 914400 : r[2] === 'px' ? v * 9525 : v * PT); };
+    return { media: m, cx: dim('width') || 1000000, cy: dim('height') || 300000 };
+  }
+  const sdtTag = sdt => { const pr = wk(sdt, 'sdtPr'); const t = pr && wk(pr, 'tag'); const v = t && wa(t, 'val'); const m = v && TAG.exec(v); return m && TYPE[m[1]] ? m[1] : null; };
+
+  function handleP(p, role, key) {
+    const c = convP(p);
+    // pictures in the paragraph
+    const picUnits = c.pics.map(pc => {
+      report.pics++;
+      const small = pc.cy < 34 * PT && c.text.trim();
+      if (small && pc.obj) report.inlineObj++;
+      return { kind: 'pic', role: role === 'figure' ? null : role, media: pc.media, cx: pc.cx, cy: pc.cy, inline: !!small };
+    });
+    if (c.inlineSplits.length) {
+      // text before | tagged inline part | text after (each its own box)
+      let pos = 0;
+      for (const s of c.inlineSplits) {
+        const before = c.runs.slice(pos, s.at);
+        if (stripRuns(before)) pushText(role, key, { runs: before, rtl: c.rtl, jc: c.jc });
+        close();
+        const fake = p.ownerDocument.createElementNS(W_NS, 'w:p');
+        for (let k = s.body.firstElementChild; k; k = k.nextElementSibling) fake.appendChild(k.cloneNode(true));
+        const ic = convP(fake);
+        if (ic.text.trim() || ic.math) pushText(s.tag, 'in' + (++gkey), { runs: ic.runs, rtl: c.rtl, jc: c.jc, math: ic.math });
+        close();
+        pos = s.at;
+      }
+      const after = c.runs.slice(pos);
+      if (stripRuns(after)) pushText(role, key + 'b' + (++gkey), { runs: after, rtl: c.rtl, jc: c.jc });
+      if (c.math) report.math++;
+      picUnits.forEach(u => { close(); units.push(u); });
+      return;
+    }
+    const empty = !c.text.trim() && !c.math;
+    if (empty) {
+      if (!picUnits.length) { if (!role) { close(); gkey++; } return; }
+      close(); picUnits.forEach(u => units.push(u)); gkey++;
+      return;
+    }
+    if (c.math) report.math++;
+    pushText(role, role ? key : 'u' + gkey, { runs: c.runs, rtl: c.rtl, jc: c.jc, math: c.math, text: c.text });
+    if (picUnits.length) { close(); picUnits.forEach(u => units.push(u)); if (!role) gkey++; }
+  }
+  function handleTbl(tbl, role) {
+    close();
+    const rows = [];
+    for (const tr of [...tbl.children].filter(x => isW(x, 'tr'))) {
+      const row = [];
+      for (const tc of [...tr.children].filter(x => isW(x, 'tc'))) {
+        const tcPr = wk(tc, 'tcPr');
+        const span = +(wa(wk(tcPr, 'gridSpan'), 'val') || 1);
+        const vm = tcPr && wk(tcPr, 'vMerge');
+        const shd = wa(wk(tcPr, 'shd'), 'fill');
+        const paras = [...tc.getElementsByTagNameNS(W_NS, 'p')].map(convP).filter(x => x.text.trim() || x.math);
+        row.push({ span, vmerge: vm ? (wa(vm, 'val') === 'restart' ? 'restart' : 'cont') : null, fill: shd && /^[0-9A-F]{6}$/i.test(shd) ? shd.toUpperCase() : null, paras });
+      }
+      rows.push(row);
+    }
+    if (!rows.length) return;
+    const grid = [...(wk(tbl, 'tblGrid') || { children: [] }).children].filter(x => isW(x, 'gridCol')).map(g => +wa(g, 'w') || 1);
+    const pr = wk(tbl, 'tblPr');
+    const rtl = !!(pr && wk(pr, 'bidiVisual'));
+    units.push({ kind: 'table', role, rows, grid, rtl });
+    report.tables++;
+    gkey++;
+  }
+  function walk(el, role, key) {
+    for (let c = el.firstElementChild; c; c = c.nextElementSibling) {
+      if (isW(c, 'p')) handleP(c, role, key);
+      else if (isW(c, 'tbl')) handleTbl(c, role);
+      else if (isW(c, 'sdt')) {
+        const tag = sdtTag(c), body = wk(c, 'sdtContent');
+        if (!body) continue;
+        if (tag) { close(); const k = 'sdt' + (++gkey); walk(body, tag, k); close(); gkey++; }
+        else walk(body, role, key);
+      } else if (isW(c, 'customXml') || isW(c, 'ins') || isW(c, 'moveTo')) walk(c, role, key);
+    }
+  }
+  const body = doc.getElementsByTagNameNS(W_NS, 'body')[0];
+  walk(body, null, null);
+  // pictures: read their bytes now
+  for (const u of units) if (u.kind === 'pic') u.data = await u.media.file.async('base64');
+  return { units: units.filter(u => u.kind !== 'text' || u.paras.length), report };
+}
+const stripRuns = x => /<a:t>[^<]*\S|<a14:m>/.test(x);
+const xe = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function runX(t, st) {
+  if (t == null || t === '') return '';
+  const ar = /[؀-ۿ]/.test(t);
+  let a = '<a:rPr lang="' + (ar ? 'ar-SA' : 'en-US') + '"' + (st.sz ? ' sz="' + Math.max(800, Math.min(4000, st.sz)) + '"' : '') + (st.b ? ' b="1"' : '') + (st.i ? ' i="1"' : '') + (st.u ? ' u="sng"' : '') + (st.base ? ' baseline="' + st.base + '"' : '') + '>';
+  if (st.c) a += '<a:solidFill><a:srgbClr val="' + st.c + '"/></a:solidFill>';
+  a += '</a:rPr>';
+  return '<a:r>' + a + '<a:t>' + xe(t) + '</a:t></a:r>';
+}
+// OMML from Word → OMML for PowerPoint (run properties become DrawingML)
+const MATH_RPR = '<a:rPr xmlns:a="' + A_NS + '" lang="en-US" i="1"><a:latin typeface="Cambria Math" panose="02040503050406030204" pitchFamily="18" charset="0"/><a:cs typeface="Cambria Math" panose="02040503050406030204" pitchFamily="18" charset="0"/></a:rPr>';
+function mathX(el) {
+  const c = el.cloneNode(true);
+  const d = c.ownerDocument;
+  const all = [c, ...c.getElementsByTagName('*')];
+  for (const e of all.reverse()) {
+    if (e.namespaceURI === M_NS) continue;
+    if (!e.parentNode) continue;
+    if (e.namespaceURI === W_NS && e.localName === 'rPr') {
+      const host = e.parentNode;
+      const n = new DOMParser().parseFromString(MATH_RPR, 'application/xml').documentElement;
+      host.replaceChild(d.importNode(n, true), e);
+    } else e.parentNode.removeChild(e);
+  }
+  // m:r without run properties gets ours (PowerPoint wants them for the font)
+  for (const r of c.getElementsByTagNameNS(M_NS, 'r')) {
+    if (![...r.children].some(k => k.localName === 'rPr' && k.namespaceURI === A_NS)) {
+      const n = new DOMParser().parseFromString(MATH_RPR, 'application/xml').documentElement;
+      const t = [...r.children].find(k => k.localName === 't');
+      r.insertBefore(d.importNode(n, true), t || null);
+    }
+  }
+  let s = new XMLSerializer().serializeToString(c);
+  // keep only the namespaces we use on the root of the math
+  s = s.replace(/\s+xmlns:(w|w14|w15|wp|wp14|r|mc|o|v|wps|wpg|wpc|wne|w10|wpi|wps|cx|aink|am3d|w16[a-z]*)="[^"]*"/g, '');
+  return s;
+}
+function mathText(el) { return [...el.getElementsByTagNameNS(M_NS, 't')].map(t => t.textContent).join(''); }
+
+// ---------- units → raw slide shapes ----------
+// returns shape xml strings stacked top-down from y0 (the engine lays them out again on the grid)
+// ctx: { W (slide width EMU), rels (UR makeRels), nextId(), mediaKey }
+function shapes(units, ctx) {
+  const CW = ctx.W - 2 * 36 * PT, X0 = 36 * PT;
+  let y = ctx.y0 || 60 * PT, n = 0;
+  const out = [];
+  const nm = (u, base) => (u.role ? 'UULA:' + u.role + ' ' : '') + base + ' ' + (++n);
+  for (let k = 0; k < units.length; k++) {
+    const u = units[k];
+    if (u.kind === 'text') {
+      const h = estH(u, CW);
+      out.push({ y, h, xml: textSp(u, nm(u, 'Word'), X0, y, CW, h, ctx), unit: u });
+      y += h + 2 * 13 * PT;
+    } else if (u.kind === 'pic') {
+      let w = u.cx, h = u.cy;
+      const max = CW * (u.inline ? 0.4 : 1);
+      if (w > max) { h = Math.round(h * max / w); w = max; }
+      // a narrow picture right after a question / text sits beside it (graph question layout)
+      const prev = out[out.length - 1];
+      const beside = prev && prev.unit && prev.unit.kind === 'text' && w <= CW * 0.48 && !prev.side && ['question', 'answer', null, 'body'].includes(prev.unit.role) && u.role !== 'figure';
+      const ext = u.media.ext === 'jpeg' ? 'jpg' : u.media.ext;
+      const rid = ctx.rels.image('w' + (ctx.mediaKey++) + '.' + ext, u.data);
+      if (beside) {
+        const tw = CW - w - 2 * 13 * PT;
+        prev.xml = prev.xml.replace(/<a:off x="\d+" y="(\d+)"\/><a:ext cx="\d+"/, (m, yy) => '<a:off x="' + (X0 + w + 2 * 13 * PT) + '" y="' + yy + '"/><a:ext cx="' + tw + '"');
+        prev.side = true;
+        out.push({ y: prev.y, h, xml: picSp(nm(u, 'Picture'), rid, X0, prev.y, w, h), side: true });
+        y = Math.max(y, prev.y + h + 2 * 13 * PT);
+      } else {
+        const x = X0 + Math.round((CW - w) / 2);
+        out.push({ y, h, xml: picSp(nm(u, 'Picture'), rid, x, y, w, h) });
+        y += h + 2 * 13 * PT;
+      }
+    } else if (u.kind === 'table') {
+      const h = u.rows.length * 22 * PT;
+      out.push({ y, h, xml: tableX(u, nm(u, 'Table'), X0, y, CW, h, ctx) });
+      y += h + 2 * 13 * PT;
+    }
+  }
+  // everything has to start on the slide (shapes below it count as parked outside): squeeze the stack, keeping its order
+  const top = ctx.y0 || 60 * PT, bot = Math.max(...out.map(o => o.y + o.h), top), lim = (ctx.H || 9899650) - 70 * PT;
+  if (bot > lim) {
+    const f = (lim - top) / (bot - top);
+    for (const o of out) {
+      const ny = Math.round(top + (o.y - top) * f), nh = Math.max(PT, Math.round(o.h * f));
+      o.xml = o.xml.replace(/<a:off x="(\d+)" y="\d+"\/><a:ext cx="(\d+)" cy="\d+"\/>/g, (m, x, cx) => '<a:off x="' + x + '" y="' + ny + '"/><a:ext cx="' + cx + '" cy="' + nh + '"/>');
+      o.y = ny; o.h = nh;
+    }
+  }
+  return out;
+}
+function estH(u, w) {
+  const cpl = Math.max(10, Math.floor(w / PT / 5.2));
+  let lines = 0;
+  for (const p of u.paras) { const t = (p.text || p.runs.replace(/<[^>]+>/g, '')).length; lines += Math.max(1, Math.ceil(t / cpl)) * (p.math ? 1.4 : 1); }
+  return Math.round(lines * 13.39 * PT + 2 * PT);
+}
+function paraX(p) {
+  const algn = p.jc === 'center' ? 'ctr' : p.rtl ? 'r' : 'l';
+  return '<a:p><a:pPr algn="' + algn + '"' + (p.rtl ? ' rtl="1"' : '') + '/>' + p.runs + '<a:endParaRPr lang="ar-SA"/></a:p>';
+}
+function textSp(u, name, x, y, w, h, ctx) {
+  const id = ctx.nextId();
+  const sp = (math) => '<p:sp><p:nvSpPr><p:cNvPr id="' + id + '" name="' + xe(name) + '"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>'
+    + '<p:spPr><a:xfrm><a:off x="' + x + '" y="' + y + '"/><a:ext cx="' + w + '" cy="' + h + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr>'
+    + '<p:txBody><a:bodyPr wrap="square" lIns="0" tIns="0" rIns="0" bIns="0" rtlCol="0"><a:spAutoFit/></a:bodyPr><a:lstStyle/>'
+    + u.paras.map(p => paraX(math ? p : Object.assign({}, p, { runs: p.runs.replace(/<a14:m>[\s\S]*?<\/a14:m>/g, '') }))).join('') + '</p:txBody></p:sp>';
+  if (!u.math) return sp(false);
+  return '<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:a14="http://schemas.microsoft.com/office/drawing/2010/main"><mc:Choice Requires="a14">' + sp(true) + '</mc:Choice><mc:Fallback>' + sp(false) + '</mc:Fallback></mc:AlternateContent>';
+}
+function picSp(name, rid, x, y, w, h) {
+  return '<p:pic><p:nvPicPr><p:cNvPr id="0" name="' + xe(name) + '"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr>'
+    + '<p:blipFill><a:blip r:embed="' + rid + '"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>'
+    + '<p:spPr><a:xfrm><a:off x="' + x + '" y="' + y + '"/><a:ext cx="' + w + '" cy="' + h + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>';
+}
+function tableX(u, name, x, y, w, h, ctx) {
+  const ncol = u.grid.length || Math.max(...u.rows.map(r => r.reduce((s, c) => s + c.span, 0)));
+  const tot = u.grid.length ? u.grid.reduce((a, b) => a + b, 0) : ncol;
+  let cols = (u.grid.length ? u.grid : Array(ncol).fill(1)).map(g => Math.round(w * g / tot));
+  if (u.rtl) cols = cols.slice().reverse();
+  // vertical merges: rowSpan on the first cell, vMerge on the rest
+  const grid = u.rows.map(r => { const cells = []; let ci = 0; for (const c of r) { cells.push(Object.assign({ ci }, c)); ci += c.span; } return cells; });
+  grid.forEach((row, ri) => row.forEach(c => {
+    if (c.vmerge === 'restart') { let n = 1; for (let k = ri + 1; k < grid.length; k++) { const o = grid[k].find(z => z.ci === c.ci); if (o && o.vmerge === 'cont') n++; else break; } c.rowSpan = n; }
+  }));
+  const rowH = 22 * PT;
+  let x0 = '<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="' + ctx.nextId() + '" name="' + xe(name) + '"/><p:cNvGraphicFramePr><a:graphicFrameLocks noGrp="1"/></p:cNvGraphicFramePr><p:nvPr/></p:nvGraphicFramePr>'
+    + '<p:xfrm><a:off x="' + x + '" y="' + y + '"/><a:ext cx="' + w + '" cy="' + (rowH * u.rows.length) + '"/></p:xfrm>'
+    + '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl><a:tblPr firstRow="1" bandRow="1"' + (u.rtl ? ' rtl="1"' : '') + '/><a:tblGrid>'
+    + cols.map(c => '<a:gridCol w="' + c + '"/>').join('') + '</a:tblGrid>';
+  for (const row of grid) {
+    x0 += '<a:tr h="' + rowH + '">';
+    let used = 0;
+    for (const c of row) {
+      const paras = c.paras.length ? c.paras.map(p => paraX(Object.assign({}, p, { runs: p.runs.replace(/<a14:m>[\s\S]*?<\/a14:m>/g, m => '') || '' }))).join('') : '<a:p><a:endParaRPr lang="ar-SA"/></a:p>';
+      const attrs = (c.span > 1 ? ' gridSpan="' + c.span + '"' : '') + (c.rowSpan > 1 ? ' rowSpan="' + c.rowSpan + '"' : '') + (c.vmerge === 'cont' ? ' vMerge="1"' : '');
+      x0 += '<a:tc' + attrs + '><a:txBody><a:bodyPr/><a:lstStyle/>' + (c.vmerge === 'cont' ? '<a:p><a:endParaRPr lang="ar-SA"/></a:p>' : paras) + '</a:txBody><a:tcPr anchor="ctr"/></a:tc>';
+      for (let k = 1; k < c.span; k++) x0 += '<a:tc hMerge="1"><a:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang="ar-SA"/></a:p></a:txBody><a:tcPr/></a:tc>';
+      used += c.span;
+    }
+    for (; used < ncol; used++) x0 += '<a:tc><a:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang="ar-SA"/></a:p></a:txBody><a:tcPr/></a:tc>';
+    x0 += '</a:tr>';
+  }
+  return x0 + '</a:tbl></a:graphicData></a:graphic></p:graphicFrame>';
+}
+
+// ---------- batches: about one page of content each (the pane then splits what is still too long) ----------
+const BOXY = ['note', 'def', 'quote', 'formula', 'other', 'activity', 'mars'];
+function batches(units, W, H) {
+  const CW = W - 72 * PT, cap = (H - 22.58 * PT - 54 * PT - 20 * PT);
+  const hOf = u => u.kind === 'text' ? estH(u, CW) : u.kind === 'pic' ? Math.round(u.cy * Math.min(1, CW / Math.max(1, u.cx))) : u.rows.length * 22 * PT;
+  // chains: a heading goes with what follows it, a question with its answer / figure, a text with the picture beside it
+  const chains = [];
+  let cur = null;
+  units.forEach((u, k) => {
+    const prev = units[k - 1];
+    const join = cur && prev && (['lesson', 'topic', 'qhead', 'chapter'].includes(prev.role)
+      || (prev.role === 'question' && (u.role === 'answer' || u.role === 'choice' || u.kind === 'pic'))
+      || (u.kind === 'pic' && prev.kind === 'text' && u.cx <= CW * 0.48));
+    if (!join) { cur = { units: [], h: 0 }; chains.push(cur); }
+    const h = hOf(u);
+    const gap = prev && prev.role === 'question' && (u.role === 'answer' || u.role === 'choice') ? 0 : 13.39 * PT;
+    if (u.kind === 'pic' && prev && prev.kind === 'text' && u.cx <= CW * 0.48 && cur.units.length) cur.h += Math.max(0, h - hOf(prev));
+    else cur.h += h + gap + (BOXY.includes(u.role) ? 2 * 13.39 * PT : 0);
+    cur.units.push(u);
+  });
+  const out = []; let b = [], h = 0;
+  for (const c of chains) {
+    if (b.length && h + c.h > cap) { out.push(b); b = []; h = 0; }
+    b.push(...c.units); h += c.h;
+  }
+  if (b.length) out.push(b);
+  return out;
+}
+
+// builds the raw shapes of one batch into a slide package's xml (the old content of the slide is removed)
+function fillSlide(pkg, units, opts) {
+  opts = opts || {};
+  const U = UR.util;
+  const doc = UR.parseXml(pkg.files.slide);
+  const tree = U.spTreeOf(doc);
+  if (opts.clear) for (const el of U.topItems(doc)) {
+    const c = U.core(el), n = U.cnvOf(c), name = n ? n.getAttribute('name') || '' : '';
+    if (/^CustomPageNumber_/.test(name)) continue;
+    tree.removeChild(el);
+  }
+  let id = U.maxId(doc) + 1;
+  const rels = U.makeRels(pkg);
+  let y0 = 60 * PT;
+  if (!opts.clear) for (const el of U.topItems(doc)) { const g = U.geomOf(el, pkg); if (g && g.y + g.h < pkg.slideH - 54 * PT) y0 = Math.max(y0, g.y + g.h + 26 * PT); }
+  const list = shapes(units, { W: pkg.slideW, H: pkg.slideH, rels, nextId: () => id++, mediaKey: opts.mediaKey || 1, y0 });
+  for (const s of list) {
+    const el = U.frag(doc, s.xml);
+    tree.appendChild(el);
+  }
+  // pictures get ids too
+  for (const c of tree.getElementsByTagNameNS(UR.NS.p, 'cNvPr')) if (c.getAttribute('id') === '0') c.setAttribute('id', String(id++));
+  pkg.files.slide = UR.serialize(doc);
+  pkg.files.rels = UR.serialize(rels.doc);
+  return list.length;
+}
+
+// the fallback copy of a shape with math (what older readers show) follows the styled copy, with the math as plain text
+function syncFallback(xml) {
+  const MC = 'http://schemas.openxmlformats.org/markup-compatibility/2006', A14 = 'http://schemas.microsoft.com/office/drawing/2010/main';
+  const doc = UR.parseXml(xml);
+  for (const ac of [...doc.getElementsByTagNameNS(MC, 'AlternateContent')]) {
+    const ch = [...ac.children].find(x => x.localName === 'Choice'), fb = [...ac.children].find(x => x.localName === 'Fallback');
+    if (!ch || !fb || !ch.firstElementChild || ch.firstElementChild.localName !== 'sp') continue;
+    const sp = ch.firstElementChild;
+    const nm = sp.getElementsByTagNameNS(UR.NS.p, 'cNvPr')[0];
+    if (!nm || !/ Word \d+/.test(nm.getAttribute('name') || '')) continue;
+    const copy = sp.cloneNode(true);
+    for (const m of [...copy.getElementsByTagNameNS(A14, 'm')]) {
+      const t = [...m.getElementsByTagNameNS(M_NS, 't')].map(x => x.textContent).join('');
+      const rPr = m.getElementsByTagNameNS(A_NS, 'rPr')[0];
+      const r = doc.createElementNS(A_NS, 'a:r');
+      if (rPr) { const c = rPr.cloneNode(true); r.appendChild(c); }
+      const at = doc.createElementNS(A_NS, 'a:t'); at.textContent = t; r.appendChild(at);
+      m.parentNode.replaceChild(r, m);
+    }
+    while (fb.firstChild) fb.removeChild(fb.firstChild);
+    fb.appendChild(copy);
+  }
+  return UR.serialize(doc);
+}
+
+return { TYPES, TYPE, TAG, guess, group, read, shapes, batches, fillSlide, syncFallback, isBlue, RX };
+})();
+if (typeof module !== 'undefined') module.exports = UW;
+</script>
 <script>(() => {
 'use strict';
 const $ = id => document.getElementById(id);
-const VER = '1.0';
+const VER = '1.1';
 const PT = UR.PT;
 const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
 const load = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
@@ -2922,12 +3538,296 @@ $('solBtn').addEventListener('click', async () => {
   finally { busy = false; lock(); }
 });
 
+// ---------- Word file → slides ----------
+// every tagged part of the Word file becomes its own text box (named "UULA:<type>"), then the slide is restyled
+function slideEmpty(pkg) {
+  const doc = UR.parseXml(pkg.files.slide), U = UR.util;
+  return !U.topItems(doc).some(el => { const c = U.core(el), n = U.cnvOf(c), nm = n ? n.getAttribute('name') || '' : ''; if (/^CustomPageNumber_/.test(nm)) return false; return c.localName !== 'sp' || /\S/.test([...c.getElementsByTagNameNS(UR.NS.a, 't')].map(t => t.textContent).join('')); });
+}
+let docxPending = null;
+async function importDocx(file) {
+  res.innerHTML = '';
+  say(L('قراءة ملف الوورد…', 'Reading the Word file…'));
+  const parsed = await UW.read(await file.arrayBuffer());
+  const units = parsed.units;
+  if (!units.length) { say(L('لم أجد محتوى في الملف.', 'No content found in the file.')); return; }
+  const id = await currentId();
+  if (!id) { say(L('حدّد شريحة أولًا.', 'Select a slide first.')); return; }
+  const b64 = await exportSlide(id);
+  const pkg0 = await UR.openPackage(b64);
+  const parts = UW.batches(units, pkg0.slideW, pkg0.slideH);
+  const empty = slideEmpty(pkg0);
+  const adds = parts.length - (empty ? 1 : 0);
+  const rp = parsed.report;
+  const info = L('في الملف: ', 'In the file: ') + (rp.tagged + rp.untagged) + L(' جزء نصي', ' text parts') + (rp.untagged ? L(' (منها ' + rp.untagged + ' غير مميز)', ' (' + rp.untagged + ' untagged)') : '')
+    + (rp.tables ? L('، ' + rp.tables + ' جدول', ', ' + rp.tables + ' tables') : '') + (rp.pics ? L('، ' + rp.pics + ' صورة', ', ' + rp.pics + ' pictures') : '') + '.';
+  line('', esc(info));
+  if (adds > 0) {
+    docxPending = { units, parts, b64, id, empty, report: rp };
+    const d = line('warn splitask', L('سيُضاف تقريبًا ', 'About ') + cnt(adds) + L(' بعد الشريحة الحالية' + (empty ? ' (والشريحة الحالية الفارغة تُستخدم أولًا)' : '') + '.', ' will be added after the current slide' + (empty ? ' (the empty current slide is used first)' : '') + '.')
+      + '<br><span style="display:flex;gap:6px;margin-top:4px"><button type="button" class="mini" data-dx="yes">' + L('موافق، أضفها', 'OK, add them') + '</button><button type="button" class="mini" data-dx="no">' + L('إلغاء', 'Cancel') + '</button></span>');
+    d.style.display = 'block';
+    d.querySelector('[data-dx="yes"]').addEventListener('click', () => { d.remove(); runDocx(); });
+    d.querySelector('[data-dx="no"]').addEventListener('click', () => { d.remove(); docxPending = null; say(L('أُلغي الإدراج.', 'Cancelled.')); });
+    say(L('بانتظار موافقتك.', 'Waiting for your OK.'));
+    return;
+  }
+  docxPending = { units, parts, b64, id, empty, report: rp };
+  await runDocx(true);
+}
+async function runDocx(already) {
+  const st = docxPending; if (!st) return;
+  if (!already) { if (busy) return; busy = true; lock(); }
+  try {
+    let prev = st.id, made = [], mediaKey = 1, first = true;
+    for (let k = 0; k < st.parts.length; k++) {
+      prog(k / st.parts.length); say(L('إنشاء الشريحة ', 'Building slide ') + (k + 1) + L(' من ', ' of ') + st.parts.length + '…');
+      const pkg = await UR.openPackage(st.b64);
+      UW.fillSlide(pkg, st.parts[k], { clear: true, mediaKey });
+      mediaKey += st.parts[k].length + 1;
+      const r = UR.restyle(pkg, {});
+      r.xml = UW.syncFallback(r.xml);
+      const newId = await insertAfter(await UR.buildPackage(pkg, r.xml, r.rels), prev);
+      if (first && st.empty) await deleteSlide(st.id);
+      first = false;
+      const lay = await refine(newId, r.plan);
+      await unmark(newId);
+      // still longer than the page: split it (already agreed)
+      if (lay.overflow >= 0 && UR.splitPoint(r.plan, lay) > 0) {
+        pendingSplit.set(newId, { pkg, rels: r.rels, xml: r.xml, plan: r.plan });
+        const ids = await splitSlide(newId);
+        made.push(...ids); prev = ids[ids.length - 1];
+      } else { made.push(newId); prev = newId; }
+    }
+    prog(null);
+    if ($('numChk').checked) { try { await renumber(); } catch (e) {} }
+    await run(async ctx => { ctx.presentation.setSelectedSlides([made[0]]); await ctx.sync(); }).catch(() => {});
+    const all = await allIds(), num = i => all.indexOf(i) + 1;
+    line('ok', L('✓ أُدرج ملف الوورد في ', '✓ The Word file was inserted in ') + cnt(made.length) + ': ' + slideLinks(made, num));
+    if (st.report.inlineObj) line('warn', L('• ' + st.report.inlineObj + ' معادلة كصورة داخل السطر وُضعت كصورة مستقلة، راجعها.', '• ' + st.report.inlineObj + ' inline equation pictures were placed as separate pictures; check them.'));
+    line('', '<span class="note">' + L('يلزم تثبيت خط UULA Sans على الجهاز.', 'The UULA Sans font must be installed.') + '</span>');
+    say(L('تم إدراج ملف الوورد.', 'The Word file was inserted.'));
+  } catch (e) { prog(null); say(L('تعذّر الإدراج: ', 'Could not insert: ') + errText(e)); }
+  finally { docxPending = null; busy = false; lock(); }
+}
+$('docxBtn').addEventListener('click', () => { if (!busy && supported) $('docxFile').click(); });
+$('docxFile').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f || busy) return;
+  busy = true; lock();
+  try { await importDocx(f); }
+  catch (e2) { prog(null); say(L('تعذّر قراءة الملف: ', 'Could not read the file: ') + errText(e2)); }
+  finally { busy = false; lock(); }
+});
+
+// ---------- Word: tagging ----------
+let isWord = false;
+const wtype = id => UW.TYPE[id];
+const wname = id => { const t = wtype(id); return t ? L(t.ar, t.en) : id; };
+function buildWordRoles() {
+  const host = $('wroles'); host.innerHTML = '';
+  for (const g of UW.TYPES) {
+    const d = document.createElement('div'); d.className = 'tgroup';
+    d.innerHTML = '<div class="gt">' + L(g.g, g.ge) + '</div>';
+    const grid = document.createElement('div'); grid.className = 'tgrid';
+    for (const [id, ar, en, col] of g.items) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'tbtn'; b.dataset.wrole = id;
+      b.title = L(ar, en); b.innerHTML = '<i style="background:#' + col + '"></i><span>' + L(ar, en) + '</span>';
+      grid.appendChild(b);
+    }
+    d.appendChild(grid); host.appendChild(d);
+  }
+}
+function styleCC(cc, type) {
+  const t = wtype(type);
+  cc.tag = 'UULA:' + type; cc.title = L(t.ar, t.en); cc.color = '#' + t.col; cc.appearance = 'BoundingBox';
+}
+const isUula = cc => cc && !cc.isNullObject && /^UULA:/.test(cc.tag || '');
+// an empty line between two tagged parts that touch (so their frames do not stick together)
+function spacer(par, where) {
+  const s = par.insertParagraph('', where);
+  try { s.spaceAfter = 0; s.spaceBefore = 0; s.font.size = 6; } catch (e) {}
+  return s;
+}
+async function tagSelection(type) {
+  return Word.run(async ctx => {
+    const sel = ctx.document.getSelection();
+    sel.load('text,isEmpty');
+    const pcc = sel.parentContentControlOrNullObject; pcc.load('isNullObject,tag,text');
+    await ctx.sync();
+    // inside a tagged part with nothing (or all of it) selected: change its type
+    if (isUula(pcc) && (sel.isEmpty || sel.text.trim() === (pcc.text || '').trim())) { styleCC(pcc, type); await ctx.sync(); return 'retag'; }
+    if (sel.isEmpty || !sel.text.trim()) {
+      // the cursor in a paragraph: that whole paragraph
+      const ps = sel.paragraphs; ps.load('items/text'); await ctx.sync();
+      if (!ps.items.length || !ps.items[0].text.trim()) return 'empty';
+    }
+    const ps = sel.paragraphs; ps.load('items/text,items/tableNestingLevel'); await ctx.sync();
+    const first = ps.items[0], last = ps.items[ps.items.length - 1];
+    const partial = !sel.isEmpty && ps.items.length === 1 && sel.text.trim().length < first.text.trim().length - 1;
+    let range;
+    if (partial) range = sel;                       // part of one paragraph: an inline frame
+    else if (first.tableNestingLevel > 0 && ps.items.every(p => p.tableNestingLevel > 0)) { const tb = first.parentTable; range = tb.getRange('Whole'); }
+    else {
+      const prev = first.getPreviousOrNullObject(), next = last.getNextOrNullObject();
+      prev.load('isNullObject,text'); next.load('isNullObject,text');
+      await ctx.sync();
+      const pc = prev.isNullObject ? null : prev.parentContentControlOrNullObject, nc = next.isNullObject ? null : next.parentContentControlOrNullObject;
+      if (pc) pc.load('isNullObject,tag'); if (nc) nc.load('isNullObject,tag');
+      await ctx.sync();
+      const inPrev = isUula(pc) && !(isUula(pcc) && pc.tag === pcc.tag), inNext = isUula(nc) && !(isUula(pcc) && nc.tag === pcc.tag);
+      if (inPrev && prev.text.trim()) spacer(first, 'Before');
+      if (inNext && next.text.trim()) spacer(last, 'After');
+      range = first.getRange('Whole').expandTo(last.getRange('Whole'));
+    }
+    const cc = range.insertContentControl();
+    styleCC(cc, type);
+    await ctx.sync();
+    return partial ? 'inline' : 'new';
+  });
+}
+async function untagSelection() {
+  return Word.run(async ctx => {
+    const sel = ctx.document.getSelection();
+    const pcc = sel.parentContentControlOrNullObject; pcc.load('isNullObject,tag');
+    const inside = sel.contentControls; inside.load('items/tag');
+    await ctx.sync();
+    let n = 0;
+    for (const c of inside.items) if (/^UULA:/.test(c.tag || '')) { c.delete(true); n++; }
+    if (isUula(pcc)) { pcc.delete(true); n++; }
+    await ctx.sync();
+    return n;
+  });
+}
+async function autoTag() {
+  return Word.run(async ctx => {
+    const ps = ctx.document.body.paragraphs;
+    ps.load('items/text,items/style,items/tableNestingLevel');
+    await ctx.sync();
+    const extra = ps.items.map(p => {
+      const cc = p.parentContentControlOrNullObject; cc.load('isNullObject,tag');
+      const pics = p.inlinePictures; pics.load('items/width');
+      p.font.load('color,bold,size');
+      return { cc, pics };
+    });
+    await ctx.sync();
+    const paras = ps.items.map((p, i) => {
+      const e = extra[i];
+      const tagged = !e.cc.isNullObject;
+      const table = p.tableNestingLevel > 0;
+      const pic = e.pics.items.length > 0;
+      const o = { text: p.text, style: p.style, color: p.font.color || '', bold: p.font.bold === true, size: p.font.size || 0, table, pic, big: pic && Math.max(...e.pics.items.map(x => x.width)) > 230 };
+      o.type = tagged ? null : UW.guess(o);
+      o.skip = tagged;
+      return o;
+    });
+    // table paragraphs: one group per table
+    const groups = [];
+    const plain = paras.map((p, i) => p.table ? Object.assign({}, p, { skip: true }) : p);
+    UW.group(plain).forEach(g => groups.push(g));
+    for (let i = 0; i < paras.length; i++) {
+      if (!paras[i].table || paras[i].skip) continue;
+      let j = i; while (j + 1 < paras.length && paras[j + 1].table) j++;
+      groups.push({ type: 'table', from: i, to: j, table: true });
+      i = j;
+    }
+    groups.sort((a, b) => a.from - b.from);
+    // ranges first (before anything moves), then spacers, then the frames
+    const plans = groups.map(g => ({ g, range: g.table ? ps.items[g.from].parentTable.getRange('Whole') : ps.items[g.from].getRange('Whole').expandTo(ps.items[g.to].getRange('Whole')) }));
+    let prevEnd = -10, prevTagged = false;
+    for (let k = 0; k < plans.length; k++) {
+      const g = plans[k].g;
+      const touch = g.from === prevEnd + 1 || (g.from > 0 && paras[g.from - 1].skip && paras[g.from - 1].text.trim() && !paras[g.from - 1].table);
+      if (touch && !g.table) spacer(ps.items[g.from], 'Before');
+      // a part tagged before, right after this one
+      const nx = paras[g.to + 1];
+      if (nx && nx.skip && (nx.text.trim() || nx.table) && !g.table && !(plans[k + 1] && plans[k + 1].g.from === g.to + 1)) spacer(ps.items[g.to], 'After');
+      prevEnd = g.to;
+    }
+    let n = 0;
+    for (const pl of plans) { const cc = pl.range.insertContentControl(); styleCC(cc, pl.g.type); n++; if (n % 40 === 0) await ctx.sync(); }
+    await ctx.sync();
+    return n;
+  });
+}
+async function clearAllTags() {
+  return Word.run(async ctx => {
+    const ccs = ctx.document.contentControls; ccs.load('items/tag'); await ctx.sync();
+    let n = 0;
+    for (const c of ccs.items) if (/^UULA:/.test(c.tag || '')) { c.delete(true); n++; }
+    await ctx.sync();
+    return n;
+  });
+}
+async function reviewList() {
+  const items = await Word.run(async ctx => {
+    const ccs = ctx.document.contentControls; ccs.load('items/id,items/tag,items/text'); await ctx.sync();
+    return ccs.items.filter(c => /^UULA:[a-z]+$/.test(c.tag || '')).map(c => ({ id: c.id, type: c.tag.slice(5), text: (c.text || '').replace(/\s+/g, ' ').trim().slice(0, 70) }));
+  });
+  const list = $('wlist'), sum = $('wsum');
+  list.innerHTML = ''; sum.innerHTML = '';
+  const counts = {};
+  for (const it of items) {
+    counts[it.type] = (counts[it.type] || 0) + 1;
+    const t = wtype(it.type) || { col: '999999' };
+    const d = document.createElement('div'); d.className = 'witem'; d.dataset.id = it.id;
+    d.innerHTML = '<i style="background:#' + t.col + '"></i><b>' + esc(wname(it.type)) + '</b><span>' + esc(it.text || '—') + '</span><button type="button" class="x" title="' + L('إزالة التمييز', 'Remove tag') + '">×</button>';
+    list.appendChild(d);
+  }
+  for (const [k, v] of Object.entries(counts)) { const s = document.createElement('span'); s.textContent = wname(k) + ' ' + v; sum.appendChild(s); }
+  if (!items.length) list.innerHTML = '<span class="note">' + L('لا توجد أجزاء مميزة بعد.', 'No tagged parts yet.') + '</span>';
+}
+$('wlist').addEventListener('click', e => {
+  const it = e.target.closest('.witem'); if (!it) return;
+  const id = +it.dataset.id;
+  if (e.target.closest('.x')) {
+    Word.run(async ctx => { ctx.document.contentControls.getById(id).delete(true); await ctx.sync(); }).then(reviewList).catch(er => say(errText(er)));
+    return;
+  }
+  Word.run(async ctx => { ctx.document.contentControls.getById(id).select('Select'); await ctx.sync(); }).catch(() => {});
+});
+$('wroles').addEventListener('click', async e => {
+  const b = e.target.closest('.tbtn'); if (!b || busy || !supported) return;
+  busy = true; lock();
+  try {
+    const r = await tagSelection(b.dataset.wrole);
+    if (r === 'empty') say(L('حدّد المحتوى أولًا.', 'Select the content first.'));
+    else say((r === 'retag' ? L('تغيّر النوع إلى: ', 'Type changed to: ') : L('مُيّز كـ: ', 'Tagged as: ')) + wname(b.dataset.wrole));
+  } catch (er) { say(L('تعذّر التمييز: ', 'Could not tag: ') + errText(er)); }
+  finally { busy = false; lock(); }
+});
+$('wUntag').addEventListener('click', async () => {
+  if (busy || !supported) return; busy = true; lock();
+  try { const n = await untagSelection(); say(n ? L('أُزيل التمييز.', 'Tag removed.') : L('لا يوجد تمييز في المحدد.', 'Nothing tagged in the selection.')); }
+  catch (er) { say(errText(er)); } finally { busy = false; lock(); }
+});
+$('wAuto').addEventListener('click', async () => {
+  if (busy || !supported) return; busy = true; lock();
+  try { say(L('تمييز المستند…', 'Tagging the document…')); const n = await autoTag(); say(n ? L('مُيّز ', 'Tagged ') + n + L(' جزءًا. راجعها في «مراجعة».', ' parts. Check them in Review.') : L('كل المحتوى مميز.', 'Everything is already tagged.')); }
+  catch (er) { say(L('تعذّر التمييز التلقائي: ', 'Auto-tag failed: ') + errText(er)); } finally { busy = false; lock(); }
+});
+$('wRefresh').addEventListener('click', () => { if (supported) reviewList().catch(er => say(errText(er))); });
+$('wClear').addEventListener('click', () => {
+  if (busy || !supported) return;
+  res.innerHTML = '';
+  const d = line('warn', L('إزالة كل التمييز من المستند؟ (يبقى النص كما هو)', 'Remove all tags from the document? (the text stays)')
+    + '<br><span style="display:flex;gap:6px;margin-top:4px"><button type="button" class="mini" data-c="yes">' + L('نعم، أزلها', 'Yes, remove') + '</button><button type="button" class="mini" data-c="no">' + L('لا', 'No') + '</button></span>');
+  d.style.display = 'block';
+  d.querySelector('[data-c="no"]').addEventListener('click', () => d.remove());
+  d.querySelector('[data-c="yes"]').addEventListener('click', async () => {
+    d.remove(); busy = true; lock();
+    try { const n = await clearAllTags(); say(L('أُزيل ', 'Removed ') + n + L(' تمييز.', ' tags.')); await reviewList(); }
+    catch (er) { say(errText(er)); } finally { busy = false; lock(); }
+  });
+});
+
 // ---------- main button ----------
 function lock() {
   $('goBtn').disabled = busy || !supported;
   $('solBtn').disabled = busy || !supported;
   $('spV').disabled = busy || !supported; $('spH').disabled = busy || !supported;
   document.querySelectorAll('.tbtn').forEach(b => { b.disabled = busy || !supported; });
+  ['docxBtn', 'wAuto', 'wUntag', 'wClear'].forEach(k => { if ($(k)) $(k).disabled = busy || !supported; });
 }
 $('goBtn').addEventListener('click', async () => {
   if (busy || !supported) return;
@@ -2941,11 +3841,13 @@ document.querySelectorAll('.scopeSeg').forEach(sg => sg.addEventListener('click'
 setScope(scope);
 // tabs
 function setTab(t) {
-  document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
+  document.querySelectorAll('#tabs button, #wtabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
   document.querySelectorAll('[data-pane]').forEach(s => { s.hidden = s.dataset.pane !== t; });
-  save('ur-tab', t);
+  save(isWord ? 'ur-wtab' : 'ur-tab', t);
+  if (t === 'wrev' && supported) reviewList().catch(() => {});
 }
 $('tabs').addEventListener('click', e => { const b = e.target.closest('button[data-tab]'); if (b) setTab(b.dataset.tab); });
+$('wtabs').addEventListener('click', e => { const b = e.target.closest('button[data-tab]'); if (b) setTab(b.dataset.tab); });
 setTab(load('ur-tab', 'conv'));
 // language
 function applyLang() {
@@ -2953,7 +3855,8 @@ function applyLang() {
   document.querySelectorAll('[data-en]').forEach(el => { if (el.dataset.ar == null) el.dataset.ar = el.textContent; el.textContent = lang === 'en' ? el.dataset.en : el.dataset.ar; });
   document.querySelectorAll('[data-en-title]').forEach(el => { el.title = lang === 'en' ? el.dataset.enTitle : el.dataset.arTitle; });
   $('langBtn').textContent = lang === 'en' ? 'ع' : 'EN';
-  buildTemplateList(); buildRoleList(); solLabel(); lock();
+  buildTemplateList(); buildRoleList(); buildWordRoles(); solLabel(); lock();
+  if (isWord && supported && !$('wlist').closest('[data-pane]').hidden) reviewList().catch(() => {});
 }
 $('langBtn').addEventListener('click', () => { lang = lang === 'en' ? 'ar' : 'en'; save('ur-lang', lang); applyLang(); say(''); });
 
@@ -2968,8 +3871,8 @@ $('modal').addEventListener('click', e => { if (e.target === $('modal')) $('moda
 $('aboutBtn').addEventListener('click', () => {
   menu(false);
   modal(L('حول الأداة', 'About'), (lang === 'en'
-    ? '<p>Restyles A4 slides into the UULA study-guide style with one click, and inserts the ready study-guide objects.</p><ul><li>UULA Sans font, 11pt text on the page grid</li><li>Headings, questions and answers in UULA colors</li><li>Full-width containers, tables and pictures in one style</li><li>Hide / show the solutions</li></ul><p>No content is deleted; only old decoration is removed.</p>'
-    : '<p>تحوّل شرائح A4 إلى ستايل مذكرات علا بضغطة زر، وتضيف قوالب المذكرة الجاهزة.</p><ul><li>خط UULA Sans، والنص 11 على شبكة الصفحة</li><li>العناوين والأسئلة والإجابات بألوان علا</li><li>حاويات بعرض الصفحة، وجداول وصور بالشكل الموحّد</li><li>إخفاء الحلول وإظهارها</li></ul><p>لا يُحذف أي محتوى؛ تُحذف الزخارف القديمة فقط.</p>')
+    ? '<p>Restyles A4 slides into the UULA study-guide style with one click, and inserts the ready study-guide objects.</p><ul><li>UULA Sans font, 11pt text on the page grid</li><li>Headings, questions and answers in UULA colors</li><li>Full-width containers, tables and pictures in one style</li><li>Hide / show the solutions</li><li>In Word: tag the parts (question, solution, definition…), then insert the Word file into PowerPoint</li></ul><p>No content is deleted; only old decoration is removed.</p>'
+    : '<p>تحوّل شرائح A4 إلى ستايل مذكرات علا بضغطة زر، وتضيف قوالب المذكرة الجاهزة.</p><ul><li>خط UULA Sans، والنص 11 على شبكة الصفحة</li><li>العناوين والأسئلة والإجابات بألوان علا</li><li>حاويات بعرض الصفحة، وجداول وصور بالشكل الموحّد</li><li>إخفاء الحلول وإظهارها</li><li>في الوورد: تمييز الأجزاء (سؤال، حل، تعريف…) ثم إدراج ملف الوورد في الباوربوينت</li></ul><p>لا يُحذف أي محتوى؛ تُحذف الزخارف القديمة فقط.</p>')
     + '<p class="foot" dir="ltr">Developed by <b>Zaher Alkablawi</b> · Version ' + VER + '<br>© 2026 UULA. All rights reserved.</p>');
 });
 
@@ -2999,7 +3902,15 @@ $('appVer').textContent = VER;
 applyLang();
 const ready = (window.Office && Office.onReady) ? Office.onReady() : Promise.resolve({});
 ready.then(info => {
-  if (!window.PowerPoint || (info && info.host && info.host !== Office.HostType.PowerPoint)) { say(L('هذه الأداة تعمل داخل PowerPoint فقط.', 'This tool works inside PowerPoint only.')); return; }
+  if (info && info.host === Office.HostType.Word) {
+    isWord = true;
+    $('tabs').hidden = true; $('wtabs').hidden = false;
+    let wt = load('ur-wtab', 'wtag'); if (!['wtag', 'wrev'].includes(wt)) wt = 'wtag';
+    if (!Office.context.requirements.isSetSupported('WordApi', '1.3')) { setTab(wt); say(L('حدّث برنامج Word لاستخدام الأداة.', 'Update Word to use this tool.')); return; }
+    supported = true; lock(); setTab(wt);
+    return;
+  }
+  if (!window.PowerPoint || (info && info.host && info.host !== Office.HostType.PowerPoint)) { say(L('هذه الأداة تعمل داخل PowerPoint وWord فقط.', 'This tool works inside PowerPoint and Word only.')); return; }
   if (!Office.context.requirements.isSetSupported('PowerPointApi', '1.8')) { say(L('حدّث برنامج PowerPoint لاستخدام الأداة.', 'Update PowerPoint to use this tool.')); return; }
   supported = true;
   const s = docSettings();

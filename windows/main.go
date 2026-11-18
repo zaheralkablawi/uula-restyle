@@ -1,6 +1,6 @@
-// UULA Restyle installer for Windows: puts the add-in into PowerPoint (current user, no admin needed).
+// UULA Restyle installer for Windows: puts the add-in into PowerPoint and Word (current user, no admin needed).
 // It copies the manifest to %LOCALAPPDATA%\UULA Restyle and registers it under
-// HKCU\Software\Microsoft\Office\16.0\WEF\Developer, so PowerPoint loads it on its next start.
+// HKCU\Software\Microsoft\Office\16.0\WEF\Developer, so PowerPoint and Word load it on their next start.
 package main
 
 import (
@@ -46,11 +46,11 @@ func reg(args ...string) (string, error) {
 	return string(out), err
 }
 
-func powerPointOpen() bool {
-	cmd := exec.Command("tasklist", "/FI", "IMAGENAME eq POWERPNT.EXE", "/NH")
+func running(exe string) bool {
+	cmd := exec.Command("tasklist", "/FI", "IMAGENAME eq "+exe, "/NH")
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	out, _ := cmd.Output()
-	return strings.Contains(strings.ToUpper(string(out)), "POWERPNT.EXE")
+	return strings.Contains(strings.ToUpper(string(out)), exe)
 }
 
 func main() {
@@ -62,7 +62,7 @@ func main() {
 		case idNo:
 			reg("delete", regKey, "/v", regValue, "/f")
 			os.RemoveAll(dir)
-			box("أُزيلت الأداة. أغلق PowerPoint وافتحه من جديد.\n\nThe add-in was removed. Restart PowerPoint.", mbOK)
+			box("أُزيلت الأداة. أغلق PowerPoint وWord وافتحهما من جديد.\n\nThe add-in was removed. Restart PowerPoint and Word.", mbOK)
 			return
 		case idYes:
 		default:
@@ -79,17 +79,17 @@ func main() {
 		return
 	}
 	if out, err := reg("add", regKey, "/v", regValue, "/t", "REG_SZ", "/d", path, "/f"); err != nil {
-		box("تعذّر تسجيل الأداة في PowerPoint:\n"+out, mbErr)
+		box("تعذّر تسجيل الأداة:\n"+out, mbErr)
 		return
 	}
 	msg := "تم تثبيت أداة UULA Restyle ✓\n\n" +
-		"1) أغلق PowerPoint تمامًا ثم افتحه من جديد.\n" +
-		"2) ستجد زر UULA Restyle في تبويب Home (الصفحة الرئيسية).\n" +
+		"1) أغلق PowerPoint وWord تمامًا ثم افتحهما من جديد.\n" +
+		"2) ستجد زر UULA Restyle في تبويب Home (الصفحة الرئيسية) في البرنامجين.\n" +
 		"   إذا لم يظهر: Insert ← Add-ins ← My Add-ins ← Developer Add-ins.\n\n" +
 		"يلزم Microsoft 365 محدّث، وخط UULA Sans مثبّت على الجهاز.\n\n" +
-		"UULA Restyle is installed. Restart PowerPoint; the button is on the Home tab."
-	if powerPointOpen() {
-		msg += "\n\n⚠ PowerPoint مفتوح الآن: أغلقه وافتحه لتظهر الأداة."
+		"UULA Restyle is installed in PowerPoint and Word. Restart them; the button is on the Home tab."
+	if running("POWERPNT.EXE") || running("WINWORD.EXE") {
+		msg += "\n\n⚠ PowerPoint أو Word مفتوح الآن: أغلقه وافتحه لتظهر الأداة."
 	}
 	box(msg, mbOK)
 }

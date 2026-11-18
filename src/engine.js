@@ -44,7 +44,8 @@ const STY = {
   question: { sz: 1100, c: '000000', keepB: 1, q: 1 },
   answer: { sz: 1100, c: C.answer, keepB: 1, ind: 1 },
   source: { sz: 1100, b: 1, c: '000000' },
-  label: { sz: 1100, c: '000000', keepB: 1 }          // small labels beside pictures / inside groups
+  label: { sz: 1100, c: '000000', keepB: 1 },         // small labels beside pictures / inside groups
+  qcont: { sz: 1100, c: '000000', keepB: 1 }          // the lines that continue a question
 };
 // containers: fill, icon, icon tint (for the vertical line)
 const BOX = {
@@ -187,7 +188,7 @@ function makeRels(pkg) {
     image(key, data) {
       if (media[key]) return media[key];
       let id; do { id = 'rIdUR' + (n++); } while (used.has(id)); used.add(id);
-      const file = 'ur_' + key + '.png';
+      const file = 'ur_' + key + (/\.[a-z0-9]+$/i.test(key) ? '' : '.png');
       pkg.zip.file('ppt/media/' + file, data || UR_ASSETS[key], { base64: true });
       const r = doc.createElementNS(NS.rel, 'Relationship');
       r.setAttribute('Id', id); r.setAttribute('Type', REL_IMG); r.setAttribute('Target', '../media/' + file);
@@ -210,7 +211,12 @@ async function buildPackage(pkg, slideXml, rels) {
   pkg.zip.file(pkg.slidePath, utf8(slideXml));
   if (rels) pkg.zip.file(pkg.relsPath, utf8(serialize(rels.doc)));
   let ct = await pkg.zip.file('[Content_Types].xml').async('string');
-  if (!/Extension="png"/i.test(ct)) { ct = ct.replace(/<Default /, '<Default Extension="png" ContentType="image/png"/><Default '); pkg.zip.file('[Content_Types].xml', utf8(ct)); }
+  const TYPES = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', bmp: 'image/bmp', tif: 'image/tiff', tiff: 'image/tiff', emf: 'image/x-emf', wmf: 'image/x-wmf', svg: 'image/svg+xml', wdp: 'image/vnd.ms-photo' };
+  const exts = new Set(['png']);
+  pkg.zip.forEach(n => { const m = /^ppt\/media\/.+\.([a-z0-9]+)$/i.exec(n); if (m) exts.add(m[1].toLowerCase()); });
+  let changed = false;
+  for (const e of exts) if (TYPES[e] && !new RegExp('Extension="' + e + '"', 'i').test(ct)) { ct = ct.replace(/<Default /, '<Default Extension="' + e + '" ContentType="' + TYPES[e] + '"/><Default '); changed = true; }
+  if (changed) pkg.zip.file('[Content_Types].xml', utf8(ct));
   return pkg.zip.generateAsync({ type: 'base64', compression: 'DEFLATE' });
 }
 
@@ -604,13 +610,21 @@ function styleText(it, ctx, pkg, forcedRole) {
   if (forcedRole === 'question') {
     const auto = paraRoles(it, ctx, pkg);
     let seenQ = false;
-    roles.forEach((r, k) => { if (!r.text) return; if (seenQ && auto[k] && ['answer', 'choice'].includes(auto[k].role)) r.role = auto[k].role; if (r.role === 'question') seenQ = true; });
+    roles.forEach((r, k) => {
+      if (!r.text && !desc(r.p, 'm', 'oMath').length) return;
+      if (seenQ && auto[k] && ['answer', 'choice'].includes(auto[k].role)) r.role = auto[k].role;
+      // the lines that continue a question (an equation, the rest of the sentence) sit under it without a new Q
+      else if (seenQ && !(auto[k] && auto[k].role === 'question') && !Q_START.test(r.text) && !Q_NUM.test(r.text)) r.role = 'qcont';
+      if (r.role === 'question') seenQ = true;
+    });
   }
   const arAll = AR.test(it.text);
   let stripped = false;
   for (const pr of roles) {
     const st = STY[pr.role] || STY.body;
     let ar = pr.text ? AR.test(pr.text) : arAll;
+    // an equation line inside an Arabic box stays on the right with the text around it
+    if (!ar && arAll && pr.role !== 'question' && desc(pr.p, 'm', 'oMath').length && !desc(pr.p, 'a', 't').some(x => /[A-Za-z]{3,}/.test(x.textContent))) ar = true;
     let bullet = null, marL = 0, indent = 0;
     if (st.q) {
       bullet = 'Q'; marL = 182880; indent = -182880;
@@ -622,14 +636,14 @@ function styleText(it, ctx, pkg, forcedRole) {
         const ts = desc(pr.p, 'a', 't').filter(x => !inMath(x));
         if (ts.length && !/^\u202A/.test(ts[0].textContent)) { ts[0].textContent = '\u202A' + ts[0].textContent; ts[ts.length - 1].textContent += '\u202C'; }
       }
-    } else if (pr.role === 'answer' || pr.role === 'choice') { marL = 182880; }
+    } else if (pr.role === 'answer' || pr.role === 'choice' || pr.role === 'qcont') { marL = 182880; }
     else if (pr.bullet && (pr.role === 'body')) {
       const auto = desc(kid(pr.p, 'pPr', 'a'), 'a', 'buAutoNum')[0];
       bullet = auto ? { auto: auto.getAttribute('type'), start: auto.getAttribute('startAt') } : '§';
       marL = 182880; indent = -182880;
     }
     setPPr(pr.p, { algn: (pr.role === 'pill' ? 'ctr' : ar ? 'r' : 'l'), rtl: ar, marL, indent, bullet });
-    const keepCol = ['body', 'answer', 'question', 'label', 'choice'].includes(pr.role);
+    const keepCol = ['body', 'answer', 'question', 'label', 'choice', 'qcont'].includes(pr.role);
     for (const r of desc(pr.p, 'a', 'r')) { let rPr = kid(r, 'rPr', 'a'); if (!rPr) { rPr = mk(r.ownerDocument, 'a', 'rPr'); rPr.setAttribute('lang', ar ? 'ar-KW' : 'en-US'); r.insertBefore(rPr, r.firstChild); } styleRPr(rPr, st, pr.role, keepCol ? (rPr.querySelector && kid(rPr, 'solidFill', 'a') ? colorOf(kid(rPr, 'solidFill', 'a'), ctx) : null) : null, false); }
     for (const r of desc(pr.p, 'a', 'fld')) { let rPr = kid(r, 'rPr', 'a'); if (rPr) styleRPr(rPr, st, pr.role, null, false); }
     for (const rPr of desc(pr.p, 'a', 'rPr').filter(x => inMath(x))) styleRPr(rPr, st, pr.role, keepCol ? colorOf(kid(rPr, 'solidFill', 'a'), ctx) : null, true);

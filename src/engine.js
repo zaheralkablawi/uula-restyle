@@ -386,7 +386,7 @@ function classify(it, items, pkg, ctx) {
   }
   if (it.kind === 'pic') {
     // a picture covering most of the slide is a background
-    if (g.w > W * 0.85 && g.h > H * 0.6) { it.drop = 'decor'; return; }
+    if (g.w > W * 0.85 && g.h > H * 0.6) { it.drop = 'keepbg'; return; }   // a background picture stays as it is
     // footer logo
     if (g.y > H * 0.92 && g.w < 60 * PT && g.h < 60 * PT) { it.drop = 'footer'; return; }
     const small = Math.max(g.w, g.h) < 100 * PT, linked = !!desc(it.c, 'a', 'hlinkClick').length;
@@ -885,7 +885,7 @@ function restyle(pkg, opts) {
 
   // 2) remove decoration, old footers and page numbers (links outside the slide stay)
   for (const t of items) {
-    if (!t.drop || t.drop === 'link' || t.drop === 'off' || t.drop === 'offpic') continue;
+    if (!t.drop || t.drop === 'link' || t.drop === 'off' || t.drop === 'offpic' || t.drop === 'keepbg') continue;
     if (t.el.parentNode) t.el.parentNode.removeChild(t.el);
     if (t.drop === 'decor' || t.drop === 'replaced') report.dropped++;
   }
@@ -996,23 +996,8 @@ function restyle(pkg, opts) {
     t.pill.el = el;
   }
 
-  // 7) footer + page number + white background
+  // 7) the background, watermark and footer come from the slide layout: left alone here
   const root = doc.documentElement;
-  const cSld = kid(root, 'cSld', 'p');
-  const bg = kid(cSld, 'bg', 'p'); if (bg) cSld.removeChild(bg);
-  if (!pkg.uulaMaster) {
-    root.setAttribute('showMasterSp', '0');
-    cSld.insertBefore(frag(doc, '<p:bg><p:bgPr><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:effectLst/></p:bgPr></p:bg>'), spTree);
-    const wmFirst = opts.watermark !== false;
-    const fx = footerX(W, H, rels, { watermark: wmFirst, now: opts.now });
-    const wrap = parseXml('<w ' + XMLNS + '>' + fx + '</w>').documentElement;
-    const firstShape = kid(spTree, 'grpSpPr', 'p').nextSibling;
-    for (const n of [...wrap.children]) {
-      const el = doc.importNode(n, true);
-      if (/Watermark/.test(textOf(el) + (cnvOf(el) || { getAttribute: () => '' }).getAttribute('name'))) spTree.insertBefore(el, kid(spTree, 'grpSpPr', 'p').nextSibling);
-      else spTree.appendChild(el);
-    }
-  }
   if (opts.pageNum != null) spTree.appendChild(frag(doc, pageNumX(W, H, opts.pageNum)));
   // animations point at shapes that may be gone
   for (const tm of kids(root, 'timing', 'p')) root.removeChild(tm);

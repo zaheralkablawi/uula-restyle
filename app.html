@@ -132,8 +132,7 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
       <label class="chk"><input type="checkbox" id="numChk" checked> ترقيم الصفحات</label>
       <div class="row" id="numRow"><span style="font-size:.84rem">يبدأ الترقيم من الشريحة</span><span style="display:flex;gap:6px;align-items:center"><input type="number" min="1" class="num" id="numStart" value="1"><button type="button" class="mini" id="numHere">الحالية</button></span></div>
       <button type="button" class="mini" id="numAll" style="justify-self:start">تحديث أرقام الصفحات الآن</button>
-      <label class="chk"><input type="checkbox" id="wmChk" checked> علامة علا المائية</label>
-      <span class="note">التذييل والعلامة المائية يُضافان فقط للشرائح التي ماسترها ليس ماستر علا.</span>
+      <span class="note">الخلفية والعلامة المائية والتذييل تأتي من تخطيط الشريحة (Layout)، والأداة لا تغيّرها.</span>
     </div>
   </section>
   <div class="modal" id="modal" hidden><div class="mbox" role="dialog" aria-modal="true"><h3 id="modalT"></h3><div id="modalB"></div><button type="button" class="mini" id="modalX" style="margin-top:10px">إغلاق</button></div></div>
@@ -543,7 +542,7 @@ function classify(it, items, pkg, ctx) {
   }
   if (it.kind === 'pic') {
     // a picture covering most of the slide is a background
-    if (g.w > W * 0.85 && g.h > H * 0.6) { it.drop = 'decor'; return; }
+    if (g.w > W * 0.85 && g.h > H * 0.6) { it.drop = 'keepbg'; return; }   // a background picture stays as it is
     // footer logo
     if (g.y > H * 0.92 && g.w < 60 * PT && g.h < 60 * PT) { it.drop = 'footer'; return; }
     const small = Math.max(g.w, g.h) < 100 * PT, linked = !!desc(it.c, 'a', 'hlinkClick').length;
@@ -1042,7 +1041,7 @@ function restyle(pkg, opts) {
 
   // 2) remove decoration, old footers and page numbers (links outside the slide stay)
   for (const t of items) {
-    if (!t.drop || t.drop === 'link' || t.drop === 'off' || t.drop === 'offpic') continue;
+    if (!t.drop || t.drop === 'link' || t.drop === 'off' || t.drop === 'offpic' || t.drop === 'keepbg') continue;
     if (t.el.parentNode) t.el.parentNode.removeChild(t.el);
     if (t.drop === 'decor' || t.drop === 'replaced') report.dropped++;
   }
@@ -1153,23 +1152,8 @@ function restyle(pkg, opts) {
     t.pill.el = el;
   }
 
-  // 7) footer + page number + white background
+  // 7) the background, watermark and footer come from the slide layout: left alone here
   const root = doc.documentElement;
-  const cSld = kid(root, 'cSld', 'p');
-  const bg = kid(cSld, 'bg', 'p'); if (bg) cSld.removeChild(bg);
-  if (!pkg.uulaMaster) {
-    root.setAttribute('showMasterSp', '0');
-    cSld.insertBefore(frag(doc, '<p:bg><p:bgPr><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:effectLst/></p:bgPr></p:bg>'), spTree);
-    const wmFirst = opts.watermark !== false;
-    const fx = footerX(W, H, rels, { watermark: wmFirst, now: opts.now });
-    const wrap = parseXml('<w ' + XMLNS + '>' + fx + '</w>').documentElement;
-    const firstShape = kid(spTree, 'grpSpPr', 'p').nextSibling;
-    for (const n of [...wrap.children]) {
-      const el = doc.importNode(n, true);
-      if (/Watermark/.test(textOf(el) + (cnvOf(el) || { getAttribute: () => '' }).getAttribute('name'))) spTree.insertBefore(el, kid(spTree, 'grpSpPr', 'p').nextSibling);
-      else spTree.appendChild(el);
-    }
-  }
   if (opts.pageNum != null) spTree.appendChild(frag(doc, pageNumX(W, H, opts.pageNum)));
   // animations point at shapes that may be gone
   for (const tm of kids(root, 'timing', 'p')) root.removeChild(tm);
@@ -2266,7 +2250,7 @@ async function doConvert() {
   if (!ids.length) { say('حدّد شريحة أولًا.'); return; }
   pendingSplit.clear();
   const rep = { done: [], full: [], tooLong: [], errs: [], boxes: 0, tables: 0, links: [], linkFail: [], qr: 0 };
-  const opts = { watermark: $('wmChk').checked };
+  const opts = {};
   for (let k = 0; k < ids.length; k++) {
     prog(k / ids.length); say('تحويل الشريحة ' + (k + 1) + ' من ' + ids.length + '…');
     try { rep.done.push(await convertOne(ids[k], opts, rep)); }
@@ -2343,8 +2327,6 @@ $('numAll').addEventListener('click', async () => {
   catch (e) { say('تعذّر الترقيم: ' + errText(e)); }
   finally { busy = false; lock(); }
 });
-$('wmChk').addEventListener('change', () => save('ur-wm', $('wmChk').checked));
-$('wmChk').checked = load('ur-wm', true);
 
 // ---------- templates ----------
 const SW = { header: '1F71DD', topic: '000000', body: 'FFFFFF', bullets: 'FFFFFF', cols: 'FFFFFF', pill: '1F71DC', qhead: 'FF0000', question: 'FF0000', qa: '1F71DE', answer: '1F71DE', qqr: 'FF0000', mcq: 'FF0000', problem: '00B050', other: 'FBEBD3',

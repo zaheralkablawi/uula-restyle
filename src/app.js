@@ -172,7 +172,7 @@ async function doConvert() {
   if (!ids.length) { say('حدّد شريحة أولًا.'); return; }
   pendingSplit.clear();
   const rep = { done: [], full: [], tooLong: [], errs: [], boxes: 0, tables: 0, links: [], linkFail: [], qr: 0 };
-  const opts = { watermark: $('wmChk').checked };
+  const opts = {};
   for (let k = 0; k < ids.length; k++) {
     prog(k / ids.length); say('تحويل الشريحة ' + (k + 1) + ' من ' + ids.length + '…');
     try { rep.done.push(await convertOne(ids[k], opts, rep)); }
@@ -249,8 +249,6 @@ $('numAll').addEventListener('click', async () => {
   catch (e) { say('تعذّر الترقيم: ' + errText(e)); }
   finally { busy = false; lock(); }
 });
-$('wmChk').addEventListener('change', () => save('ur-wm', $('wmChk').checked));
-$('wmChk').checked = load('ur-wm', true);
 
 // ---------- templates ----------
 const SW = { header: '1F71DD', topic: '000000', body: 'FFFFFF', bullets: 'FFFFFF', cols: 'FFFFFF', pill: '1F71DC', qhead: 'FF0000', question: 'FF0000', qa: '1F71DE', answer: '1F71DE', qqr: 'FF0000', mcq: 'FF0000', problem: '00B050', other: 'FBEBD3',

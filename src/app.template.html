@@ -183,8 +183,13 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
   <section class="panel" data-pane="wrev" hidden>
     <div class="row"><span class="gt2" data-en="Tagged parts">الأجزاء المميزة</span><button type="button" class="mini" id="wRefresh" data-en="Refresh">تحديث</button></div>
     <div class="wsum" id="wsum"></div>
+    <div id="wwarn" hidden style="display:grid;gap:5px;border:1px solid #e8590c;background:#fff4e6;border-radius:8px;padding:6px 8px">
+      <span id="wwarnT" style="font-size:.78rem;color:#b4541a;font-weight:600"></span>
+      <div class="btnrow"><button type="button" class="mini" id="wMark" data-en="Colour untagged">لوّن غير المميز</button><button type="button" class="mini" id="wUnmark" data-en="Remove colouring">إزالة التلوين</button></div>
+    </div>
     <div class="wlist" id="wlist"></div>
     <span class="note" data-en="Click a part to go to it. To change its type, click it and pick the new type in Tag.">اضغط جزءًا للانتقال إليه. لتغيير نوعه اضغطه ثم اختر النوع الجديد من «تمييز».</span>
+    <span class="note" data-en="Only tagged parts are brought into PowerPoint.">تُنقل إلى الباوربوينت الأجزاء المميزة فقط.</span>
     <button type="button" class="mini" id="wClear" style="justify-self:start" data-en="Remove all tags">إزالة كل التمييز</button>
   </section>
 

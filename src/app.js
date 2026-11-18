@@ -359,7 +359,7 @@ async function insertTemplate(tid) {
 
 // ---------- one object at a time ----------
 const ROLES = [
-  { g: 'نصوص', ge: 'Text', items: [['chapter', 'اسم الوحدة', 'A6A6A6'], ['lesson', 'اسم الدرس', '1F71DD'], ['topic', 'موضوع', '000000'], ['body', 'فقرة', 'FFFFFF'], ['bullets', 'نقاط', 'FFFFFF'], ['qhead', 'عنوان أسئلة', 'FF0000'], ['question', 'سؤال', 'FF0000'], ['answer', 'حل', '1F71DE'], ['choice', 'خيارات', 'FFFFFF']] },
+  { g: 'نصوص', ge: 'Text', items: [['chapter', 'اسم الوحدة', 'A6A6A6'], ['lesson', 'اسم الدرس', '1F71DD'], ['topic', 'موضوع', '000000'], ['body', 'فقرة', 'FFFFFF'], ['bullets', 'نقاط', 'FFFFFF'], ['qhead', 'عنوان أسئلة', 'FF0000'], ['question', 'سؤال', 'FF0000'], ['choice', 'خيارات', 'FFFFFF']] },
   { g: 'للحلول', ge: 'For solutions', items: [['answer', 'حل', '1F71DE'], ['correct', 'الخيار الصحيح', '2070DF'], ['given', 'شكل من السؤال', 'A6A6A6']] },
   { g: 'حاويات', ge: 'Containers', items: [['note', 'ملاحظة', 'FBEBD3'], ['quote', 'نص مقتطف', 'E2F0D9'], ['def', 'تعريف', 'E2F0D9'], ['formula', 'قوانين', 'D3E4F5'], ['other', 'صيغة أخرى', 'FBEBD3'], ['activity', 'نشاط', 'F1F1F1'], ['mars', 'من المريخ', 'F1F1F1']] }
 ];
@@ -633,7 +633,11 @@ async function importDocx(file) {
   say(L('قراءة ملف الوورد…', 'Reading the Word file…'));
   const parsed = await UW.read(await file.arrayBuffer());
   const units = parsed.units;
-  if (!units.length) { say(L('لم أجد محتوى في الملف.', 'No content found in the file.')); return; }
+  const rp0 = parsed.report;
+  if (!units.length) {
+    say(rp0.skippedParts ? L('لا يوجد في الملف أي جزء مميز. ميّز الأجزاء في الوورد أولًا.', 'Nothing in the file is tagged. Tag the parts in Word first.') : L('لم أجد محتوى في الملف.', 'No content found in the file.'));
+    return;
+  }
   const id = await currentId();
   if (!id) { say(L('حدّد شريحة أولًا.', 'Select a slide first.')); return; }
   const b64 = await exportSlide(id);
@@ -642,9 +646,9 @@ async function importDocx(file) {
   const empty = slideEmpty(pkg0);
   const adds = parts.length - (empty ? 1 : 0);
   const rp = parsed.report;
-  const info = L('في الملف: ', 'In the file: ') + (rp.tagged + rp.untagged) + L(' جزء نصي', ' text parts') + (rp.untagged ? L(' (منها ' + rp.untagged + ' غير مميز)', ' (' + rp.untagged + ' untagged)') : '')
-    + (rp.tables ? L('، ' + rp.tables + ' جدول', ', ' + rp.tables + ' tables') : '') + (rp.pics ? L('، ' + rp.pics + ' صورة', ', ' + rp.pics + ' pictures') : '') + '.';
-  line('', esc(info));
+  line('', esc(L('عدد الأجزاء المميزة التي ستُنقل: ', 'Tagged parts to bring over: ') + units.length + '.'));
+  if (rp.skippedParts) line('warn', L('• في ملف الوورد أجزاء غير مميزة (عددها ' + rp.skippedParts + ')، تجاهلتها ولن تُنقل. لرؤيتها: في الوورد افتح «مراجعة» واضغط «لوّن غير المميز».', '• ' + rp.skippedParts + ' untagged parts of the Word file are skipped. To see them: in Word open Review and press Colour untagged.')
+    + (rp.skippedText.length ? '<br><span class="note">' + rp.skippedText.slice(0, 4).map(x => '«' + esc(x) + '…»').join('، ') + '</span>' : ''));
   if (adds > 0) {
     docxPending = { units, parts, b64, id, empty, report: rp };
     const d = line('warn splitask', L('سيُضاف تقريبًا ', 'About ') + cnt(adds) + L(' بعد الشريحة الحالية' + (empty ? ' (والشريحة الحالية الفارغة تُستخدم أولًا)' : '') + '.', ' will be added after the current slide' + (empty ? ' (the empty current slide is used first)' : '') + '.')
@@ -766,7 +770,10 @@ async function tagSelection(type) {
     }
     const cc = range.insertContentControl();
     styleCC(cc, type);
+    cc.font.load('highlightColor');
     await ctx.sync();
+    // the "not tagged" colour goes once the part is tagged
+    if ((cc.font.highlightColor || '').toUpperCase() === UW.UNTAGGED) { cc.font.highlightColor = null; await ctx.sync(); }
     return partial ? 'inline' : 'new';
   });
 }
@@ -860,6 +867,21 @@ async function clearAllTags() {
     return n;
   });
 }
+// content that is not tagged: counted, and coloured on request so it stands out
+async function untaggedParas(ctx) {
+  const ps = ctx.document.body.paragraphs; ps.load('items/text,items/tableNestingLevel'); await ctx.sync();
+  const ex = ps.items.map(p => { const cc = p.parentContentControlOrNullObject; cc.load('isNullObject,tag'); const pics = p.inlinePictures; pics.load('items/width'); p.font.load('highlightColor'); return { cc, pics }; });
+  await ctx.sync();
+  return ps.items.filter((p, i) => (p.text.trim() || ex[i].pics.items.length) && !(isUula(ex[i].cc)));
+}
+async function markUntagged(on) {
+  return Word.run(async ctx => {
+    if (on) { const list = await untaggedParas(ctx); list.forEach(p => { p.font.highlightColor = UW.UNTAGGED; }); await ctx.sync(); return list.length; }
+    const ps = ctx.document.body.paragraphs; ps.load('items/font/highlightColor'); await ctx.sync();
+    let n = 0; for (const p of ps.items) if ((p.font.highlightColor || '').toUpperCase() === UW.UNTAGGED) { p.font.highlightColor = null; n++; }
+    await ctx.sync(); return n;
+  });
+}
 async function reviewList() {
   const items = await Word.run(async ctx => {
     const ccs = ctx.document.contentControls; ccs.load('items/id,items/tag,items/text'); await ctx.sync();
@@ -876,6 +898,9 @@ async function reviewList() {
     list.appendChild(d);
   }
   for (const [k, v] of Object.entries(counts)) { const s = document.createElement('span'); s.textContent = wname(k) + ' ' + v; sum.appendChild(s); }
+  const un = await Word.run(async ctx => (await untaggedParas(ctx)).length).catch(() => 0);
+  $('wwarn').hidden = !un;
+  $('wwarnT').textContent = L('⚠ فقرات غير مميزة (عددها ' + un + ')، ولن تُنقل إلى الباوربوينت.', '⚠ ' + un + ' paragraphs are not tagged and will not be brought into PowerPoint.');
   if (!items.length) list.innerHTML = '<span class="note">' + L('لا توجد أجزاء مميزة بعد.', 'No tagged parts yet.') + '</span>';
 }
 $('wlist').addEventListener('click', e => {
@@ -907,6 +932,16 @@ $('wAuto').addEventListener('click', async () => {
   try { say(L('تمييز المستند…', 'Tagging the document…')); const n = await autoTag(); say(n ? L('مُيّز ', 'Tagged ') + n + L(' جزءًا. راجعها في «مراجعة».', ' parts. Check them in Review.') : L('كل المحتوى مميز.', 'Everything is already tagged.')); }
   catch (er) { say(L('تعذّر التمييز التلقائي: ', 'Auto-tag failed: ') + errText(er)); } finally { busy = false; lock(); }
 });
+$('wMark').addEventListener('click', async () => {
+  if (busy || !supported) return; busy = true; lock();
+  try { const n = await markUntagged(true); say(n ? L('لُوّنت الفقرات غير المميزة (' + n + ') بالأزرق الفاتح.', n + ' untagged paragraphs are coloured light blue.') : L('كل المحتوى مميز.', 'Everything is tagged.')); }
+  catch (er) { say(errText(er)); } finally { busy = false; lock(); }
+});
+$('wUnmark').addEventListener('click', async () => {
+  if (busy || !supported) return; busy = true; lock();
+  try { await markUntagged(false); say(L('أُزيل التلوين.', 'Colouring removed.')); }
+  catch (er) { say(errText(er)); } finally { busy = false; lock(); }
+});
 $('wRefresh').addEventListener('click', () => { if (supported) reviewList().catch(er => say(errText(er))); });
 $('wClear').addEventListener('click', () => {
   if (busy || !supported) return;
@@ -928,7 +963,7 @@ function lock() {
   $('solBtn').disabled = busy || !supported;
   $('spV').disabled = busy || !supported; $('spH').disabled = busy || !supported;
   document.querySelectorAll('.tbtn').forEach(b => { b.disabled = busy || !supported; });
-  ['docxBtn', 'wAuto', 'wUntag', 'wClear'].forEach(k => { if ($(k)) $(k).disabled = busy || !supported; });
+  ['docxBtn', 'wAuto', 'wUntag', 'wClear', 'wMark', 'wUnmark'].forEach(k => { if ($(k)) $(k).disabled = busy || !supported; });
 }
 $('goBtn').addEventListener('click', async () => {
   if (busy || !supported) return;

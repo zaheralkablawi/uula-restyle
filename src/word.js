@@ -29,6 +29,8 @@ const TYPES = [
 const TYPE = {};
 TYPES.forEach(g => g.items.forEach(([id, ar, en, col]) => { TYPE[id] = { id, ar, en, col }; }));
 const TAG = /^UULA:([a-z]+)$/;
+// the highlight Word shows on content that is not tagged yet
+const UNTAGGED = '#00FFFF';
 // an answer of a word or two written inside a question (a blank to fill) stays in its line
 const INLINE = ['answer', 'correct'];
 
@@ -158,7 +160,7 @@ async function read(data, opts) {
   let gkey = 0;
   const close = () => { curText = null; };
   const pushText = (role, key, para) => {
-    if (!curText || curText.key !== key) { curText = { kind: 'text', role, key, paras: [] }; units.push(curText); if (role) report.tagged++; else report.untagged++; }
+    if (!curText || curText.key !== key) { curText = { kind: 'text', role, tagged: !!role, key, paras: [] }; units.push(curText); if (role) report.tagged++; else report.untagged++; }
     curText.paras.push(para);
     if (para.math) curText.math = true;
   };
@@ -265,7 +267,7 @@ async function read(data, opts) {
       const small = pc.cy < 34 * PT && c.text.trim();
       if (small && pc.obj) report.inlineObj++;
       const pr = role === 'figure' ? null : ['question', 'choice', 'qhead', 'given'].includes(role) ? 'given' : role;
-      return { kind: 'pic', role: pr, media: pc.media, cx: pc.cx, cy: pc.cy, inline: !!small };
+      return { kind: 'pic', role: pr, tagged: !!role, media: pc.media, cx: pc.cx, cy: pc.cy, inline: !!small };
     });
     if (c.inlineSplits.length) {
       // text before | tagged inline part | text after (each its own box)
@@ -316,7 +318,7 @@ async function read(data, opts) {
     const grid = [...(wk(tbl, 'tblGrid') || { children: [] }).children].filter(x => isW(x, 'gridCol')).map(g => +wa(g, 'w') || 1);
     const pr = wk(tbl, 'tblPr');
     const rtl = !!(pr && wk(pr, 'bidiVisual'));
-    units.push({ kind: 'table', role, rows, grid, rtl });
+    units.push({ kind: 'table', role, tagged: !!role, rows, grid, rtl });
     report.tables++;
     gkey++;
   }
@@ -335,8 +337,13 @@ async function read(data, opts) {
   const body = doc.getElementsByTagNameNS(W_NS, 'body')[0];
   walk(body, null, null);
   // pictures: read their bytes now
-  for (const u of units) if (u.kind === 'pic') u.data = await u.media.file.async('base64');
-  return { units: units.filter(u => u.kind !== 'text' || u.paras.length), report };
+  // only what was tagged in Word is brought over; the rest is counted so the user can be told
+  const all = units.filter(u => u.kind !== 'text' || u.paras.length);
+  const kept = opts.all ? all : all.filter(u => u.tagged);
+  report.skippedParts = all.length - kept.length;
+  report.skippedText = all.filter(u => !u.tagged && u.kind === 'text').map(u => (u.paras[0].text || u.paras[0].runs.replace(/<[^>]+>/g, '')).trim().slice(0, 50));
+  for (const u of kept) if (u.kind === 'pic') u.data = await u.media.file.async('base64');
+  return { units: kept, report };
 }
 const stripRuns = x => /<a:t>[^<]*\S|<a14:m>/.test(x);
 const xe = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -566,6 +573,6 @@ function syncFallback(xml) {
   return UR.serialize(doc);
 }
 
-return { TYPES, TYPE, TAG, INLINE, guess, group, read, shapes, batches, fillSlide, syncFallback, isBlue, RX };
+return { TYPES, TYPE, TAG, INLINE, UNTAGGED, guess, group, read, shapes, batches, fillSlide, syncFallback, isBlue, RX };
 })();
 if (typeof module !== 'undefined') module.exports = UW;

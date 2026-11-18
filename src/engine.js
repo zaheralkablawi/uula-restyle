@@ -563,7 +563,7 @@ function setPPr(p, opt) {
   add('<a:lnSpc><a:spcPct val="100000"/></a:lnSpc>');
   add('<a:spcBef><a:spcPts val="0"/></a:spcBef>');
   add('<a:spcAft><a:spcPts val="0"/></a:spcAft>');
-  if (opt.bullet === 'Q') add('<a:buClr><a:srgbClr val="FF0000"/></a:buClr><a:buSzPct val="100000"/><a:buFont typeface="Avenir Next Arabic Black"/><a:buChar char="Q"/>');
+  if (opt.bullet === 'Q') add('<a:buClr><a:srgbClr val="FF0000"/></a:buClr><a:buSzPct val="100000"/><a:buFont typeface="UULA Sans Black" panose="00000300000000000000" pitchFamily="2" charset="-78"/><a:buChar char="Q"/>');
   else if (opt.bullet === '§') add('<a:buFont typeface="Wingdings" pitchFamily="2" charset="2"/><a:buChar char="§"/>');
   else if (opt.bullet && opt.bullet.auto) { const b = frag(doc, '<a:buAutoNum type="' + opt.bullet.auto + '"/>'); if (opt.bullet.start) b.setAttribute('startAt', opt.bullet.start); add('<a:buFontTx/>'); pPr.appendChild(b); }
   else add('<a:buNone/>');
@@ -747,7 +747,7 @@ function pX(text, o) {
   o = o || {};
   const ar = o.ar !== false;
   let ppr = '<a:pPr marL="' + (o.marL || 0) + '" indent="' + (o.indent || 0) + '" algn="' + (o.algn || (ar ? 'r' : 'l')) + '" rtl="' + (ar ? 1 : 0) + '"><a:lnSpc><a:spcPct val="100000"/></a:lnSpc><a:spcBef><a:spcPts val="0"/></a:spcBef><a:spcAft><a:spcPts val="0"/></a:spcAft>';
-  if (o.q) ppr += '<a:buClr><a:srgbClr val="FF0000"/></a:buClr><a:buSzPct val="100000"/><a:buFont typeface="Avenir Next Arabic Black"/><a:buChar char="Q"/>';
+  if (o.q) ppr += '<a:buClr><a:srgbClr val="FF0000"/></a:buClr><a:buSzPct val="100000"/><a:buFont typeface="UULA Sans Black" panose="00000300000000000000" pitchFamily="2" charset="-78"/><a:buChar char="Q"/>';
   else if (o.dot) ppr += '<a:buFont typeface="Wingdings" pitchFamily="2" charset="2"/><a:buChar char="§"/>';
   else ppr += '<a:buNone/>';
   ppr += '</a:pPr>';

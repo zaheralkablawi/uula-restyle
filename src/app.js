@@ -265,7 +265,7 @@ function buildTemplateList() {
     const grid = document.createElement('div'); grid.className = 'tgrid';
     for (const t of g.items) {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'tbtn'; b.dataset.id = t.id;
-      b.innerHTML = '<i style="background:#' + (SW[t.id] || 'FFFFFF') + '"></i><span>' + t.name + '</span>';
+      b.title = t.full || t.name; b.innerHTML = '<i style="background:#' + (SW[t.id] || 'FFFFFF') + '"></i><span>' + t.name + '</span>';
       grid.appendChild(b);
     }
     d.appendChild(grid); host.appendChild(d);
@@ -315,8 +315,8 @@ async function insertTemplate(tid) {
 
 // ---------- one object at a time ----------
 const ROLES = [
-  { g: 'نصوص', items: [['chapter', 'اسم الوحدة', 'A6A6A6'], ['lesson', 'اسم الدرس', '1F71DD'], ['topic', 'عنوان موضوع', '000000'], ['body', 'فقرة', 'FFFFFF'], ['bullets', 'نقاط', 'FFFFFF'], ['qhead', 'عنوان أسئلة', 'FF0000'], ['question', 'سؤال', 'FF0000'], ['answer', 'حل', '1F71DE'], ['choice', 'خيارات الإجابة', 'FFFFFF']] },
-  { g: 'حاويات', items: [['note', 'ملاحظة', 'FBEBD3'], ['quote', 'نص مقتطف', 'E2F0D9'], ['def', 'تعريف', 'E2F0D9'], ['formula', 'معادلات وقوانين', 'D3E4F5'], ['other', 'صيغة أخرى للسؤال', 'FBEBD3'], ['activity', 'نشاط', 'F1F1F1'], ['mars', 'أسئلة من المريخ', 'F1F1F1']] }
+  { g: 'نصوص', items: [['chapter', 'اسم الوحدة', 'A6A6A6'], ['lesson', 'اسم الدرس', '1F71DD'], ['topic', 'موضوع', '000000'], ['body', 'فقرة', 'FFFFFF'], ['bullets', 'نقاط', 'FFFFFF'], ['qhead', 'عنوان أسئلة', 'FF0000'], ['question', 'سؤال', 'FF0000'], ['answer', 'حل', '1F71DE'], ['choice', 'خيارات', 'FFFFFF']] },
+  { g: 'حاويات', items: [['note', 'ملاحظة', 'FBEBD3'], ['quote', 'نص مقتطف', 'E2F0D9'], ['def', 'تعريف', 'E2F0D9'], ['formula', 'قوانين', 'D3E4F5'], ['other', 'صيغة أخرى', 'FBEBD3'], ['activity', 'نشاط', 'F1F1F1'], ['mars', 'من المريخ', 'F1F1F1']] }
 ];
 function buildRoleList() {
   const host = $('roles'); host.innerHTML = '';
@@ -326,7 +326,7 @@ function buildRoleList() {
     const grid = document.createElement('div'); grid.className = 'tgrid';
     for (const [id, name, col] of g.items) {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'tbtn'; b.dataset.role = id;
-      b.innerHTML = '<i style="background:#' + col + '"></i><span>' + name + '</span>';
+      b.title = name === 'موضوع' ? 'عنوان موضوع' : name; b.innerHTML = '<i style="background:#' + col + '"></i><span>' + name + '</span>';
       grid.appendChild(b);
     }
     d.appendChild(grid); host.appendChild(d);
@@ -422,6 +422,12 @@ $('goBtn').addEventListener('click', async () => {
 function setScope(v) { scope = v; save('ur-scope', v); $('scope').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v))); }
 $('scope').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setScope(b.dataset.v); });
 setScope(scope);
+document.querySelectorAll('.drop').forEach(b => {
+  const body = $(b.dataset.drop), key = 'ur-open-' + b.dataset.drop;
+  const set = o => { b.setAttribute('aria-expanded', String(o)); body.hidden = !o; save(key, o); };
+  set(load(key, false));
+  b.addEventListener('click', () => set(body.hidden));
+});
 $('setTog').addEventListener('click', () => { const o = $('setTog').getAttribute('aria-expanded') !== 'true'; $('setTog').setAttribute('aria-expanded', String(o)); $('setBody').hidden = !o; });
 
 // ---------- menu / about ----------

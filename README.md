@@ -6,7 +6,7 @@
 - `app.html` يُبنى من مجلد `src` بالأمر `python3 build.py`.
 - `src/engine.js` محرك التحويل (يعمل على XML الشريحة)، و`src/templates.js` القوالب.
 - قواعد التصميم مأخوذة من مهارة `uula-restyle` (مرفقة في `docs/SKILL.md`).
-- التثبيت على Mac: انسخ `manifest.xml` إلى
+- التثبيت على Mac: انسخ `UULA-Restyle.xml` إلى
   `~/Library/Containers/com.microsoft.Powerpoint/Data/Documents/wef/`
 
 By Zaher Alkablawi

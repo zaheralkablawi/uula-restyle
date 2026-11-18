@@ -589,12 +589,18 @@ function styleText(it, ctx, pkg, forcedRole) {
   let stripped = false;
   for (const pr of roles) {
     const st = STY[pr.role] || STY.body;
-    const ar = pr.text ? AR.test(pr.text) : arAll;
+    let ar = pr.text ? AR.test(pr.text) : arAll;
     let bullet = null, marL = 0, indent = 0;
     if (st.q) {
       bullet = 'Q'; marL = 182880; indent = -182880;
       const t0 = desc(pr.p, 'a', 't')[0];
       if (t0 && Q_PREFIX.test(t0.textContent)) { t0.textContent = t0.textContent.replace(Q_PREFIX, ''); stripped = true; }
+      // a question that is only math (no Arabic left): Q stays on the right, the math keeps its left-to-right order
+      if (!AR.test(paraText(pr.p)) && arAll) {
+        ar = true;
+        const ts = desc(pr.p, 'a', 't').filter(x => !inMath(x));
+        if (ts.length && !/^\u202A/.test(ts[0].textContent)) { ts[0].textContent = '\u202A' + ts[0].textContent; ts[ts.length - 1].textContent += '\u202C'; }
+      }
     } else if (pr.role === 'answer' || pr.role === 'choice') { marL = 182880; }
     else if (pr.bullet && (pr.role === 'body')) {
       const auto = desc(kid(pr.p, 'pPr', 'a'), 'a', 'buAutoNum')[0];
@@ -607,10 +613,33 @@ function styleText(it, ctx, pkg, forcedRole) {
     for (const r of desc(pr.p, 'a', 'fld')) { let rPr = kid(r, 'rPr', 'a'); if (rPr) styleRPr(rPr, st, pr.role, null, false); }
     for (const rPr of desc(pr.p, 'a', 'rPr').filter(x => inMath(x))) styleRPr(rPr, st, pr.role, keepCol ? colorOf(kid(rPr, 'solidFill', 'a'), ctx) : null, true);
     const e = kid(pr.p, 'endParaRPr', 'a'); if (e) styleRPr(e, st, pr.role, null, false);
+    if (pr.role === 'qhead') labelOnly(pr.p);
   }
   return { roles: roles.map(r => r.role), stripped };
 }
 
+// "تحقق من فهمك 2: أوجد …": only the label up to ':' is red and bold, the instruction after it is black
+function labelOnly(p) {
+  const runs = desc(p, 'a', 'r');
+  const full = runs.map(r => (kid(r, 't', 'a') || { textContent: '' }).textContent).join('');
+  const ci = full.search(/[:：]/);
+  if (ci <= 0 || ci > 40 || full.length - ci < 12) return;
+  const cut = ci + 1;
+  const plain = r => { const pr = kid(r, 'rPr', 'a'); if (!pr) return; pr.setAttribute('b', '0'); removeKids(pr, FILLS); placeChild(pr, solid(pr.ownerDocument, '000000'), RPR_ORDER); };
+  let acc = 0;
+  for (const r of runs) {
+    const t = kid(r, 't', 'a'); if (!t) continue;
+    const len = t.textContent.length;
+    if (acc >= cut) plain(r);
+    else if (acc + len > cut) {
+      const c = r.cloneNode(true), ct = kid(c, 't', 'a');
+      ct.textContent = t.textContent.slice(cut - acc); ct.setAttribute('xml:space', 'preserve');
+      t.textContent = t.textContent.slice(0, cut - acc);
+      r.parentNode.insertBefore(c, r.nextSibling); plain(c);
+    }
+    acc += len;
+  }
+}
 // ---------- tables ----------
 function styleTable(it, ctx, W) {
   const doc = it.c.ownerDocument;
@@ -1005,6 +1034,40 @@ function buildPlan(doc, live, cards, pkg) {
     } else { cur = { type: 'row', items: [u.item], span: { y: g.y, h: g.h } }; blocks.push(cur); }
   }
   for (const b of blocks) if (b.type === 'row') b.cols = makeCols(b.items);
+  // a question with one figure (graph / picture) and its texts / tables: the figure on the left,
+  // the question and everything belonging to it stacked on the right — whatever the current positions are
+  const isFig = t => (t.kind === 'pic' || t.kind === 'group') && t.g.w > CW * 0.25 && t.g.h > 60 * PT;
+  const merged = [];
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i];
+    if (b.type === 'row') {
+      const figs = b.items.filter(isFig), others = b.items.filter(t => !isFig(t));
+      if (figs.length === 1 && others.length && others.every(t => t.kind === 'text' || t.kind === 'table') && others.some(t => t.role === 'question')) {
+        const stack = [...others];
+        while (i + 1 < blocks.length && blocks[i + 1].type === 'row' && blocks[i + 1].items.every(t => t.kind === 'table' || (t.kind === 'text' && ['answer', 'choice'].includes(t.role)))) { stack.push(...blocks[i + 1].items); i++; }
+        // order: the question, short lines (the equation), tables, then longer texts
+        const rank = t => t.role === 'question' ? 0 : t.kind === 'table' ? 2 : (kids(kid(t.c, 'txBody', 'p'), 'p', 'a').filter(p => paraText(p).trim()).length <= 1 ? 1 : 3);
+        stack.sort((a, c) => rank(a) - rank(c) || a.g.y - c.g.y || (c.g.x + c.g.w) - (a.g.x + a.g.w));
+        const qi = stack.findIndex(t => t.role === 'question'); if (qi > 0) stack.unshift(stack.splice(qi, 1)[0]);
+        const fig = figs[0];
+        const figW = Math.min(fig.g.w, Math.round(CW * 0.5));
+        const colW = CW - figW - 18 * PT;
+        // tables take the width of the right column
+        for (const t of stack.filter(x => x.kind === 'table')) {
+          const tbl = desc(t.c, 'a', 'tbl')[0]; if (!tbl) continue;
+          const grid = kids(kid(tbl, 'tblGrid', 'a'), 'gridCol', 'a');
+          const tot = grid.reduce((a, g) => a + (+g.getAttribute('w') || 0), 0) || 1;
+          let acc = 0;
+          grid.forEach((g, k) => { const w = k === grid.length - 1 ? colW - acc : Math.round((+g.getAttribute('w') || 0) * colW / tot); acc += w; g.setAttribute('w', String(w)); });
+          t.g = Object.assign({}, t.g, { w: colW });
+        }
+        merged.push({ type: 'row', items: [fig, ...stack], cols: [[fig], stack], unit: { figW } });
+        continue;
+      }
+    }
+    merged.push(b);
+  }
+  blocks.length = 0; blocks.push(...merged);
   const mapItem = t => ({
     idx: idxOf(t.el), kind: t.kind, role: t.role || null, roles: t.roles || null,
     g0: t.g, text: t.text ? t.text.slice(0, 40) : '', est: 0, inBox: !!t.box, fullW: !!t.fullW,
@@ -1017,7 +1080,7 @@ function buildPlan(doc, live, cards, pkg) {
       ? { type: 'box', idx: idxOf(b.box.el), boxType: b.box.type, textBox: !!b.box.boxText, icon: b.box.iconEl ? idxOf(b.box.iconEl) : -1, line: b.box.lineEl ? idxOf(b.box.lineEl) : -1,
         hasQr: b.rows.some(r => r.items.some(t => t.kind === 'qr')),
         rows: b.rows.map(r => ({ cols: makeCols(r.items).map(c => c.map(mapItem)) })) }
-      : { type: 'row', cols: b.cols.map(c => c.map(mapItem)) })
+      : { type: 'row', cols: b.cols.map(c => c.map(mapItem)), unit: b.unit || null })
   };
   // estimated heights (for text) so the first layout is close
   const els = order;
@@ -1164,6 +1227,21 @@ function layoutPass(plan, heights, mode) {
     for (const q of placed) rb = Math.max(rb, q.bottom);
     return rb;
   }
+  // figure on the left, the question and its parts stacked on the right
+  function placeUnit(b, top) {
+    const fig = b.cols[0][0], stack = b.cols[1];
+    const figW = b.unit.figW, figH = Math.round(fig.g0.h * figW / (fig.g0.w || figW));
+    pos[fig.idx] = { x: M, y: Math.round(top), w: figW, h: figH };
+    const cx = M + figW + 18 * PT, cw = W - M - cx;
+    let sy = top, prev = null;
+    for (const it of stack) {
+      if (prev) sy += prev.role === 'question' ? 4 * PT : Math.round(0.5 * ROW);
+      pos[it.idx] = { x: Math.round(cx), y: Math.round(sy), w: Math.round(cw) };
+      sy += it.kind === 'text' ? hOf(it, cw) : hOf(it);
+      prev = it;
+    }
+    return Math.max(top + figH, sy);
+  }
   let y = afterHeader != null ? afterHeader : 0, first = true, prevItems = null, prevBox = false, bottom = afterHeader || 0;
   const rowsInfo = [];
   plan.blocks.forEach((b, bi) => {
@@ -1198,8 +1276,8 @@ function layoutPass(plan, heights, mode) {
     if (first) top = afterHeader != null ? afterHeader + ROW : 22.6 * PT;
     else if (prevBox) top = y + ROW;
     else top = y + gapRows(lastOf(prevItems), f, top0(its) - bot0(prevItems)) * ROW;
-    const rb = placeRow(b.cols, top, M, W - M);
-    rowsInfo.push({ bi, top, bottom: rb, role: f && f.role });
+    const rb = b.unit ? placeUnit(b, top) : placeRow(b.cols, top, M, W - M);
+    rowsInfo.push({ bi, top, bottom: rb, role: b.unit ? 'question' : f && f.role });
     y = rb; first = false; prevItems = its; prevBox = false; bottom = Math.max(bottom, y);
   });
   let overflow = -1;

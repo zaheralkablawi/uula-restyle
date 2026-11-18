@@ -147,7 +147,15 @@ const NS = {
   ct: 'http://schemas.openxmlformats.org/package/2006/content-types'
 };
 const PT = 12700;
-const ROW = Math.round(13.3 * PT);          // one line of 11pt text = the grid unit
+// the page grid of the UULA layout ("Math Grid"): horizontal lines every 6.695pt from y=22.58 to 725.66,
+// and the vertical guides below. Two grid steps = one line of 11pt text.
+const G = Math.round(6.695 * PT);
+const Y0 = Math.round(22.58 * PT);
+const ROW = 2 * G;
+const XGUIDES = [36, 51.2, 76.24, 85.98, 258.4, 270, 280.4, 397.92, 454.16, 463.79, 488.8, 504].map(v => Math.round(v * PT));
+const snapUp = y => Y0 + Math.max(0, Math.ceil((y - Y0 - 0.3 * PT) / G)) * G;
+const snapNear = y => Y0 + Math.max(0, Math.round((y - Y0) / G)) * G;
+const snapX = (x, tol) => { let best = x, d = (tol == null ? 12 : tol) * PT; for (const g of XGUIDES) if (Math.abs(g - x) < d) { d = Math.abs(g - x); best = g; } return best; };
 const M = 36 * PT;                          // side margins
 const FOOT = 54 * PT;                       // space kept for the footer
 const REL_IMG = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image';
@@ -1268,10 +1276,6 @@ function gapBefore(prev, it) {
   const pr = prev.role, r = it.role;
   if ((r === 'answer' || r === 'choice') && (pr === 'question' || pr === 'answer' || pr === 'choice')) return 0;
   if (r === 'question' && (pr === 'answer' || pr === 'choice' || pr === 'question')) return 1;
-  if (r === 'topic') return 3;
-  if (r === 'qhead' && pr !== 'qhead') return 3;
-  if (r === 'question' && pr !== 'question' && pr !== 'answer' && pr !== 'qhead') return 3;
-  if (prev.kind === 'qr' || it.kind === 'qr') return 1;
   return 1;
 }
 // heights: map idx -> real height (EMU) from PowerPoint; null = estimate
@@ -1290,8 +1294,8 @@ function layoutPass(plan, heights, mode) {
   const hOf = (it, w) => (heights && heights[it.idx] != null) ? heights[it.idx] : it.kind === 'text' ? estParas(it.paras, w || CW) : it.g0.h;
   const ch = plan.header.find(i => i.role === 'chapter'), le = plan.header.find(i => i.role === 'lesson');
   let afterHeader = null;
-  if (ch) { pos[ch.idx] = { x: M, y: Math.round(22.6 * PT), w: CW }; afterHeader = 22.6 * PT + hOf(ch); }
-  if (le) { const ly = ch ? 42.7 * PT : 22.6 * PT; pos[le.idx] = { x: M, y: Math.round(ly), w: CW }; afterHeader = ly + hOf(le); }
+  if (ch) { pos[ch.idx] = { x: M, y: Y0, w: CW }; afterHeader = Y0 + hOf(ch); }
+  if (le) { const ly = ch ? Y0 + 3 * G : Y0; pos[le.idx] = { x: M, y: Math.round(ly), w: CW }; afterHeader = ly + hOf(le); }
   for (const h of plan.header) if (h !== ch && h !== le) { const yy = afterHeader || 22.6 * PT; pos[h.idx] = { x: M, y: Math.round(yy), w: CW }; afterHeader = yy + hOf(h); }
   const snap = d => Math.max(0, Math.round(d / ROW));
   const gapRows = (prev, it, origGap) => {
@@ -1326,7 +1330,10 @@ function layoutPass(plan, heights, mode) {
       if (it.kind === 'table' && it.fullW) { x = x0; w = x1 - x0; }
       if (it.kind === 'table' && !it.fullW) { w = it.g0.w; x = Math.max(x0, Math.min(inside ? it.g0.x : x, x1 - w)); }
       if (it.kind === 'qr') { x = x0; w = it.g0.w; }
-      let y = top + (it.g0.y - rt);
+      // edges on the page guides
+      if (!wide && it.kind === 'text') { const l = snapX(x), r = snapX(x + w); if (r - l > 20 * PT) { x = l; w = r - l; } }
+      else if (!wide && it.kind !== 'qr' && it.kind !== 'line') { const l = snapX(x); if (l + w <= x1 + 2 * PT) x = l; }
+      let y = snapUp(top + (it.g0.y - rt));
       // keep clear of what was above it (and overlaps it horizontally): text may have grown
       for (const q of placed) {
         const above = q.it.g0.y + q.it.g0.h <= it.g0.y + 3 * PT;
@@ -1334,7 +1341,7 @@ function layoutPass(plan, heights, mode) {
         if (!above || hov <= Math.min(q.it.g0.w, it.g0.w) * 0.1) continue;
         const og = it.g0.y - (q.it.g0.y + q.it.g0.h);
         const need = (q.it.role === 'question' && (it.role === 'answer' || it.role === 'choice')) ? 0 : Math.max(0, Math.min(og, ROW));
-        y = Math.max(y, q.bottom + need);
+        y = Math.max(y, snapUp(q.bottom) + (need > 0 ? ROW : 0));
       }
       let bottomNow;
       if (it.pill) {
@@ -1366,7 +1373,7 @@ function layoutPass(plan, heights, mode) {
         if (a.it.kind === 'line' || b.it.kind === 'line') continue;
         const na = R(a), nb = R(b);
         if (!hit(na, nb, PT) || hit(a.it.g0, b.it.g0, PT)) continue;
-        const dy = na.y + na.h + ((a.it.role === 'question' && (b.it.role === 'answer' || b.it.role === 'choice')) ? 0 : 4 * PT) - nb.y;
+        const dy = snapUp(na.y + na.h) + ((a.it.role === 'question' && (b.it.role === 'answer' || b.it.role === 'choice')) ? 0 : ROW) - nb.y;
         if (dy <= 0) continue;
         pos[b.it.idx].y = Math.round(pos[b.it.idx].y + dy);
         if (b.it.pill) pos[b.it.pill.idx].y = Math.round(pos[b.it.pill.idx].y + dy);
@@ -1382,10 +1389,10 @@ function layoutPass(plan, heights, mode) {
     const fig = b.cols[0][0], stack = b.cols[1];
     const figW = b.unit.figW, figH = Math.round(fig.g0.h * figW / (fig.g0.w || figW));
     pos[fig.idx] = { x: M, y: Math.round(top), w: figW, h: figH };
-    const cx = M + figW + 18 * PT, cw = W - M - cx;
+    const cx = snapX(M + figW + 18 * PT, 20), cw = W - M - cx;
     let sy = top, prev = null;
     for (const it of stack) {
-      if (prev) sy += prev.role === 'question' ? 4 * PT : Math.round(0.5 * ROW);
+      if (prev) sy = snapUp(sy) + (prev.role === 'question' && (it.role === 'answer' || it.role === 'choice') ? 0 : ROW);
       pos[it.idx] = { x: Math.round(cx), y: Math.round(sy), w: Math.round(cw) };
       sy += it.kind === 'text' ? hOf(it, cw) : hOf(it);
       prev = it;
@@ -1398,19 +1405,19 @@ function layoutPass(plan, heights, mode) {
     if (b.type === 'box') {
       const members = b.rows.flatMap(r => allOf(r.cols));
       let cTop;
-      if (first) cTop = afterHeader != null ? afterHeader + Math.round(1.55 * ROW) : 0;
-      else cTop = y + ROW;
+      if (first) cTop = afterHeader != null ? snapUp(afterHeader) + ROW : 0;
+      else cTop = snapUp(y) + ROW;
       let iy = cTop + (first && afterHeader == null ? 2 * ROW : ROW);
       const x1 = W - M - (b.icon >= 0 ? 15 * PT : 0);
       let prevR = null;
       for (const r of b.rows) {
         const its = allOf(r.cols);
-        if (prevR) { const pi = allOf(prevR.cols); iy += gapRows(lastOf(pi), firstOf(its), top0(its) - bot0(pi)) * ROW; }
+        if (prevR) { const pi = allOf(prevR.cols); iy = snapUp(iy) + gapRows(lastOf(pi), firstOf(its), top0(its) - bot0(pi)) * ROW; }
         iy = placeRow(r.cols, iy, M, x1);
         prevR = r;
       }
       if (!b.rows.length) iy = cTop + ROW;
-      const cBot = iy + 2 * ROW;
+      const cBot = snapUp(iy) + ROW;
       pos[b.idx] = { x: 0, y: Math.round(cTop), w: W, h: Math.round(cBot - cTop), box: true };
       if (b.icon >= 0) pos[b.icon] = { x: W - 47 * PT, y: Math.round(cTop + ROW - 2 * PT), keep: true };
       if (b.line >= 0) {
@@ -1423,9 +1430,9 @@ function layoutPass(plan, heights, mode) {
     }
     const its = allOf(b.cols), f = firstOf(its);
     let top;
-    if (first) top = afterHeader != null ? afterHeader + ROW : 22.6 * PT;
-    else if (prevBox) top = y + ROW;
-    else top = y + gapRows(lastOf(prevItems), f, top0(its) - bot0(prevItems)) * ROW;
+    if (first) top = afterHeader != null ? snapUp(afterHeader) + ROW : Y0;
+    else if (prevBox) top = snapUp(y) + ROW;
+    else top = snapUp(y) + gapRows(lastOf(prevItems), f, top0(its) - bot0(prevItems)) * ROW;
     const rb = b.unit ? placeUnit(b, top) : placeRow(b.cols, top, M, W - M);
     rowsInfo.push({ bi, top, bottom: rb, role: b.unit ? 'question' : f && f.role });
     y = rb; first = false; prevItems = its; prevBox = false; bottom = Math.max(bottom, y);
@@ -1545,12 +1552,7 @@ function applyRole(pkg, role) {
       }
       if (B.line) { const ln = frag(doc, lineX(W - 40 * PT, top + ROW + 17 * PT, Math.max(ROW, est - 17 * PT), B.line)); spTree.insertBefore(ln, t.el.nextSibling); rec.lineEl = ln; }
       rec.boxEl = box;
-      // what was under the object moves down if the container needs the room
-      const need = (top + boxH) - (t.g.y + t.g.h);
-      if (need > 0) {
-        for (const o of items) if (o !== t && !/^UULA (Footer|Watermark)|^CustomPageNumber_/.test(o.name) && o.g.y >= t.g.y + t.g.h - 2 * PT && o.g.y < H - FOOT * 0.6) { o.g = Object.assign({}, o.g, { y: o.g.y + need }); setGeom(o.el, { y: o.g.y }); }
-        shift += need;
-      }
+      // the pane puts the object on the grid and moves what is under it (with the real heights)
     }
     out.push(rec);
   }
@@ -1561,6 +1563,45 @@ function applyRole(pkg, role) {
   // the marks were set before the final order was known: set them again
   markNames(doc);
   return { xml: serialize(doc), rels, targets: out, W, H };
+}
+// rects: [{ key, x, y, w, h, fixed }] (fixed = footer, page number …); group: keys of the object (+ its container)
+// returns { key: { x?, y?, w? } }: the object sits two grid steps under what is above it, on the page guides,
+// and everything under it keeps two grid steps from it
+function reflow(rects, group, opts) {
+  opts = opts || {};
+  const inG = r => group.includes(r.key);
+  const G0 = rects.filter(inG); if (!G0.length) return {};
+  const gx = Math.min(...G0.map(r => r.x)), gy = Math.min(...G0.map(r => r.y));
+  const gr = Math.max(...G0.map(r => r.x + r.w)), gb = Math.max(...G0.map(r => r.y + r.h));
+  const free = rects.filter(r => !inG(r) && !r.fixed);
+  const hov = r => Math.min(r.x + r.w, gr) - Math.max(r.x, gx) > 2 * PT;
+  const above = free.filter(r => r.y + r.h <= gy + 2 * PT && hov(r));
+  const newTop = above.length ? snapUp(Math.max(...above.map(r => r.y + r.h))) + ROW : snapUp(gy);
+  const dy = newTop - gy;
+  const out = {};
+  for (const r of G0) out[r.key] = { y: r.y + dy };
+  // the text itself on the guides
+  if (opts.textKey != null && !opts.keepX) {
+    const t = rects.find(r => r.key === opts.textKey);
+    if (t) {
+      let l = snapX(t.x); const rr = snapX(t.x + t.w);
+      // a QR / picture on its left in the same band: the text starts at the next guide after it
+      const ty = t.y + dy;
+      for (const o of free) {
+        const vo = Math.min(o.y + o.h, ty + t.h) - Math.max(o.y, ty);
+        if (vo > 2 * PT && o.x < l && o.x + o.w > l - 2 * PT && o.x + o.w < rr - 40 * PT) { const g = XGUIDES.find(v => v >= o.x + o.w + 8 * PT); if (g) l = Math.max(l, g); }
+      }
+      if (rr - l > 20 * PT) Object.assign(out[t.key], { x: l, w: rr - l });
+    }
+  }
+  // what comes after the object (under it, not beside it) keeps two grid steps from it
+  const below = free.filter(r => r.y > gy + 2 * PT && (hov(r) || r.y >= gb - 2 * PT));
+  if (below.length) {
+    const first = Math.min(...below.map(r => r.y));
+    const d2 = snapUp(gb + dy) + ROW - first;
+    if (d2) for (const r of below) out[r.key] = Object.assign(out[r.key] || {}, { y: r.y + d2 });
+  }
+  return out;
 }
 // ---------- splitting ----------
 // two slides from one: blocks [0, k) stay (with the header), blocks [k, …) move to a new slide.
@@ -1621,7 +1662,7 @@ function splitPoint(plan, lay) {
 }
 
 return {
-  NS, PT, ROW, M, FOOT, C, STY, BOX, openPackage, buildPackage, parseXml, serialize, restyle, layout, applyLayout, splitParts, splitPoint, markNames, MARK, applyRole, TEXT_ROLES, BOX_ROLES,
+  NS, PT, ROW, M, FOOT, C, STY, BOX, openPackage, buildPackage, parseXml, serialize, restyle, layout, applyLayout, splitParts, splitPoint, markNames, MARK, applyRole, reflow, TEXT_ROLES, BOX_ROLES, G, Y0, snapUp, snapX,
   // used by the templates module
   util: { pX, txX, boxX, gradBoxX, picX, pillX, pillW, lineX, tableX, makeRels, frag, topItems, core, cnvOf, maxId, spTreeOf, kid, kids, desc, xfrmOf, geomOf, setNext: n => { NEXT = n; }, yearText, pageNumX, estimateText }
 };
@@ -2287,6 +2328,26 @@ async function pinRole(role) {
         const h = map[t.idx].height, other = t.boxType === 'other';
         const b = map[t.box]; b.top = t.top / PT; b.height = other ? h + 8 : h + 3 * 13.3;
         if (t.line != null && map[t.line]) map[t.line].height = Math.max(13.3, h - 17);
+      }
+      await ctx.sync();
+      // on the page grid: two grid steps under what is above, and what is under keeps two grid steps
+      const sh = ctx.presentation.slides.getItem(newId).shapes;
+      sh.load('items/name,items/left,items/top,items/width,items/height'); await ctx.sync();
+      const H = r.H / PT;
+      const rects = sh.items.map((s, k) => ({ key: k, x: s.left * PT, y: s.top * PT, w: s.width * PT, h: s.height * PT,
+        fixed: /^UULA (Footer|Watermark)|^CustomPageNumber_/.test((s.name || '').replace(/ #ur\d+$/, '')) || s.top > H - 54 || s.left + s.width <= 0 || s.left >= r.W / PT }));
+      const keyOf = idx => { const s = map[idx]; return s ? sh.items.findIndex(x => x.name === s.name) : -1; };
+      const order = r.targets.slice().sort((a, c) => (rects[keyOf(a.idx)] || {}).y - (rects[keyOf(c.idx)] || {}).y);
+      for (const t of order) {
+        const tk = keyOf(t.idx); if (tk < 0) continue;
+        const group = [tk, t.box != null ? keyOf(t.box) : -1, t.icon != null ? keyOf(t.icon) : -1, t.line != null ? keyOf(t.line) : -1].filter(k => k >= 0);
+        const mv = UR.reflow(rects, group, { textKey: tk, keepX: !!t.box || t.role === 'chapter' || t.role === 'lesson' });
+        for (const [k, m] of Object.entries(mv)) {
+          const R = rects[+k], s = sh.items[+k];
+          if (m.y != null) { R.y = m.y; s.top = m.y / PT; }
+          if (m.x != null) { R.x = m.x; s.left = m.x / PT; }
+          if (m.w != null) { R.w = m.w; s.width = m.w / PT; }
+        }
       }
       await ctx.sync();
       ctx.presentation.setSelectedSlides([newId]); await ctx.sync();

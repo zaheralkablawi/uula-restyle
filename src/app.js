@@ -378,6 +378,26 @@ async function pinRole(role) {
         if (t.line != null && map[t.line]) map[t.line].height = Math.max(13.3, h - 17);
       }
       await ctx.sync();
+      // on the page grid: two grid steps under what is above, and what is under keeps two grid steps
+      const sh = ctx.presentation.slides.getItem(newId).shapes;
+      sh.load('items/name,items/left,items/top,items/width,items/height'); await ctx.sync();
+      const H = r.H / PT;
+      const rects = sh.items.map((s, k) => ({ key: k, x: s.left * PT, y: s.top * PT, w: s.width * PT, h: s.height * PT,
+        fixed: /^UULA (Footer|Watermark)|^CustomPageNumber_/.test((s.name || '').replace(/ #ur\d+$/, '')) || s.top > H - 54 || s.left + s.width <= 0 || s.left >= r.W / PT }));
+      const keyOf = idx => { const s = map[idx]; return s ? sh.items.findIndex(x => x.name === s.name) : -1; };
+      const order = r.targets.slice().sort((a, c) => (rects[keyOf(a.idx)] || {}).y - (rects[keyOf(c.idx)] || {}).y);
+      for (const t of order) {
+        const tk = keyOf(t.idx); if (tk < 0) continue;
+        const group = [tk, t.box != null ? keyOf(t.box) : -1, t.icon != null ? keyOf(t.icon) : -1, t.line != null ? keyOf(t.line) : -1].filter(k => k >= 0);
+        const mv = UR.reflow(rects, group, { textKey: tk, keepX: !!t.box || t.role === 'chapter' || t.role === 'lesson' });
+        for (const [k, m] of Object.entries(mv)) {
+          const R = rects[+k], s = sh.items[+k];
+          if (m.y != null) { R.y = m.y; s.top = m.y / PT; }
+          if (m.x != null) { R.x = m.x; s.left = m.x / PT; }
+          if (m.w != null) { R.w = m.w; s.width = m.w / PT; }
+        }
+      }
+      await ctx.sync();
       ctx.presentation.setSelectedSlides([newId]); await ctx.sync();
       try { const ids = r.targets.map(t => map[t.idx]).filter(Boolean).map(s => s.id); ctx.presentation.slides.getItem(newId).setSelectedShapes(ids); await ctx.sync(); } catch (e) {}
     });

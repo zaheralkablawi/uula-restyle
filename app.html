@@ -80,7 +80,7 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
   <section class="panel">
     <div class="chead"><svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor"><path d="M10 2.5l1.7 4.6 4.8 1.8-4.8 1.8L10 15.5l-1.7-4.8-4.8-1.8 4.8-1.8z"/></svg><b>تحويل لستايل علا</b></div>
     <div class="seg" id="scope">
-      <button type="button" data-v="sel" aria-pressed="true">الشرائح المحددة</button>
+      <button type="button" data-v="cur" aria-pressed="true">الشريحة الحالية</button>
       <button type="button" data-v="all" aria-pressed="false">كل الشرائح</button>
     </div>
     <button type="button" class="big" id="goBtn">تحويل</button>
@@ -1742,7 +1742,7 @@ const VER = '1.0';
 const PT = UR.PT;
 const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
 const load = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
-let scope = load('ur-scope', 'sel');
+let scope = load('ur-scope', 'cur'); if (scope !== 'all') scope = 'cur';
 let busy = false, supported = false;
 
 // ---------- status / results ----------
@@ -1764,9 +1764,10 @@ const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', 
 const run = f => PowerPoint.run(f);
 async function targetIds() {
   return run(async ctx => {
-    const col = scope === 'sel' ? ctx.presentation.getSelectedSlides() : ctx.presentation.slides;
+    const col = scope === 'cur' ? ctx.presentation.getSelectedSlides() : ctx.presentation.slides;
     col.load('items/id'); await ctx.sync();
-    return col.items.map(s => s.id);
+    const ids = col.items.map(s => s.id);
+    return scope === 'cur' ? ids.slice(0, 1) : ids;
   });
 }
 async function allIds() { return run(async ctx => { const s = ctx.presentation.slides; s.load('items/id'); await ctx.sync(); return s.items.map(x => x.id); }); }

@@ -5,7 +5,7 @@ const VER = '1.0';
 const PT = UR.PT;
 const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
 const load = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
-let scope = load('ur-scope', 'sel');
+let scope = load('ur-scope', 'cur'); if (scope !== 'all') scope = 'cur';
 let busy = false, supported = false;
 
 // ---------- status / results ----------
@@ -27,9 +27,10 @@ const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', 
 const run = f => PowerPoint.run(f);
 async function targetIds() {
   return run(async ctx => {
-    const col = scope === 'sel' ? ctx.presentation.getSelectedSlides() : ctx.presentation.slides;
+    const col = scope === 'cur' ? ctx.presentation.getSelectedSlides() : ctx.presentation.slides;
     col.load('items/id'); await ctx.sync();
-    return col.items.map(s => s.id);
+    const ids = col.items.map(s => s.id);
+    return scope === 'cur' ? ids.slice(0, 1) : ids;
   });
 }
 async function allIds() { return run(async ctx => { const s = ctx.presentation.slides; s.load('items/id'); await ctx.sync(); return s.items.map(x => x.id); }); }

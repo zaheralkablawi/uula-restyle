@@ -407,9 +407,60 @@ async function pinRole(role) {
   finally { busy = false; lock(); }
 }
 
+// ---------- vertical spacing only ----------
+async function spaceSlide(id) {
+  const { W, H } = await getSize();
+  return run(async ctx => {
+    const sh = ctx.presentation.slides.getItem(id).shapes;
+    sh.load('items/name,items/type,items/left,items/top,items/width,items/height'); await ctx.sync();
+    // text boxes take the height of their text (so the gaps are real)
+    for (const s of sh.items) if (s.type === 'TextBox') { try { s.textFrame.autoSizeSetting = 'AutoSizeShapeToFitText'; } catch (e) {} }
+    await ctx.sync();
+    const fills = sh.items.map(s => { try { s.fill.load('type'); return s.fill; } catch (e) { return null; } });
+    sh.items.forEach(s => s.load('top,height'));
+    await ctx.sync();
+    const rects = sh.items.map((s, k) => {
+      const nm = s.name || '';
+      const fixed = /^UULA (Footer|Watermark)|^CustomPageNumber_/.test(nm) || s.top >= H - 54 || s.left + s.width <= 0 || s.left >= W || s.top + s.height <= 0 || (s.width > W * 0.85 && s.height > H * 0.6) || / #ur\d+$/.test(nm) && false;
+      let solid = false; try { solid = fills[k] && fills[k].type === 'Solid' || fills[k] && fills[k].type === 'Gradient'; } catch (e) {}
+      const box = (s.type === 'GeometricShape' && solid && s.width > W * 0.5) || /Container$/.test(nm);
+      return { key: k, x: s.left * PT, y: s.top * PT, w: s.width * PT, h: s.height * PT, fixed, box };
+    });
+    const mv = UR.spacing(rects, W * PT, H * PT);
+    let moved = 0, low = 0;
+    for (const [k, m] of Object.entries(mv)) {
+      const s = sh.items[+k];
+      if (m.y != null && Math.abs(m.y / PT - s.top) > 0.2) { s.top = m.y / PT; moved++; }
+      if (m.h != null) s.height = m.h / PT;
+      low = Math.max(low, (m.y != null ? m.y : rects[+k].y) + (m.h != null ? m.h : rects[+k].h));
+    }
+    await ctx.sync();
+    return { moved, over: low > (H - 54) * PT + PT };
+  });
+}
+$('spBtn').addEventListener('click', async () => {
+  if (busy || !supported) return;
+  busy = true; lock(); res.innerHTML = '';
+  try {
+    const ids = await targetIds();
+    if (!ids.length) { say('حدّد شريحة أولًا.'); return; }
+    const over = [];
+    for (let k = 0; k < ids.length; k++) {
+      prog(k / ids.length); say('تنسيق المسافات ' + (k + 1) + ' من ' + ids.length + '…');
+      try { const r = await spaceSlide(ids[k]); if (r.over) over.push(ids[k]); }
+      catch (e) { line('err', '✗ ' + esc(errText(e))); }
+    }
+    prog(null);
+    if (over.length) { const all = await allIds(); line('warn', '• المحتوى أطول من الصفحة: ' + slideLinks(over, i => all.indexOf(i) + 1)); }
+    say('تم تنسيق المسافات.');
+  } catch (e) { prog(null); say('حدث خطأ: ' + errText(e)); }
+  finally { busy = false; lock(); }
+});
+
 // ---------- main button ----------
 function lock() {
   $('goBtn').disabled = busy || !supported;
+  $('spBtn').disabled = busy || !supported;
   document.querySelectorAll('.tbtn').forEach(b => { b.disabled = busy || !supported; });
 }
 $('goBtn').addEventListener('click', async () => {

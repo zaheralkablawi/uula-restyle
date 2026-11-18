@@ -1469,6 +1469,65 @@ function reflow(rects, group, opts) {
   }
   return out;
 }
+// ---------- vertical spacing only ("تنسيق المسافات") ----------
+// rects: [{ key, x, y, w, h, fixed, box }] in EMU. Nothing moves sideways: each object keeps its x,
+// rows of objects side by side keep their arrangement, and between rows there are two grid steps
+// (objects that were touching stay touching). Containers keep one line above and two below their content.
+function spacing(rects, W, H) {
+  const free = rects.filter(r => !r.fixed);
+  const inside = (o, b) => { const cx = o.x + o.w / 2, cy = o.y + o.h / 2; return cx >= b.x && cx <= b.x + b.w && cy >= b.y && cy <= b.y + b.h; };
+  const boxes = free.filter(b => b.box && free.some(o => o !== b && !o.box && inside(o, b)));
+  const parent = new Map();
+  for (const o of free) {
+    if (boxes.includes(o)) continue;
+    let best = null;
+    for (const b of boxes) if (inside(o, b) && (!best || b.w * b.h < best.w * best.h)) best = b;
+    if (best) parent.set(o, best);
+  }
+  for (const b of boxes) { let best = null; for (const c of boxes) if (c !== b && inside(b, c) && c.w * c.h > b.w * b.h && (!best || c.w * c.h < best.w * best.h)) best = c; if (best) parent.set(b, best); }
+  const out = {};
+  const kidsOf = p => free.filter(o => parent.get(o) === p);
+  // lay a set of units from `start`; returns the bottom
+  function level(units, start, keepFirst) {
+    const s = [...units].sort((a, b) => a.y - b.y);
+    const rows = [];
+    for (const u of s) {
+      const r = rows[rows.length - 1];
+      if (r && Math.min(r.y1, u.y + u.h) - Math.max(r.y0, u.y) > Math.min(u.h, r.y1 - r.y0) * 0.3) { r.items.push(u); r.y1 = Math.max(r.y1, u.y + u.h); }
+      else rows.push({ items: [u], y0: u.y, y1: u.y + u.h });
+    }
+    let bottom = start, prev = null;
+    rows.forEach((r, k) => {
+      let top;
+      if (k === 0) top = keepFirst ? r.y0 : start;
+      else if (start === Y0 && k === 1 && rows[0].y0 < 40 * PT && r.y0 < 60 * PT) top = Math.max(Y0 + 3 * G, snapUp(bottom) + G);   // the lesson name under the unit name
+      else top = (r.y0 - prev.y1 <= 3 * PT) ? snapUp(bottom) : snapUp(bottom) + ROW;
+      let rb = top;
+      for (const u of r.items) {
+        const ny = top + (u.y - r.y0);
+        out[u.key] = Object.assign(out[u.key] || {}, { y: Math.round(ny) });
+        let ub = ny + u.h;
+        if (boxes.includes(u)) {
+          const ks = kidsOf(u);
+          if (ks.length) {
+            const inner = level(ks, snapUp(ny) + ROW, false);
+            const nh = snapUp(inner) + ROW - ny;
+            out[u.key].h = Math.round(nh); ub = ny + nh;
+          }
+        }
+        rb = Math.max(rb, ub);
+      }
+      bottom = rb; prev = r;
+    });
+    return bottom;
+  }
+  const top = free.filter(o => !parent.has(o));
+  if (!top.length) return out;
+  const first = Math.min(...top.map(o => o.y));
+  // a container touching the top of the page stays there; otherwise the content starts on a grid line
+  level(top, first <= 2 * PT ? first : Math.max(Y0, snapNear(first)), first <= 2 * PT);
+  return out;
+}
 // ---------- splitting ----------
 // two slides from one: blocks [0, k) stay (with the header), blocks [k, …) move to a new slide.
 // returns [{ xml, plan }, { xml, plan }] with item indexes renumbered for each part
@@ -1528,7 +1587,7 @@ function splitPoint(plan, lay) {
 }
 
 return {
-  NS, PT, ROW, M, FOOT, C, STY, BOX, openPackage, buildPackage, parseXml, serialize, restyle, layout, applyLayout, splitParts, splitPoint, markNames, MARK, applyRole, reflow, TEXT_ROLES, BOX_ROLES, G, Y0, snapUp, snapX,
+  NS, PT, ROW, M, FOOT, C, STY, BOX, openPackage, buildPackage, parseXml, serialize, restyle, layout, applyLayout, splitParts, splitPoint, markNames, MARK, applyRole, reflow, spacing, TEXT_ROLES, BOX_ROLES, G, Y0, snapUp, snapX,
   // used by the templates module
   util: { pX, txX, boxX, gradBoxX, picX, pillX, pillW, lineX, tableX, makeRels, frag, topItems, core, cnvOf, maxId, spTreeOf, kid, kids, desc, xfrmOf, geomOf, setNext: n => { NEXT = n; }, yearText, pageNumX, estimateText }
 };

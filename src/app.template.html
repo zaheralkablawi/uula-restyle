@@ -36,6 +36,8 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
 .big{font:inherit;font-size:.95rem;font-weight:700;height:36px;border:0;border-radius:10px;background:var(--accent);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
 .big:hover{filter:brightness(1.07)}.big:disabled{background:#c7cfdb;cursor:not-allowed;filter:none}
 .big svg{width:20px;height:20px}
+.sec{font:inherit;font-size:.84rem;font-weight:600;height:30px;border:1px solid var(--accent);border-radius:9px;background:var(--panel);color:var(--accent);cursor:pointer}
+.sec:hover{background:var(--accent-soft)}.sec:disabled{border-color:#c7cfdb;color:#9aa3b0;cursor:not-allowed;background:var(--panel)}
 .chead{display:flex;align-items:center;gap:7px;font-size:.95rem}.chead b{font-weight:600}.chead svg{color:var(--accent)}
 .row{display:flex;align-items:center;gap:8px;justify-content:space-between}
 .chk{display:flex;align-items:center;gap:8px;font-size:.84rem;cursor:pointer}
@@ -89,6 +91,7 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
       <button type="button" data-v="all" aria-pressed="false">كل الشرائح</button>
     </div>
     <button type="button" class="big" id="goBtn">تحويل</button>
+    <button type="button" class="sec" id="spBtn">تنسيق المسافات</button>
     <div class="prog" id="prog" hidden><i></i></div>
     <div class="status" id="status" role="status"></div>
     <div class="res" id="res"></div>

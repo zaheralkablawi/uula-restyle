@@ -36,6 +36,8 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
 .big{font:inherit;font-size:.95rem;font-weight:700;height:36px;border:0;border-radius:10px;background:var(--accent);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
 .big:hover{filter:brightness(1.07)}.big:disabled{background:#c7cfdb;cursor:not-allowed;filter:none}
 .big svg{width:20px;height:20px}
+.sec{font:inherit;font-size:.84rem;font-weight:600;height:30px;border:1px solid var(--accent);border-radius:9px;background:var(--panel);color:var(--accent);cursor:pointer}
+.sec:hover{background:var(--accent-soft)}.sec:disabled{border-color:#c7cfdb;color:#9aa3b0;cursor:not-allowed;background:var(--panel)}
 .chead{display:flex;align-items:center;gap:7px;font-size:.95rem}.chead b{font-weight:600}.chead svg{color:var(--accent)}
 .row{display:flex;align-items:center;gap:8px;justify-content:space-between}
 .chk{display:flex;align-items:center;gap:8px;font-size:.84rem;cursor:pointer}
@@ -89,6 +91,7 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
       <button type="button" data-v="all" aria-pressed="false">كل الشرائح</button>
     </div>
     <button type="button" class="big" id="goBtn">تحويل</button>
+    <button type="button" class="sec" id="spBtn">تنسيق المسافات</button>
     <div class="prog" id="prog" hidden><i></i></div>
     <div class="status" id="status" role="status"></div>
     <div class="res" id="res"></div>
@@ -1612,6 +1615,65 @@ function reflow(rects, group, opts) {
   }
   return out;
 }
+// ---------- vertical spacing only ("تنسيق المسافات") ----------
+// rects: [{ key, x, y, w, h, fixed, box }] in EMU. Nothing moves sideways: each object keeps its x,
+// rows of objects side by side keep their arrangement, and between rows there are two grid steps
+// (objects that were touching stay touching). Containers keep one line above and two below their content.
+function spacing(rects, W, H) {
+  const free = rects.filter(r => !r.fixed);
+  const inside = (o, b) => { const cx = o.x + o.w / 2, cy = o.y + o.h / 2; return cx >= b.x && cx <= b.x + b.w && cy >= b.y && cy <= b.y + b.h; };
+  const boxes = free.filter(b => b.box && free.some(o => o !== b && !o.box && inside(o, b)));
+  const parent = new Map();
+  for (const o of free) {
+    if (boxes.includes(o)) continue;
+    let best = null;
+    for (const b of boxes) if (inside(o, b) && (!best || b.w * b.h < best.w * best.h)) best = b;
+    if (best) parent.set(o, best);
+  }
+  for (const b of boxes) { let best = null; for (const c of boxes) if (c !== b && inside(b, c) && c.w * c.h > b.w * b.h && (!best || c.w * c.h < best.w * best.h)) best = c; if (best) parent.set(b, best); }
+  const out = {};
+  const kidsOf = p => free.filter(o => parent.get(o) === p);
+  // lay a set of units from `start`; returns the bottom
+  function level(units, start, keepFirst) {
+    const s = [...units].sort((a, b) => a.y - b.y);
+    const rows = [];
+    for (const u of s) {
+      const r = rows[rows.length - 1];
+      if (r && Math.min(r.y1, u.y + u.h) - Math.max(r.y0, u.y) > Math.min(u.h, r.y1 - r.y0) * 0.3) { r.items.push(u); r.y1 = Math.max(r.y1, u.y + u.h); }
+      else rows.push({ items: [u], y0: u.y, y1: u.y + u.h });
+    }
+    let bottom = start, prev = null;
+    rows.forEach((r, k) => {
+      let top;
+      if (k === 0) top = keepFirst ? r.y0 : start;
+      else if (start === Y0 && k === 1 && rows[0].y0 < 40 * PT && r.y0 < 60 * PT) top = Math.max(Y0 + 3 * G, snapUp(bottom) + G);   // the lesson name under the unit name
+      else top = (r.y0 - prev.y1 <= 3 * PT) ? snapUp(bottom) : snapUp(bottom) + ROW;
+      let rb = top;
+      for (const u of r.items) {
+        const ny = top + (u.y - r.y0);
+        out[u.key] = Object.assign(out[u.key] || {}, { y: Math.round(ny) });
+        let ub = ny + u.h;
+        if (boxes.includes(u)) {
+          const ks = kidsOf(u);
+          if (ks.length) {
+            const inner = level(ks, snapUp(ny) + ROW, false);
+            const nh = snapUp(inner) + ROW - ny;
+            out[u.key].h = Math.round(nh); ub = ny + nh;
+          }
+        }
+        rb = Math.max(rb, ub);
+      }
+      bottom = rb; prev = r;
+    });
+    return bottom;
+  }
+  const top = free.filter(o => !parent.has(o));
+  if (!top.length) return out;
+  const first = Math.min(...top.map(o => o.y));
+  // a container touching the top of the page stays there; otherwise the content starts on a grid line
+  level(top, first <= 2 * PT ? first : Math.max(Y0, snapNear(first)), first <= 2 * PT);
+  return out;
+}
 // ---------- splitting ----------
 // two slides from one: blocks [0, k) stay (with the header), blocks [k, …) move to a new slide.
 // returns [{ xml, plan }, { xml, plan }] with item indexes renumbered for each part
@@ -1671,7 +1733,7 @@ function splitPoint(plan, lay) {
 }
 
 return {
-  NS, PT, ROW, M, FOOT, C, STY, BOX, openPackage, buildPackage, parseXml, serialize, restyle, layout, applyLayout, splitParts, splitPoint, markNames, MARK, applyRole, reflow, TEXT_ROLES, BOX_ROLES, G, Y0, snapUp, snapX,
+  NS, PT, ROW, M, FOOT, C, STY, BOX, openPackage, buildPackage, parseXml, serialize, restyle, layout, applyLayout, splitParts, splitPoint, markNames, MARK, applyRole, reflow, spacing, TEXT_ROLES, BOX_ROLES, G, Y0, snapUp, snapX,
   // used by the templates module
   util: { pX, txX, boxX, gradBoxX, picX, pillX, pillW, lineX, tableX, makeRels, frag, topItems, core, cnvOf, maxId, spTreeOf, kid, kids, desc, xfrmOf, geomOf, setNext: n => { NEXT = n; }, yearText, pageNumX, estimateText }
 };
@@ -2368,9 +2430,60 @@ async function pinRole(role) {
   finally { busy = false; lock(); }
 }
 
+// ---------- vertical spacing only ----------
+async function spaceSlide(id) {
+  const { W, H } = await getSize();
+  return run(async ctx => {
+    const sh = ctx.presentation.slides.getItem(id).shapes;
+    sh.load('items/name,items/type,items/left,items/top,items/width,items/height'); await ctx.sync();
+    // text boxes take the height of their text (so the gaps are real)
+    for (const s of sh.items) if (s.type === 'TextBox') { try { s.textFrame.autoSizeSetting = 'AutoSizeShapeToFitText'; } catch (e) {} }
+    await ctx.sync();
+    const fills = sh.items.map(s => { try { s.fill.load('type'); return s.fill; } catch (e) { return null; } });
+    sh.items.forEach(s => s.load('top,height'));
+    await ctx.sync();
+    const rects = sh.items.map((s, k) => {
+      const nm = s.name || '';
+      const fixed = /^UULA (Footer|Watermark)|^CustomPageNumber_/.test(nm) || s.top >= H - 54 || s.left + s.width <= 0 || s.left >= W || s.top + s.height <= 0 || (s.width > W * 0.85 && s.height > H * 0.6) || / #ur\d+$/.test(nm) && false;
+      let solid = false; try { solid = fills[k] && fills[k].type === 'Solid' || fills[k] && fills[k].type === 'Gradient'; } catch (e) {}
+      const box = (s.type === 'GeometricShape' && solid && s.width > W * 0.5) || /Container$/.test(nm);
+      return { key: k, x: s.left * PT, y: s.top * PT, w: s.width * PT, h: s.height * PT, fixed, box };
+    });
+    const mv = UR.spacing(rects, W * PT, H * PT);
+    let moved = 0, low = 0;
+    for (const [k, m] of Object.entries(mv)) {
+      const s = sh.items[+k];
+      if (m.y != null && Math.abs(m.y / PT - s.top) > 0.2) { s.top = m.y / PT; moved++; }
+      if (m.h != null) s.height = m.h / PT;
+      low = Math.max(low, (m.y != null ? m.y : rects[+k].y) + (m.h != null ? m.h : rects[+k].h));
+    }
+    await ctx.sync();
+    return { moved, over: low > (H - 54) * PT + PT };
+  });
+}
+$('spBtn').addEventListener('click', async () => {
+  if (busy || !supported) return;
+  busy = true; lock(); res.innerHTML = '';
+  try {
+    const ids = await targetIds();
+    if (!ids.length) { say('حدّد شريحة أولًا.'); return; }
+    const over = [];
+    for (let k = 0; k < ids.length; k++) {
+      prog(k / ids.length); say('تنسيق المسافات ' + (k + 1) + ' من ' + ids.length + '…');
+      try { const r = await spaceSlide(ids[k]); if (r.over) over.push(ids[k]); }
+      catch (e) { line('err', '✗ ' + esc(errText(e))); }
+    }
+    prog(null);
+    if (over.length) { const all = await allIds(); line('warn', '• المحتوى أطول من الصفحة: ' + slideLinks(over, i => all.indexOf(i) + 1)); }
+    say('تم تنسيق المسافات.');
+  } catch (e) { prog(null); say('حدث خطأ: ' + errText(e)); }
+  finally { busy = false; lock(); }
+});
+
 // ---------- main button ----------
 function lock() {
   $('goBtn').disabled = busy || !supported;
+  $('spBtn').disabled = busy || !supported;
   document.querySelectorAll('.tbtn').forEach(b => { b.disabled = busy || !supported; });
 }
 $('goBtn').addEventListener('click', async () => {

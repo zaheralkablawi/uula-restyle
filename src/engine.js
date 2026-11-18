@@ -184,11 +184,11 @@ function makeRels(pkg) {
   const media = {};
   return {
     doc,
-    image(key) {
+    image(key, data) {
       if (media[key]) return media[key];
       let id; do { id = 'rIdUR' + (n++); } while (used.has(id)); used.add(id);
       const file = 'ur_' + key + '.png';
-      pkg.zip.file('ppt/media/' + file, UR_ASSETS[key], { base64: true });
+      pkg.zip.file('ppt/media/' + file, data || UR_ASSETS[key], { base64: true });
       const r = doc.createElementNS(NS.rel, 'Relationship');
       r.setAttribute('Id', id); r.setAttribute('Type', REL_IMG); r.setAttribute('Target', '../media/' + file);
       root.appendChild(r);
@@ -1369,7 +1369,7 @@ function applyRole(pkg, role) {
   for (const t of sel.sort((a, b) => a.g.y - b.g.y)) {
     t.g = Object.assign({}, t.g, { y: t.g.y + shift });
     if (t.kind === 'table') { t.fullW = false; styleTable(t, ctx, W); rename(t, 'table'); out.push({ idx: t.i, kind: 'table' }); continue; }
-    if (t.kind === 'pic' || t.kind === 'grpSp') { stylePic(t, false); rename(t, 'pic'); out.push({ idx: t.i, kind: 'pic' }); continue; }
+    if (t.kind === 'pic' || t.kind === 'grpSp') { stylePic(t, false); rename(t, role === 'answer' ? 'answer' : 'pic'); out.push({ idx: t.i, kind: 'pic' }); continue; }
     if (t.kind !== 'text') { rename(t, role); continue; }
     const isBox = BOX_ROLES.includes(role);
     styleText(t, ctx, pkg, isBox ? 'body' : role);
@@ -1573,6 +1573,130 @@ function align(rects, W, mode, only) {
   }
   return out;
 }
+// ---------- hide / show the solutions ----------
+// Hidden originals keep everything: each object holding a solution gets hidden="1" and the name prefix
+// "UULA SolHidden "; when only part of it is a solution, a student copy ("UULA SolView …") is put after it:
+// answers made invisible (space kept), blue chosen answers back to black, filled circles emptied,
+// a solution graph replaced by the same picture with the drawing removed (empty grid, made by the pane).
+const DRAW = /ارسم|ارسمي|مثّل|مثل\s|مثلي|مث[ّ]?ل بياني|التمثيل البياني|بيان الدالة|منحنى الدالة/;
+const NEG = c => { const p = c.codePointAt(0);
+  if (p >= 0x2776 && p <= 0x277F) return String.fromCodePoint(0x2460 + p - 0x2776);
+  if (p >= 0x24EB && p <= 0x24F4) return String.fromCodePoint(0x246A + p - 0x24EB);
+  if (p >= 0x1F150 && p <= 0x1F169) return String.fromCodePoint(0x24B6 + p - 0x1F150);
+  return c; };
+const hasSolutions = xml => /name="UULA SolHidden /.test(xml);
+// what would be hidden on this slide; pics that need an empty-grid image are listed with their media path
+function findSolutions(pkg) {
+  const W = pkg.slideW, H = pkg.slideH;
+  const doc = parseXml(pkg.files.slide);
+  const ctx = { scheme: readTheme(pkg.files), bodySz: 1100 };
+  const items = analyze(doc, pkg, ctx);
+  headerRoles(items, pkg);
+  const rels = parseXml(pkg.files.rels);
+  const relT = id => { const r = desc(rels, 'rel', 'Relationship').find(x => x.getAttribute('Id') === id); return r ? r.getAttribute('Target') : null; };
+  const texts = items.filter(t => t.kind === 'text' && !t.drop);
+  const found = [];
+  for (const t of items) {
+    if (t.drop || /^UULA (SolHidden|SolView)/.test(t.name)) continue;
+    const pin = PIN.exec(t.name);
+    if (pin && pin[1] === 'answer') { found.push({ i: t.i, how: 'hide' }); continue; }
+    if (t.kind === 'text') {
+      if (['lesson', 'chapter'].includes(t.role) || t.fill) continue;
+      const roles = paraRoles(t, ctx, pkg).filter(r => r.text);
+      if (!roles.length) continue;
+      const choiceLike = r => r.role === 'choice' || /[①-⓿❶-➓]/.test(bulletChar(r.p) || '') || (t.g.w < W * 0.45 && r.text.length < 60);
+      const ans = roles.filter(r => r.role === 'answer');
+      const blueChoice = roles.filter(r => r.role !== 'answer' && choiceLike(r) && desc(r.p, 'a', 'rPr').some(pr => { const c = colorOf(kid(pr, 'solidFill', 'a'), ctx); return c && isBlue(rgb(c)); }));
+      const neg = /[❶-❿⓫-⓴]|\uD83C[\uDD50-\uDD69]/.test(t.text);
+      if (ans.length === roles.length && !blueChoice.length) found.push({ i: t.i, how: 'hide' });
+      else if (ans.length || blueChoice.length || neg) found.push({ i: t.i, how: 'copy' });
+      continue;
+    }
+    if (t.kind === 'table') {
+      if (desc(t.c, 'a', 'tc').some(tc => /^(الحل|الإجابة|الاجابة)$/.test(textOf(tc).trim()))) found.push({ i: t.i, how: 'copy' });
+      continue;
+    }
+    if (t.kind === 'shape' && /ellipse|flowChartConnector/.test((desc(t.c, 'a', 'prstGeom')[0] || { getAttribute: () => '' }).getAttribute('prst')) && t.g.w < 34 * PT && t.g.h < 34 * PT && t.fill && lum(t.fill) < 250) { found.push({ i: t.i, how: 'copy' }); continue; }
+    if (t.kind === 'pic' && t.g.w > 80 * PT && t.g.h > 70 * PT) {
+      // a graph that answers a "draw" question: the nearest questions above it or beside it
+      const near = texts.filter(x => x.g.y < t.g.y + t.g.h && x.g.y > t.g.y - 260 * PT).sort((a, b) => Math.abs(a.g.y - t.g.y) - Math.abs(b.g.y - t.g.y)).slice(0, 6);
+      const qs = near.filter(x => DRAW.test(x.text));
+      const above = texts.filter(x => x.g.y + x.g.h <= t.g.y + 4 * PT && DRAW.test(x.text) && QHEAD.test(x.text.replace(/ـ/g, '')));
+      if (qs.length || above.length) {
+        const blip = desc(t.c, 'a', 'blip')[0], rid = blip && blip.getAttributeNS(NS.r, 'embed');
+        const target = rid && relT(rid);
+        if (target) found.push({ i: t.i, how: 'grid', media: 'ppt/media/' + target.split('/').pop() });
+      }
+    }
+  }
+  return found;
+}
+function hideSolutions(pkg, grids) {
+  grids = grids || {};
+  const W = pkg.slideW;
+  const doc = parseXml(pkg.files.slide);
+  const ctx = { scheme: readTheme(pkg.files), bodySz: 1100 };
+  const items = analyze(doc, pkg, ctx);
+  const rels = makeRels(pkg);
+  NEXT = maxId(doc) + 1;
+  const list = findSolutions(pkg);
+  let n = 0;
+  for (const f of list) {
+    const t = items.find(x => x.i === f.i); if (!t) continue;
+    if (f.how === 'grid' && !grids[f.i]) continue;            // not a graph after all (no drawing found)
+    n++;
+    const view = f.how === 'hide' ? null : t.el.cloneNode(true);
+    for (const c of allCores(t.el)) { const nv = cnvOf(c); if (nv) { nv.setAttribute('hidden', '1'); nv.setAttribute('name', 'UULA SolHidden ' + (nv.getAttribute('name') || '')); } }
+    if (!view) continue;
+    for (const c of allCores(view)) { const nv = cnvOf(c); if (nv) { nv.setAttribute('id', String(NEXT++)); nv.setAttribute('name', 'UULA SolView ' + (nv.getAttribute('name') || '')); nv.removeAttribute('hidden'); } }
+    const vt = { c: core(view), el: view, text: t.text, g: t.g, box: null, ph: null };
+    if (f.how === 'grid') {
+      const id = rels.image('grid' + f.i + '_' + Date.now().toString(36), grids[f.i]);
+      for (const b of desc(view, 'a', 'blip')) { b.setAttributeNS(NS.r, 'r:embed', id); for (const e of [...b.children]) b.removeChild(e); }
+    } else if (t.kind === 'text') {
+      const roles = paraRoles(vt, ctx, pkg);
+      const W45 = W * 0.45;
+      for (const r of roles) {
+        if (!r.text) continue;
+        const choiceLike = r.role === 'choice' || /[①-⓿❶-➓]/.test(bulletChar(r.p) || '') || (t.g.w < W45 && r.text.length < 60);
+        if (r.role === 'answer') {
+          // invisible, the space stays for the student
+          for (const pr of [...desc(r.p, 'a', 'rPr'), ...desc(r.p, 'a', 'endParaRPr')]) { removeKids(pr, FILLS); placeChild(pr, frag(doc, '<a:solidFill><a:srgbClr val="FFFFFF"><a:alpha val="0"/></a:srgbClr></a:solidFill>'), RPR_ORDER); }
+          const pPr = kid(r.p, 'pPr', 'a'); if (pPr && kid(pPr, 'buChar', 'a')) { removeKids(pPr, ['buClr']); placeChild(pPr, frag(doc, '<a:buClr><a:srgbClr val="FFFFFF"><a:alpha val="0"/></a:srgbClr></a:buClr>'), PPR_ORDER); }
+        } else if (choiceLike) {
+          for (const pr of desc(r.p, 'a', 'rPr')) { const c = colorOf(kid(pr, 'solidFill', 'a'), ctx); if (c && isBlue(rgb(c))) { removeKids(pr, FILLS); placeChild(pr, solid(doc, '000000'), RPR_ORDER); pr.setAttribute('b', '0'); } }
+        }
+      }
+      for (const tn of [...desc(view, 'a', 't'), ...desc(view, 'm', 't')]) tn.textContent = [...tn.textContent].map(NEG).join('');
+    } else if (t.kind === 'table') {
+      for (const tr of desc(view, 'a', 'tr')) {
+        const tcs = kids(tr, 'tc', 'a');
+        if (!tcs.some(tc => /^(الحل|الإجابة|الاجابة)$/.test(textOf(tc).trim()))) continue;
+        for (const tc of tcs) { if (/^(الحل|الإجابة|الاجابة)$/.test(textOf(tc).trim())) continue; for (const pr of [...desc(tc, 'a', 'rPr'), ...desc(tc, 'a', 'endParaRPr')]) { removeKids(pr, FILLS); placeChild(pr, frag(doc, '<a:solidFill><a:srgbClr val="FFFFFF"><a:alpha val="0"/></a:srgbClr></a:solidFill>'), RPR_ORDER); } }
+      }
+    } else if (t.kind === 'shape') {
+      const spPr = kid(vt.c, 'spPr', 'p'); removeKids(spPr, FILLS); placeChild(spPr, mk(doc, 'a', 'noFill'), SPPR_ORDER);
+      for (const pr of desc(view, 'a', 'rPr')) { removeKids(pr, FILLS); placeChild(pr, solid(doc, '000000'), RPR_ORDER); }
+      const st = kid(vt.c, 'style', 'p'); if (st) { const fr = desc(st, 'a', 'fillRef')[0]; if (fr) fr.setAttribute('idx', '0'); }
+    }
+    t.el.parentNode.insertBefore(view, t.el.nextSibling);
+  }
+  return { xml: serialize(doc), rels, count: n };
+}
+function showSolutions(pkg) {
+  const doc = parseXml(pkg.files.slide);
+  let n = 0;
+  for (const el of topItems(doc)) {
+    const nv = cnvOf(core(el)); if (!nv) continue;
+    const name = nv.getAttribute('name') || '';
+    if (/^UULA SolView /.test(name)) { el.parentNode.removeChild(el); continue; }
+    if (/^UULA SolHidden /.test(name)) {
+      n++;
+      for (const c of allCores(el)) { const v = cnvOf(c); if (v) { v.removeAttribute('hidden'); v.setAttribute('name', (v.getAttribute('name') || '').replace(/^UULA SolHidden /, '')); } }
+    }
+  }
+  return { xml: serialize(doc), count: n };
+}
 // ---------- splitting ----------
 // two slides from one: blocks [0, k) stay (with the header), blocks [k, …) move to a new slide.
 // returns [{ xml, plan }, { xml, plan }] with item indexes renumbered for each part
@@ -1632,7 +1756,7 @@ function splitPoint(plan, lay) {
 }
 
 return {
-  NS, PT, ROW, M, FOOT, C, STY, BOX, openPackage, buildPackage, parseXml, serialize, restyle, layout, applyLayout, splitParts, splitPoint, markNames, MARK, applyRole, reflow, spacing, align, TEXT_ROLES, BOX_ROLES, G, Y0, snapUp, snapX,
+  NS, PT, ROW, M, FOOT, C, STY, BOX, openPackage, buildPackage, parseXml, serialize, restyle, layout, applyLayout, splitParts, splitPoint, markNames, MARK, applyRole, reflow, spacing, align, findSolutions, hideSolutions, showSolutions, hasSolutions, TEXT_ROLES, BOX_ROLES, G, Y0, snapUp, snapX,
   // used by the templates module
   util: { pX, txX, boxX, gradBoxX, picX, pillX, pillW, lineX, tableX, makeRels, frag, topItems, core, cnvOf, maxId, spTreeOf, kid, kids, desc, xfrmOf, geomOf, setNext: n => { NEXT = n; }, yearText, pageNumX, estimateText }
 };

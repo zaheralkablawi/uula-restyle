@@ -175,7 +175,7 @@ async function doConvert() {
   const opts = {};
   for (let k = 0; k < ids.length; k++) {
     prog(k / ids.length); say('تحويل الشريحة ' + (k + 1) + ' من ' + ids.length + '…');
-    try { rep.done.push(await convertOne(ids[k], opts, rep)); }
+    try { const nid = await convertOne(ids[k], opts, rep); rep.done.push(nid); if (scope === 'cur') await run(async ctx => { ctx.presentation.setSelectedSlides([nid]); await ctx.sync(); }).catch(() => {}); }
     catch (e) { rep.errs.push(errText(e)); }
   }
   prog(null);
@@ -487,9 +487,94 @@ async function spacingRun(kind) {
 $('spV').addEventListener('click', () => spacingRun('v'));
 $('spH').addEventListener('click', () => spacingRun('h'));
 
+// ---------- hide / show the solutions ----------
+// an empty grid from a graph picture: the coloured drawing is removed and the grid lines / axes it covered are drawn again
+async function emptyGrid(b64, ext) {
+  const mime = /jpe?g/i.test(ext) ? 'image/jpeg' : 'image/png';
+  const img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = 'data:' + mime + ';base64,' + b64; });
+  const w = img.naturalWidth, h = img.naturalHeight;
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  const g = cv.getContext('2d'); g.drawImage(img, 0, 0);
+  const im = g.getImageData(0, 0, w, h), d = im.data;
+  const colGray = new Uint32Array(w), rowGray = new Uint32Array(h), colDark = new Uint32Array(w), rowDark = new Uint32Array(h);
+  let colored = 0, transparent = 0, grayR = 0, grayN = 0;
+  const kind = new Uint8Array(w * h);           // 1 coloured, 2 gray, 3 dark
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const k = (y * w + x) * 4, a = d[k + 3]; if (a < 30) { transparent++; continue; }
+    const r = d[k], gg = d[k + 1], b = d[k + 2], mx = Math.max(r, gg, b), mn = Math.min(r, gg, b), av = (r + gg + b) / 3;
+    if (mx - mn > 55) { kind[y * w + x] = 1; colored++; }
+    else if (mx - mn < 25 && av >= 130 && av <= 238) { kind[y * w + x] = 2; colGray[x]++; rowGray[y]++; grayR += av; grayN++; }
+    else if (mx - mn < 45 && av < 110) { kind[y * w + x] = 3; colDark[x]++; rowDark[y]++; }
+  }
+  if (colored < w * h * 0.002) return null;     // nothing drawn on it
+  const bgClear = transparent > w * h * 0.3;
+  const gv = grayN ? Math.round(grayR / grayN) : 190;
+  const gx = new Uint8Array(w), gy = new Uint8Array(h), ax = new Uint8Array(w), ay = new Uint8Array(h);
+  for (let x = 0; x < w; x++) { if (colGray[x] > h * 0.3) gx[x] = 1; if (colDark[x] > h * 0.45) ax[x] = 1; }
+  for (let y = 0; y < h; y++) { if (rowGray[y] > w * 0.3) gy[y] = 1; if (rowDark[y] > w * 0.45) ay[y] = 1; }
+  // a coloured pixel is erased (with a 1px halo for antialiasing), then the line under it comes back
+  const erase = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (kind[y * w + x] === 1)
+    for (let yy = Math.max(0, y - 1); yy <= Math.min(h - 1, y + 1); yy++) for (let xx = Math.max(0, x - 1); xx <= Math.min(w - 1, x + 1); xx++) if (kind[yy * w + xx] !== 3 || kind[y * w + x] === 1) erase[yy * w + xx] = 1;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (!erase[y * w + x]) continue;
+    const k = (y * w + x) * 4;
+    if (ax[x] || ay[y]) { d[k] = d[k + 1] = d[k + 2] = 0; d[k + 3] = 255; }
+    else if (gx[x] || gy[y]) { d[k] = d[k + 1] = d[k + 2] = gv; d[k + 3] = 255; }
+    else if (bgClear) d[k + 3] = 0;
+    else { d[k] = d[k + 1] = d[k + 2] = 255; d[k + 3] = 255; }
+  }
+  g.putImageData(im, 0, 0);
+  return cv.toDataURL('image/png').split(',')[1];
+}
+function solHidden() { const s = docSettings(); return !!(s && s.get('urSolHidden')); }
+function solLabel() { const h = solHidden(); $('solLbl').textContent = h ? 'إظهار الحلول' : 'إخفاء الحلول'; $('solSlash').style.display = h ? 'none' : ''; }
+async function solSlide(id, mode) {
+  const pkg = await UR.openPackage(await exportSlide(id));
+  let r;
+  if (mode === 'show') { if (!UR.hasSolutions(pkg.files.slide)) return 0; r = UR.showSolutions(pkg); r.rels = null; }
+  else {
+    if (UR.hasSolutions(pkg.files.slide)) return 0;
+    const found = UR.findSolutions(pkg);
+    if (!found.length) return 0;
+    const grids = {};
+    for (const f of found.filter(x => x.how === 'grid')) {
+      const file = pkg.zip.file(f.media); if (!file || !/\.(png|jpe?g)$/i.test(f.media)) continue;
+      try { const png = await emptyGrid(await file.async('base64'), f.media); if (png) grids[f.i] = png; } catch (e) {}
+    }
+    r = UR.hideSolutions(pkg, grids);
+  }
+  if (!r.count) return 0;
+  const newId = await insertAfter(await UR.buildPackage(pkg, r.xml, r.rels), id);
+  await deleteSlide(id);
+  if (scope === 'cur') await run(async ctx => { ctx.presentation.setSelectedSlides([newId]); await ctx.sync(); }).catch(() => {});
+  return r.count;
+}
+$('solBtn').addEventListener('click', async () => {
+  if (busy || !supported) return;
+  busy = true; lock(); res.innerHTML = '';
+  const mode = solHidden() ? 'show' : 'hide';
+  try {
+    const ids = await targetIds();
+    if (!ids.length) { say('حدّد شريحة أولًا.'); return; }
+    let total = 0, slides = 0;
+    for (let k = 0; k < ids.length; k++) {
+      prog(k / ids.length); say((mode === 'hide' ? 'إخفاء' : 'إظهار') + ' الحلول ' + (k + 1) + ' من ' + ids.length + '…');
+      try { const n = await solSlide(ids[k], mode); if (n) { total += n; slides++; } }
+      catch (e) { line('err', '✗ ' + esc(errText(e))); }
+    }
+    prog(null);
+    const s = docSettings(); if (s) { s.set('urSolHidden', mode === 'hide'); s.saveAsync(); }
+    solLabel();
+    say(total ? (mode === 'hide' ? 'أُخفيت الحلول في ' : 'ظهرت الحلول في ') + cnt(slides) + '.' : (mode === 'hide' ? 'لم أجد حلولًا لإخفائها.' : 'لا توجد حلول مخفية.'));
+  } catch (e) { prog(null); say('حدث خطأ: ' + errText(e)); }
+  finally { busy = false; lock(); }
+});
+
 // ---------- main button ----------
 function lock() {
   $('goBtn').disabled = busy || !supported;
+  $('solBtn').disabled = busy || !supported;
   $('spV').disabled = busy || !supported; $('spH').disabled = busy || !supported;
   document.querySelectorAll('.tbtn').forEach(b => { b.disabled = busy || !supported; });
 }
@@ -563,6 +648,7 @@ ready.then(info => {
     const on = s.get('urNum'); if (on === false) $('numChk').checked = false;
   }
   $('numRow').style.opacity = $('numChk').checked ? '' : '.5';
+  solLabel();
   lock();
 });
 })();

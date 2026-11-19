@@ -166,7 +166,7 @@ async function read(data, opts) {
   };
 
   // paragraph → runs xml (DrawingML) + found pictures
-  function convP(p) {
+  function convP(p, inherit0) {
     const pPr = wk(p, 'pPr');
     const rtl = !!(pPr && wk(pPr, 'bidi') && wa(wk(pPr, 'bidi'), 'val') !== '0');
     const jc = pPr && wa(wk(pPr, 'jc'), 'val');
@@ -220,7 +220,7 @@ async function read(data, opts) {
       }
     };
     const inlineSplits = [], boxes = [];
-    walkRuns(p);
+    walkRuns(p, inherit0);
     return { runs: out, text, rtl: rtl || /[؀-ۿ]/.test(text), jc, math, pics, inlineSplits, boxes };
   }
   function runStyle(rPr) {
@@ -344,7 +344,9 @@ async function read(data, opts) {
         const span = +(wa(wk(tcPr, 'gridSpan'), 'val') || 1);
         const vm = tcPr && wk(tcPr, 'vMerge');
         const shd = wa(wk(tcPr, 'shd'), 'fill');
-        const paras = [...tc.getElementsByTagNameNS(W_NS, 'p')].map(convP).filter(x => x.text.trim() || x.math);
+        // everything in a table is text; what is tagged «حل» / «الخيار الصحيح» inside a cell is a solution
+        const tagIn = p => { for (let n = p.parentNode; n && n !== tc; n = n.parentNode) if (isW(n, 'sdt')) { const tg = sdtTag(n); if (tg) return tg; } return null; };
+        const paras = [...tc.getElementsByTagNameNS(W_NS, 'p')].map(p => { const tg = tagIn(p); return convP(p, INLINE.includes(tg) ? { c: tg === 'correct' ? '2070DF' : '1F71DE', bmk: 'UULA:' + tg } : undefined); }).filter(x => x.text.trim() || x.math);
         row.push({ span, vmerge: vm ? (wa(vm, 'val') === 'restart' ? 'restart' : 'cont') : null, fill: shd && /^[0-9A-F]{6}$/i.test(shd) ? shd.toUpperCase() : null, paras });
       }
       rows.push(row);
@@ -370,7 +372,7 @@ async function read(data, opts) {
     if (!grid.length || grid.some(g => !g)) grid = grid.length ? grid.map(g => g || 1) : [];
     const pr = wk(tbl, 'tblPr');
     const rtl = !!(pr && wk(pr, 'bidiVisual'));
-    units.push({ kind: 'table', role, tagged: !!role, rows, grid, rtl });
+    units.push({ kind: 'table', role: role || 'table', tagged: true, rows, grid, rtl });
     report.tables++;
     gkey++;
   }

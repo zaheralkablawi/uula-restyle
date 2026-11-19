@@ -1703,7 +1703,8 @@ function findSolutions(pkg) {
       continue;
     }
     if (t.kind === 'table') {
-      if (desc(t.c, 'a', 'tc').some(tc => /^(الحل|الإجابة|الاجابة)$/.test(textOf(tc).trim()))) found.push({ i: t.i, how: 'copy' });
+      if (desc(t.c, 'a', 'tc').some(tc => /^(الحل|الإجابة|الاجابة)$/.test(textOf(tc).trim()))
+        || desc(t.c, 'a', 'rPr').some(pr => /^UULA:(answer|correct)$/.test(pr.getAttribute('bmk') || ''))) found.push({ i: t.i, how: 'copy' });
       continue;
     }
     if (t.kind === 'shape' && /ellipse|flowChartConnector/.test((desc(t.c, 'a', 'prstGeom')[0] || { getAttribute: () => '' }).getAttribute('prst')) && t.g.w < 34 * PT && t.g.h < 34 * PT && t.fill && lum(t.fill) < 250) { found.push({ i: t.i, how: 'copy' }); continue; }
@@ -1789,6 +1790,13 @@ function hideSolutions(pkg, grids) {
         const tcs = kids(tr, 'tc', 'a');
         if (!tcs.some(tc => /^(الحل|الإجابة|الاجابة)$/.test(textOf(tc).trim()))) continue;
         for (const tc of tcs) { if (/^(الحل|الإجابة|الاجابة)$/.test(textOf(tc).trim())) continue; for (const pr of [...desc(tc, 'a', 'rPr'), ...desc(tc, 'a', 'endParaRPr')]) { removeKids(pr, FILLS); placeChild(pr, frag(doc, '<a:solidFill><a:srgbClr val="FFFFFF"><a:alpha val="0"/></a:srgbClr></a:solidFill>'), RPR_ORDER); } }
+      }
+      // answers marked inside cells (from Word): blank to fill / the correct choice turns black
+      for (const pr of desc(view, 'a', 'rPr')) {
+        const m = /^UULA:(answer|correct)$/.exec(pr.getAttribute('bmk') || ''); if (!m) continue;
+        removeKids(pr, FILLS);
+        if (m[1] === 'answer') placeChild(pr, frag(doc, '<a:solidFill><a:srgbClr val="FFFFFF"><a:alpha val="0"/></a:srgbClr></a:solidFill>'), RPR_ORDER);
+        else { placeChild(pr, solid(doc, '000000'), RPR_ORDER); pr.setAttribute('b', '0'); }
       }
     } else if (t.kind === 'shape' || (f.correct && t.kind !== 'text')) {
       const spPr = kid(vt.c, 'spPr', 'p'); removeKids(spPr, FILLS); placeChild(spPr, mk(doc, 'a', 'noFill'), SPPR_ORDER);

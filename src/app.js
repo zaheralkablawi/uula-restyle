@@ -883,7 +883,8 @@ async function untaggedParas(ctx) {
   const ps = ctx.document.body.paragraphs; ps.load('items/text,items/tableNestingLevel'); await ctx.sync();
   const ex = ps.items.map(p => { const cc = p.parentContentControlOrNullObject; cc.load('isNullObject,tag'); const pics = p.inlinePictures; pics.load('items/width'); p.font.load('highlightColor'); return { cc, pics }; });
   await ctx.sync();
-  return ps.items.filter((p, i) => (p.text.trim() || ex[i].pics.items.length) && !(isUula(ex[i].cc)));
+  // tables count as tagged (their content is text; solutions inside are tagged by hand)
+  return ps.items.filter((p, i) => (p.text.trim() || ex[i].pics.items.length) && !(isUula(ex[i].cc)) && !(p.tableNestingLevel > 0));
 }
 async function markUntagged(on) {
   return Word.run(async ctx => {

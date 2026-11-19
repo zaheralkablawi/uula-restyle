@@ -202,8 +202,8 @@ async function read(data, opts) {
             else if (kn === 'br' && wa(k, 'type') !== 'page') out += '<a:br><a:rPr lang="ar-SA"/></a:br>';
             else if (kn === 'sym') { const ch = wa(k, 'char'); if (ch) { const s = String.fromCharCode(parseInt(ch, 16) > 0xF000 ? parseInt(ch, 16) - 0xF000 : parseInt(ch, 16)); out += runX(s, st); text += s; } }
             else if (kn === 'noBreakHyphen') { out += runX('-', st); text += '-'; }
-            else if (kn === 'drawing' || kn === 'AlternateContent') pics.push(...picsOf(k));
-            else if (kn === 'object' || kn === 'pict') { const pc = vmlPic(k); if (pc) { pc.obj = kn === 'object'; pics.push(pc); } }
+            else if (kn === 'drawing' || kn === 'AlternateContent') { const tb = txbxOf(k); if (tb) boxes.push(tb); pics.push(...picsOf(k)); }
+            else if (kn === 'object' || kn === 'pict') { const tb = txbxOf(k); if (tb) boxes.push(tb); else { const pc = vmlPic(k); if (pc) { pc.obj = kn === 'object'; pics.push(pc); } } }
           }
         } else if (ns === M_NS && (ln === 'oMath' || ln === 'oMathPara')) {
           const mx = mathX(c);
@@ -219,9 +219,9 @@ async function read(data, opts) {
         }
       }
     };
-    const inlineSplits = [];
+    const inlineSplits = [], boxes = [];
     walkRuns(p);
-    return { runs: out, text, rtl: rtl || /[؀-ۿ]/.test(text), jc, math, pics, inlineSplits };
+    return { runs: out, text, rtl: rtl || /[؀-ۿ]/.test(text), jc, math, pics, inlineSplits, boxes };
   }
   function runStyle(rPr) {
     const st = {};
@@ -238,10 +238,16 @@ async function read(data, opts) {
     if (va === 'superscript') st.base = 30000; else if (va === 'subscript') st.base = -25000;
     return st;
   }
+  // the text inside a text box / shape (first copy when the drawing has a fallback)
+  function txbxOf(el) { return el.getElementsByTagNameNS(W_NS, 'txbxContent')[0] || null; }
   // every picture of a drawing, with its crop, rotation and flips (groups and shapes filled with a picture too)
   function picsOf(el) {
     const out = [];
-    const blips = [...el.getElementsByTagNameNS(A_NS, 'blip')];
+    const inBox = b => { for (let n = b.parentNode; n && n !== el; n = n.parentNode) if (n.localName === 'txbxContent') return true; return false; };
+    // a drawing in mc:AlternateContent is there twice (Choice / Fallback): read the first copy only
+    const fb = [...el.getElementsByTagName('*')].filter(e => e.localName === 'Fallback');
+    const inFb = b => fb.some(f => f.contains(b));
+    const blips = [...el.getElementsByTagNameNS(A_NS, 'blip')].filter(b => !inBox(b) && !inFb(b));
     if (!blips.length) return out;
     const ext = el.getElementsByTagNameNS(WP_NS, 'extent')[0];
     const W0 = ext ? +ext.getAttribute('cx') : 0, H0 = ext ? +ext.getAttribute('cy') : 0;
@@ -285,6 +291,11 @@ async function read(data, opts) {
 
   function handleP(p, role, key) {
     const c = convP(p);
+    handleConv(p, c, role, key);
+    // text boxes / shapes anchored in this paragraph: their content (and its tags) comes right after it
+    for (const tb of c.boxes) { close(); walk(tb, role, role ? key : null); close(); gkey++; }
+  }
+  function handleConv(p, c, role, key) {
     // pictures in the paragraph
     const picUnits = c.pics.map(pc => {
       report.pics++;

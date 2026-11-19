@@ -745,6 +745,17 @@ async function tagSelection(type) {
     await ctx.sync();
     // inside a tagged part with nothing (or all of it) selected: change its type
     if (isUula(pcc) && (sel.isEmpty || sel.text.trim() === (pcc.text || '').trim())) { styleCC(pcc, type); await ctx.sync(); return 'retag'; }
+    // the cursor (or a selection) inside a text box / shape: the whole box is tagged
+    let pb = null;
+    try { pb = sel.parentBody; pb.load('type'); await ctx.sync(); } catch (e) { pb = null; }
+    if (pb && pb.type && !['MainDoc', 'TableCell', 'Header', 'Footer', 'Section', 'Footnote', 'Endnote'].includes(pb.type)) {
+      const all = pb.getRange('Content'); all.load('text'); await ctx.sync();
+      const whole = sel.isEmpty || sel.text.trim().length >= all.text.trim().length - 1;
+      if (whole && all.text.trim()) {
+        const cc = all.insertContentControl(); styleCC(cc, type); await ctx.sync();
+        return 'box';
+      }
+    }
     if (sel.isEmpty || !sel.text.trim()) {
       // the cursor in a paragraph: that whole paragraph
       const ps = sel.paragraphs; ps.load('items/text'); await ctx.sync();
@@ -918,7 +929,7 @@ $('wroles').addEventListener('click', async e => {
   try {
     const r = await tagSelection(b.dataset.wrole);
     if (r === 'empty') say(L('حدّد المحتوى أولًا.', 'Select the content first.'));
-    else say((r === 'retag' ? L('تغيّر النوع إلى: ', 'Type changed to: ') : L('مُيّز كـ: ', 'Tagged as: ')) + wname(b.dataset.wrole));
+    else say((r === 'retag' ? L('تغيّر النوع إلى: ', 'Type changed to: ') : r === 'box' ? L('مُيّز مربع النص كاملًا كـ: ', 'The whole text box is tagged as: ') : L('مُيّز كـ: ', 'Tagged as: ')) + wname(b.dataset.wrole));
   } catch (er) { say(L('تعذّر التمييز: ', 'Could not tag: ') + errText(er)); }
   finally { busy = false; lock(); }
 });

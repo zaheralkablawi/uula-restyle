@@ -694,11 +694,14 @@ function styleTable(it, ctx, W) {
   const sol = rows.some(r => kids(r, 'tc', 'a').some(tc => /^(الحل|الإجابة|الاجابة)$/.test(cellText(tc)))) && !/شرط الحل/.test(textOf(tbl));
   const firstColHead = rows.length > 1 && rows.every(r => { const t = kids(r, 'tc', 'a')[0]; return t && cellText(t); }) && grid.length > 2 && !sol
     ? false : false;
+  // a header row has short labels; a table of statements (true / false, sentences) has none
+  const headRow = rows.length > 1 && kids(rows[0], 'tc', 'a').every(tc => cellText(tc).length <= 25 && !/[.؟?]\s*$/.test(cellText(tc)));
   rows.forEach((tr, ri) => {
     tr.setAttribute('h', '254000');
     kids(tr, 'tc', 'a').forEach((tc, ci) => {
       const txt = cellText(tc);
-      let fill = ri === 0 ? C.head : (ri % 2 ? 'FFFFFF' : C.alt), bold = ri === 0;
+      const head = headRow && ri === 0;
+      let fill = head ? C.head : ((ri + (headRow ? 0 : 1)) % 2 ? 'FFFFFF' : C.alt), bold = head;
       if (sol) {
         const ansRow = ri > 0;
         const solCol = kids(tr, 'tc', 'a').findIndex(x => /^(الحل|الإجابة|الاجابة|السؤال)$/.test(cellText(x)));
@@ -719,7 +722,8 @@ function styleTable(it, ctx, W) {
       const solCell = tc.getAttribute('data-ur-sol') === '1';
       for (const p of desc(tc, 'a', 'p')) {
         const ar = AR.test(paraText(p));
-        setPPr(p, { algn: 'ctr', rtl: ar });
+        // short labels and numbers in the middle; a sentence reads from its side
+        setPPr(p, { algn: !bold && paraText(p).trim().length > 30 ? (ar ? 'r' : 'l') : 'ctr', rtl: ar });
         const st = { sz: 1100, b: bold ? 1 : 0, c: solCell ? C.answer : '000000' };
         for (const r of desc(p, 'a', 'r')) { let rPr = kid(r, 'rPr', 'a'); if (!rPr) { rPr = mk(doc, 'a', 'rPr'); r.insertBefore(rPr, r.firstChild); } styleRPr(rPr, st, 'cell', null, false); if (solCell) rPr.removeAttribute('b'); }
         for (const rPr of desc(p, 'a', 'rPr').filter(inMath)) styleRPr(rPr, st, 'cell', null, true);

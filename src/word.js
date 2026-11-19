@@ -339,7 +339,24 @@ async function read(data, opts) {
       rows.push(row);
     }
     if (!rows.length) return;
-    const grid = [...(wk(tbl, 'tblGrid') || { children: [] }).children].filter(x => isW(x, 'gridCol')).map(g => +wa(g, 'w') || 1);
+    let grid = [...(wk(tbl, 'tblGrid') || { children: [] }).children].filter(x => isW(x, 'gridCol')).map(g => +wa(g, 'w') || 0);
+    // the cells' own widths are what Word shows (the grid can be stale): take them from the row with the most cells
+    const trs = [...tbl.children].filter(x => isW(x, 'tr'));
+    let best = null;
+    for (const tr of trs) {
+      const tcs = [...tr.children].filter(x => isW(x, 'tc'));
+      const ws = [];
+      let ok = true;
+      for (const tc of tcs) {
+        const pr = wk(tc, 'tcPr'), w = pr && wk(pr, 'tcW'), span = +(wa(wk(pr, 'gridSpan'), 'val') || 1);
+        const v = w ? +wa(w, 'w') : 0, ty = w ? wa(w, 'type') : '';
+        if (!v || !(ty === 'dxa' || ty === 'pct' || !ty)) { ok = false; break; }
+        for (let k = 0; k < span; k++) ws.push(v / span);
+      }
+      if (ok && ws.length && (!best || ws.length > best.length)) best = ws;
+    }
+    if (best && (!grid.length || best.length === grid.length)) grid = best;
+    if (!grid.length || grid.some(g => !g)) grid = grid.length ? grid.map(g => g || 1) : [];
     const pr = wk(tbl, 'tblPr');
     const rtl = !!(pr && wk(pr, 'bidiVisual'));
     units.push({ kind: 'table', role, tagged: !!role, rows, grid, rtl });
@@ -493,7 +510,7 @@ function tableX(u, name, x, y, w, h, ctx) {
   const ncol = u.grid.length || Math.max(...u.rows.map(r => r.reduce((s, c) => s + c.span, 0)));
   const tot = u.grid.length ? u.grid.reduce((a, b) => a + b, 0) : ncol;
   let cols = (u.grid.length ? u.grid : Array(ncol).fill(1)).map(g => Math.round(w * g / tot));
-  if (u.rtl) cols = cols.slice().reverse();
+  // the grid is in reading order in both Word and PowerPoint (rtl="1" shows the first column on the right): no reversing
   // vertical merges: rowSpan on the first cell, vMerge on the rest
   const grid = u.rows.map(r => { const cells = []; let ci = 0; for (const c of r) { cells.push(Object.assign({ ci }, c)); ci += c.span; } return cells; });
   grid.forEach((row, ri) => row.forEach(c => {

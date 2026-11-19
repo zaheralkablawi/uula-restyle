@@ -911,11 +911,14 @@ function styleTable(it, ctx, W) {
   const sol = rows.some(r => kids(r, 'tc', 'a').some(tc => /^(الحل|الإجابة|الاجابة)$/.test(cellText(tc)))) && !/شرط الحل/.test(textOf(tbl));
   const firstColHead = rows.length > 1 && rows.every(r => { const t = kids(r, 'tc', 'a')[0]; return t && cellText(t); }) && grid.length > 2 && !sol
     ? false : false;
+  // a header row has short labels; a table of statements (true / false, sentences) has none
+  const headRow = rows.length > 1 && kids(rows[0], 'tc', 'a').every(tc => cellText(tc).length <= 25 && !/[.؟?]\s*$/.test(cellText(tc)));
   rows.forEach((tr, ri) => {
     tr.setAttribute('h', '254000');
     kids(tr, 'tc', 'a').forEach((tc, ci) => {
       const txt = cellText(tc);
-      let fill = ri === 0 ? C.head : (ri % 2 ? 'FFFFFF' : C.alt), bold = ri === 0;
+      const head = headRow && ri === 0;
+      let fill = head ? C.head : ((ri + (headRow ? 0 : 1)) % 2 ? 'FFFFFF' : C.alt), bold = head;
       if (sol) {
         const ansRow = ri > 0;
         const solCol = kids(tr, 'tc', 'a').findIndex(x => /^(الحل|الإجابة|الاجابة|السؤال)$/.test(cellText(x)));
@@ -936,7 +939,8 @@ function styleTable(it, ctx, W) {
       const solCell = tc.getAttribute('data-ur-sol') === '1';
       for (const p of desc(tc, 'a', 'p')) {
         const ar = AR.test(paraText(p));
-        setPPr(p, { algn: 'ctr', rtl: ar });
+        // short labels and numbers in the middle; a sentence reads from its side
+        setPPr(p, { algn: !bold && paraText(p).trim().length > 30 ? (ar ? 'r' : 'l') : 'ctr', rtl: ar });
         const st = { sz: 1100, b: bold ? 1 : 0, c: solCell ? C.answer : '000000' };
         for (const r of desc(p, 'a', 'r')) { let rPr = kid(r, 'rPr', 'a'); if (!rPr) { rPr = mk(doc, 'a', 'rPr'); r.insertBefore(rPr, r.firstChild); } styleRPr(rPr, st, 'cell', null, false); if (solCell) rPr.removeAttribute('b'); }
         for (const rPr of desc(p, 'a', 'rPr').filter(inMath)) styleRPr(rPr, st, 'cell', null, true);
@@ -2715,7 +2719,24 @@ async function read(data, opts) {
       rows.push(row);
     }
     if (!rows.length) return;
-    const grid = [...(wk(tbl, 'tblGrid') || { children: [] }).children].filter(x => isW(x, 'gridCol')).map(g => +wa(g, 'w') || 1);
+    let grid = [...(wk(tbl, 'tblGrid') || { children: [] }).children].filter(x => isW(x, 'gridCol')).map(g => +wa(g, 'w') || 0);
+    // the cells' own widths are what Word shows (the grid can be stale): take them from the row with the most cells
+    const trs = [...tbl.children].filter(x => isW(x, 'tr'));
+    let best = null;
+    for (const tr of trs) {
+      const tcs = [...tr.children].filter(x => isW(x, 'tc'));
+      const ws = [];
+      let ok = true;
+      for (const tc of tcs) {
+        const pr = wk(tc, 'tcPr'), w = pr && wk(pr, 'tcW'), span = +(wa(wk(pr, 'gridSpan'), 'val') || 1);
+        const v = w ? +wa(w, 'w') : 0, ty = w ? wa(w, 'type') : '';
+        if (!v || !(ty === 'dxa' || ty === 'pct' || !ty)) { ok = false; break; }
+        for (let k = 0; k < span; k++) ws.push(v / span);
+      }
+      if (ok && ws.length && (!best || ws.length > best.length)) best = ws;
+    }
+    if (best && (!grid.length || best.length === grid.length)) grid = best;
+    if (!grid.length || grid.some(g => !g)) grid = grid.length ? grid.map(g => g || 1) : [];
     const pr = wk(tbl, 'tblPr');
     const rtl = !!(pr && wk(pr, 'bidiVisual'));
     units.push({ kind: 'table', role, tagged: !!role, rows, grid, rtl });
@@ -2869,7 +2890,7 @@ function tableX(u, name, x, y, w, h, ctx) {
   const ncol = u.grid.length || Math.max(...u.rows.map(r => r.reduce((s, c) => s + c.span, 0)));
   const tot = u.grid.length ? u.grid.reduce((a, b) => a + b, 0) : ncol;
   let cols = (u.grid.length ? u.grid : Array(ncol).fill(1)).map(g => Math.round(w * g / tot));
-  if (u.rtl) cols = cols.slice().reverse();
+  // the grid is in reading order in both Word and PowerPoint (rtl="1" shows the first column on the right): no reversing
   // vertical merges: rowSpan on the first cell, vMerge on the rest
   const grid = u.rows.map(r => { const cells = []; let ci = 0; for (const c of r) { cells.push(Object.assign({ ci }, c)); ci += c.span; } return cells; });
   grid.forEach((row, ri) => row.forEach(c => {

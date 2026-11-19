@@ -2578,7 +2578,7 @@ async function read(data, opts) {
             else if (kn === 'br' && wa(k, 'type') !== 'page') out += '<a:br><a:rPr lang="ar-SA"/></a:br>';
             else if (kn === 'sym') { const ch = wa(k, 'char'); if (ch) { const s = String.fromCharCode(parseInt(ch, 16) > 0xF000 ? parseInt(ch, 16) - 0xF000 : parseInt(ch, 16)); out += runX(s, st); text += s; } }
             else if (kn === 'noBreakHyphen') { out += runX('-', st); text += '-'; }
-            else if (kn === 'drawing' || kn === 'AlternateContent') { const pc = picOf(k); if (pc) pics.push(pc); }
+            else if (kn === 'drawing' || kn === 'AlternateContent') pics.push(...picsOf(k));
             else if (kn === 'object' || kn === 'pict') { const pc = vmlPic(k); if (pc) { pc.obj = kn === 'object'; pics.push(pc); } }
           }
         } else if (ns === M_NS && (ln === 'oMath' || ln === 'oMathPara')) {
@@ -2614,14 +2614,38 @@ async function read(data, opts) {
     if (va === 'superscript') st.base = 30000; else if (va === 'subscript') st.base = -25000;
     return st;
   }
-  function picOf(el) {
-    const blip = el.getElementsByTagNameNS(A_NS, 'blip')[0];
-    if (!blip) return null;
-    const rid = blip.getAttributeNS(R_NS, 'embed') || blip.getAttribute('r:embed');
-    const m = mediaOf(rid); if (!m) return null;
+  // every picture of a drawing, with its crop, rotation and flips (groups and shapes filled with a picture too)
+  function picsOf(el) {
+    const out = [];
+    const blips = [...el.getElementsByTagNameNS(A_NS, 'blip')];
+    if (!blips.length) return out;
     const ext = el.getElementsByTagNameNS(WP_NS, 'extent')[0];
-    const anchor = el.getElementsByTagNameNS(WP_NS, 'anchor')[0];
-    return { media: m, cx: ext ? +ext.getAttribute('cx') : 2000000, cy: ext ? +ext.getAttribute('cy') : 1500000, floating: !!anchor };
+    const W0 = ext ? +ext.getAttribute('cx') : 0, H0 = ext ? +ext.getAttribute('cy') : 0;
+    const grp = [...el.getElementsByTagName('*')].find(e => e.localName === 'grpSpPr' || e.localName === 'wgp');
+    let sx = 1, sy = 1;
+    if (grp) {
+      const gx = [...el.getElementsByTagNameNS(A_NS, 'chExt')][0];
+      if (gx && W0) { sx = W0 / Math.max(1, +gx.getAttribute('cx')); sy = H0 / Math.max(1, +gx.getAttribute('cy')); }
+    }
+    for (const blip of blips) {
+      const rid = blip.getAttributeNS(R_NS, 'embed') || blip.getAttribute('r:embed');
+      const m = mediaOf(rid); if (!m) continue;
+      const fill = blip.parentNode;
+      const src = [...fill.children].find(k => k.localName === 'srcRect');
+      const crop = src ? ['l', 't', 'r', 'b'].reduce((o, k) => { const v = +(src.getAttribute(k) || 0); if (v) o[k] = v; return o; }, {}) : null;
+      // the shape that holds the picture: its own size, rotation and flips
+      let host = fill.parentNode;
+      while (host && host !== el && ![...host.children].some(k => k.localName === 'spPr')) host = host.parentNode;
+      const spPr = host && host !== el ? [...host.children].find(k => k.localName === 'spPr') : null;
+      const xf = spPr ? [...spPr.children].find(k => k.localName === 'xfrm') : null;
+      const xe = xf ? [...xf.children].find(k => k.localName === 'ext') : null;
+      let cx = W0, cy = H0;
+      if ((blips.length > 1 || grp || !W0) && xe) { cx = Math.round(+xe.getAttribute('cx') * sx); cy = Math.round(+xe.getAttribute('cy') * sy); }
+      if (!cx || !cy) { cx = cx || 2000000; cy = cy || 1500000; }
+      out.push({ media: m, cx, cy, crop: crop && Object.keys(crop).length ? crop : null,
+        rot: xf ? +(xf.getAttribute('rot') || 0) : 0, flipH: xf && xf.getAttribute('flipH') === '1', flipV: xf && xf.getAttribute('flipV') === '1' });
+    }
+    return out;
   }
   function vmlPic(el) {
     const im = el.getElementsByTagNameNS(V_NS, 'imagedata')[0];
@@ -2643,7 +2667,7 @@ async function read(data, opts) {
       const small = pc.cy < 34 * PT && c.text.trim();
       if (small && pc.obj) report.inlineObj++;
       const pr = role === 'figure' ? null : ['question', 'choice', 'qhead', 'given'].includes(role) ? 'given' : role;
-      return { kind: 'pic', role: pr, tagged: !!role, media: pc.media, cx: pc.cx, cy: pc.cy, inline: !!small };
+      return { kind: 'pic', role: pr, tagged: !!role, media: pc.media, cx: pc.cx, cy: pc.cy, crop: pc.crop, rot: pc.rot, flipH: pc.flipH, flipV: pc.flipV, inline: !!small };
     });
     if (c.inlineSplits.length) {
       // text before | tagged inline part | text after (each its own box)
@@ -2788,11 +2812,11 @@ function shapes(units, ctx) {
         const tw = CW - w - 2 * 13 * PT;
         prev.xml = prev.xml.replace(/<a:off x="\d+" y="(\d+)"\/><a:ext cx="\d+"/, (m, yy) => '<a:off x="' + (X0 + w + 2 * 13 * PT) + '" y="' + yy + '"/><a:ext cx="' + tw + '"');
         prev.side = true;
-        out.push({ y: prev.y, h, xml: picSp(nm(u, 'Picture'), rid, X0, prev.y, w, h), side: true });
+        out.push({ y: prev.y, h, xml: picSp(nm(u, 'Picture'), rid, X0, prev.y, w, h, u), side: true });
         y = Math.max(y, prev.y + h + 2 * 13 * PT);
       } else {
         const x = X0 + Math.round((CW - w) / 2);
-        out.push({ y, h, xml: picSp(nm(u, 'Picture'), rid, x, y, w, h) });
+        out.push({ y, h, xml: picSp(nm(u, 'Picture'), rid, x, y, w, h, u) });
         y += h + 2 * 13 * PT;
       }
     } else if (u.kind === 'table') {
@@ -2832,10 +2856,14 @@ function textSp(u, name, x, y, w, h, ctx) {
   if (!u.math) return sp(false);
   return '<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:a14="http://schemas.microsoft.com/office/drawing/2010/main"><mc:Choice Requires="a14">' + sp(true) + '</mc:Choice><mc:Fallback>' + sp(false) + '</mc:Fallback></mc:AlternateContent>';
 }
-function picSp(name, rid, x, y, w, h) {
+function picSp(name, rid, x, y, w, h, u) {
+  u = u || {};
+  const c = u.crop;
+  const src = c ? '<a:srcRect' + ['l', 't', 'r', 'b'].map(k => c[k] ? ' ' + k + '="' + c[k] + '"' : '').join('') + '/>' : '';
+  const xa = (u.rot ? ' rot="' + u.rot + '"' : '') + (u.flipH ? ' flipH="1"' : '') + (u.flipV ? ' flipV="1"' : '');
   return '<p:pic><p:nvPicPr><p:cNvPr id="0" name="' + xe(name) + '"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr>'
-    + '<p:blipFill><a:blip r:embed="' + rid + '"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>'
-    + '<p:spPr><a:xfrm><a:off x="' + x + '" y="' + y + '"/><a:ext cx="' + w + '" cy="' + h + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>';
+    + '<p:blipFill><a:blip r:embed="' + rid + '"/>' + src + '<a:stretch><a:fillRect/></a:stretch></p:blipFill>'
+    + '<p:spPr><a:xfrm' + xa + '><a:off x="' + x + '" y="' + y + '"/><a:ext cx="' + w + '" cy="' + h + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>';
 }
 function tableX(u, name, x, y, w, h, ctx) {
   const ncol = u.grid.length || Math.max(...u.rows.map(r => r.reduce((s, c) => s + c.span, 0)));

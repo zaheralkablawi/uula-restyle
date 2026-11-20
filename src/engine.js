@@ -1489,6 +1489,19 @@ function reflow(rects, group, opts) {
 // rects: [{ key, x, y, w, h, fixed, box }] in EMU. Nothing moves sideways: each object keeps its x,
 // rows of objects side by side keep their arrangement, and between rows there are two grid steps
 // (objects that were touching stay touching). Containers keep one line above and two below their content.
+// for "distribute": which top-level objects start a question (the Q bullet, a "UULA:question" name, or question words)
+function questionFlags(pkg) {
+  const doc = parseXml(pkg.files.slide);
+  return topItems(doc).map(el => {
+    const c = core(el), n = cnvOf(c), name = n ? n.getAttribute('name') || '' : '';
+    if (/^UULA:question/.test(name)) return true;
+    if (desc(c, 'a', 'buChar').some(b => b.getAttribute('char') === 'Q')) return true;
+    const p = desc(c, 'a', 'p')[0];
+    const tx = p ? desc(p, 'a', 't').map(x => x.textContent).join('') : '';
+    return !!tx && Q_START.test(tx) && /[؟?:]\s*$|المطلوب/.test(tx);
+  });
+}
+
 function spacing(rects, W, H) {
   const free = rects.filter(r => !r.fixed);
   const inside = (o, b) => { const cx = o.x + o.w / 2, cy = o.y + o.h / 2; return cx >= b.x && cx <= b.x + b.w && cy >= b.y && cy <= b.y + b.h; };
@@ -1615,9 +1628,25 @@ function wrapBox(pkg, type) {
   NEXT = maxId(doc) + 1;
   const spTree = spTreeOf(doc);
   const all = topItems(doc).map((el, i) => { const c = core(el), n = cnvOf(c); return { i, el, c, name: n ? n.getAttribute('name') || '' : '', g: geomOf(el, pkg) || { x: 0, y: 0, w: 0, h: 0 } }; });
-  const sel = all.filter(t => / #ursel$/.test(t.name));
+  let sel = all.filter(t => / #ursel$/.test(t.name));
   if (!sel.length) throw new Error('nosel');
   for (const t of sel) for (const c of allCores(t.el)) { const n = cnvOf(c); if (n) n.setAttribute('name', (n.getAttribute('name') || '').replace(/ #ursel$/, '')); }
+  // the old frames of what is selected go: a frame (with its icon and line) whose content is all in the selection
+  const deco = t => /^UULA .*(Container|Icon|Container Line)( #ur\d+)?( #ursel)?$/.test(t.name);
+  const inside = (a, b) => { const cx = a.g.x + a.g.w / 2, cy = a.g.y + a.g.h / 2; return cx >= b.g.x && cx <= b.g.x + b.g.w && cy >= b.g.y && cy <= b.g.y + b.g.h; };
+  const content = sel.filter(t => !deco(t));
+  if (content.length) {
+    const gone = new Set(sel.filter(deco));
+    for (const card of all.filter(t => / Container( #ur\d+)?$/.test(t.name.replace(/ #ursel$/, '')))) {
+      const held = all.filter(o => o !== card && !deco(o) && inside(o, card));
+      if (held.length && held.every(o => content.includes(o))) {
+        gone.add(card);
+        for (const d of all) if (d !== card && deco(d) && !/ Container( #ur\d+)?$/.test(d.name) && inside(d, card)) gone.add(d);
+      }
+    }
+    for (const t of gone) if (t.el.parentNode) t.el.parentNode.removeChild(t.el);
+    sel = content;
+  }
   const B = type === 'cancelled' ? { name: 'Cancelled', frame: 'FFC000' } : type === 'practice' ? { name: 'Practice', grad: true } : BOX[type];
   let x0 = Math.min(...sel.map(t => t.g.x)), x1 = Math.max(...sel.map(t => t.g.x + t.g.w));
   const y0 = Math.min(...sel.map(t => t.g.y)), y1 = Math.max(...sel.map(t => t.g.y + t.g.h));
@@ -1942,6 +1971,7 @@ function splitPoint(plan, lay) {
 }
 
 return {
+  questionFlags,
   NS, PT, ROW, M, FOOT, C, STY, BOX, openPackage, buildPackage, parseXml, serialize, restyle, layout, applyLayout, splitParts, splitPoint, markNames, MARK, applyRole, wrapBox, WRAP, reflow, spacing, align, findSolutions, hideSolutions, showSolutions, hasSolutions, TEXT_ROLES, BOX_ROLES, G, Y0, snapUp, snapX,
   // used by the templates module
   util: { pX, txX, boxX, gradBoxX, picX, pillX, pillW, lineX, tableX, makeRels, frag, topItems, core, cnvOf, maxId, spTreeOf, kid, kids, desc, xfrmOf, geomOf, setNext: n => { NEXT = n; }, yearText, pageNumX, estimateText, iconW, iconH }

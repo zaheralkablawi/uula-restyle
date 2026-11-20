@@ -1743,8 +1743,46 @@ function findSolutions(pkg) {
   }
   return found;
 }
-function hideSolutions(pkg, grids) {
-  grids = grids || {};
+// empty writing lines in the place of a hidden solution box (one group, removed again by showSolutions)
+// g: the box; ys (optional): the y of each line, else one under every text line of the box
+function writingLines(doc, g, ys) {
+  const x = Math.round(g.x), w = Math.round(g.w), top = Math.round(g.y);
+  if (!ys) { const n = Math.max(1, Math.round((g.h - 7.2 * PT) / ROW)); ys = []; for (let k = 1; k <= n; k++) ys.push(top + Math.round(3.6 * PT) + k * ROW); }
+  if (!ys.length) return null;
+  const y0 = ys[0], hh = Math.max(1, ys[ys.length - 1] - y0);
+  let lines = '';
+  ys.forEach((y, k) => {
+    lines += '<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="' + (NEXT++) + '" name="UULA SolLine ' + (k + 1) + '"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>'
+      + '<p:spPr><a:xfrm><a:off x="' + x + '" y="' + y + '"/><a:ext cx="' + w + '" cy="0"/></a:xfrm><a:prstGeom prst="line"><a:avLst/></a:prstGeom>'
+      + '<a:ln w="9525"><a:solidFill><a:srgbClr val="A6A6A6"/></a:solidFill></a:ln></p:spPr></p:cxnSp>';
+  });
+  return frag(doc, '<p:grpSp><p:nvGrpSpPr><p:cNvPr id="' + (NEXT++) + '" name="UULA SolView Lines"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>'
+    + '<p:grpSpPr><a:xfrm><a:off x="' + x + '" y="' + y0 + '"/><a:ext cx="' + w + '" cy="' + hh + '"/><a:chOff x="' + x + '" y="' + y0 + '"/><a:chExt cx="' + w + '" cy="' + hh + '"/></a:xfrm></p:grpSpPr>'
+    + lines + '</p:grpSp>');
+}
+let MEASURE = null;
+function paraLines(p, boxW) {
+  const sz = (runSz(p) || 1100) / 100;                      // pt
+  const room = Math.max(20, boxW / PT - 14.4);
+  // the paragraph's lines: a line break (Shift+Enter) starts a new one, long text wraps
+  const segs = [''];
+  for (const c of p.children) {
+    if (c.localName === 'br') segs.push('');
+    else if (c.localName !== 'pPr' && c.localName !== 'endParaRPr') segs[segs.length - 1] += [...c.getElementsByTagNameNS(NS.a, 't'), ...c.getElementsByTagNameNS(NS.m, 't')].map(t => t.textContent).join('');
+  }
+  let n = 0;
+  for (const txt of segs) {
+    let wd = txt.trim().length * sz * 0.5;
+    try {
+      if (!MEASURE) MEASURE = document.createElement('canvas').getContext('2d');
+      MEASURE.font = sz + 'px "UULA Sans", Arial, sans-serif'; wd = MEASURE.measureText(txt.trim()).width;
+    } catch (e) {}
+    n += Math.max(1, Math.ceil(wd / room));
+  }
+  return Math.max(1, n);
+}
+function hideSolutions(pkg, grids, opts) {
+  grids = grids || {}; opts = opts || {};
   const W = pkg.slideW;
   const doc = parseXml(pkg.files.slide);
   const ctx = { scheme: readTheme(pkg.files), bodySz: 1100 };
@@ -1759,6 +1797,16 @@ function hideSolutions(pkg, grids) {
     n++;
     const view = f.how === 'hide' ? null : t.el.cloneNode(true);
     for (const c of allCores(t.el)) { const nv = cnvOf(c); if (nv) { nv.setAttribute('hidden', '1'); nv.setAttribute('name', 'UULA SolHidden ' + (nv.getAttribute('name') || '')); } }
+    if (!view && opts.lines && t.kind === 'text') {
+      // one line under every text line: counted from the text itself (the box can be shorter than its text)
+      const ps = kids(kid(t.c, 'txBody', 'p'), 'p', 'a');
+      let n = 0; for (const p of ps) n += paraLines(p, t.g.w);
+      while (ps.length && n > 1 && !paraText(ps[ps.length - 1]).trim()) { n--; ps.pop(); }   // empty paragraphs at the end
+      n = Math.max(n, Math.round((t.g.h - 7.2 * PT) / ROW), 1);
+      const top = Math.round(t.g.y) + Math.round(3.6 * PT), ys = [];
+      for (let k = 1; k <= n; k++) ys.push(top + k * ROW);
+      const lg = writingLines(doc, t.g, ys); if (lg) t.el.parentNode.insertBefore(lg, t.el.nextSibling);
+    }
     if (!view) continue;
     for (const c of allCores(view)) { const nv = cnvOf(c); if (nv) { nv.setAttribute('id', String(NEXT++)); nv.setAttribute('name', 'UULA SolView ' + (nv.getAttribute('name') || '')); nv.removeAttribute('hidden'); } }
     const vt = { c: core(view), el: view, text: t.text, g: t.g, box: null, ph: null };
@@ -1788,6 +1836,17 @@ function hideSolutions(pkg, grids) {
         else { placeChild(pr, solid(doc, '000000'), RPR_ORDER); pr.setAttribute('b', '0'); }
       }
       for (const tn of [...desc(view, 'a', 't'), ...desc(view, 'm', 't')]) tn.textContent = [...tn.textContent].map(NEG).join('');
+      // a grey line under every line that disappeared (whole answer paragraphs)
+      if (opts.lines && !f.correct) {
+        let at = 0; const ys = [], top = Math.round(t.g.y) + Math.round(3.6 * PT);
+        for (const r of roles) {
+          const nl = paraLines(r.p, t.g.w);
+          if (r.text && r.role === 'answer') for (let k = 1; k <= nl; k++) ys.push(top + (at + k) * ROW);
+          at += nl;
+        }
+        const lg = ys.length && writingLines(doc, t.g, ys);
+        if (lg) t.el.parentNode.insertBefore(lg, t.el.nextSibling);
+      }
     } else if (t.kind === 'table') {
       for (const tr of desc(view, 'a', 'tr')) {
         const tcs = kids(tr, 'tc', 'a');

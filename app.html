@@ -72,7 +72,7 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
 .mbox{background:var(--panel);border-radius:12px;max-width:420px;width:100%;max-height:80vh;overflow:auto;padding:14px 16px;box-shadow:0 16px 40px rgb(0 0 0 / .3)}
 .mbox h3{margin:0 0 8px;font-size:1rem}.mbox p{margin:6px 0}.mbox ul{margin:6px 0;padding-inline-start:1.2em}
 .mbox .foot{text-align:center;color:var(--muted);font-size:.8rem;margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
-.tabs{display:grid;grid-template-columns:repeat(5,1fr);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px}
+.tabs{display:grid;grid-template-columns:repeat(3,1fr);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px}
 .tabs button{font:inherit;font-size:.68rem;border:0;background:none;color:var(--muted);border-radius:7px;padding:4px 2px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1.2}
 .tabs button:hover{color:var(--accent)}
 .tabs button[aria-selected="true"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
@@ -91,6 +91,14 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
 .wsum span{font-size:.7rem;border-radius:10px;padding:0 7px;background:var(--bg);border:1px solid var(--line)}
 .btnrow{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .credit{text-align:center;font-size:.72rem;color:var(--muted);padding:6px 0 0}
+.splab.gt2{font-size:.84rem;font-weight:600;color:var(--ink)}
+/* compact buttons */
+.big{height:28px;font-size:.84rem;font-weight:600;border-radius:7px;padding:0 20px;justify-self:start;min-width:120px}
+.sec{height:24px;font-size:.76rem;border-radius:6px;padding:0 10px;justify-self:start}
+.sec svg{width:14px;height:14px}
+.seg{border-radius:6px}.seg button{height:24px;font-size:.76rem}
+.sprow{grid-template-columns:auto auto auto;justify-content:start}
+.sprow2{grid-template-columns:auto auto;justify-content:start}.sprow2 .seg3{width:186px}
 </style></head><body>
 <div class="wrap">
   <header dir="rtl">
@@ -107,9 +115,7 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
   </header>
 
   <nav class="tabs" id="tabs" role="tablist">
-    <button type="button" role="tab" data-tab="conv" aria-selected="true"><svg viewBox="0 0 20 20" width="15" height="15" fill="currentColor"><path d="M10 2.5l1.7 4.6 4.8 1.8-4.8 1.8L10 15.5l-1.7-4.8-4.8-1.8 4.8-1.8z"/></svg><span data-en="Restyle">تحويل</span></button>
-    <button type="button" role="tab" data-tab="obj" aria-selected="false"><svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M4 3l11 6-5 1.5L8 16z"/></svg><span data-en="Format">تنسيق</span></button>
-    <button type="button" role="tab" data-tab="spc" aria-selected="false"><svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M10 3v14M7 5.5 10 2.8l3 2.7M7 14.5l3 2.7 3-2.7M3 10h3M14 10h3"/></svg><span data-en="Spacing">تنسيق المسافات</span></button>
+    <button type="button" role="tab" data-tab="obj" aria-selected="true"><svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M4 3l11 6-5 1.5L8 16z"/></svg><span data-en="Format">تنسيق</span></button>
     <button type="button" role="tab" data-tab="ins" aria-selected="false"><svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="14" height="5" rx="1.2"/><rect x="3" y="10" width="6" height="7" rx="1.2"/><rect x="11" y="10" width="6" height="7" rx="1.2"/></svg><span data-en="Insert">إدراج</span></button>
     <button type="button" role="tab" data-tab="set" aria-selected="false"><svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="2.6"/><path d="M10 2.5v2.2M10 15.3v2.2M2.5 10h2.2M15.3 10h2.2M4.7 4.7l1.6 1.6M13.7 13.7l1.6 1.6M4.7 15.3l1.6-1.6M13.7 6.3l1.6-1.6"/></svg><span data-en="Options">الخيارات</span></button>
   </nav>
@@ -119,25 +125,20 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
   </nav>
 
 
-  <section class="panel" data-pane="conv">
+
+  <section class="panel" data-pane="obj">
     <div class="seg scopeSeg">
       <button type="button" data-v="cur" aria-pressed="true" data-en="Current slide">الشريحة الحالية</button>
       <button type="button" data-v="all" aria-pressed="false" data-en="All slides">كل الشرائح</button>
     </div>
-    <button type="button" class="big" id="goBtn" data-en="Restyle">تحويل</button>
-  </section>
-
-  <section class="panel" data-pane="obj" hidden>
+    <span class="gt2" data-en="Convert the font">تحويل الخط</span>
+    <span class="note" data-en="Converts the font to the UULA font">تحويل الخط إلى خط علا</span>
+    <button type="button" class="big" id="goBtn" data-en="Convert">تحويل</button>
+    <div class="sep"></div>
     <span class="note" data-en="Select a box on the slide, then pick what it is.">حدّد مربعًا في الشريحة، ثم اختر نوعه.</span>
     <div id="roles" style="display:grid;gap:4px"></div>
-  </section>
-
-  <section class="panel" data-pane="spc" hidden>
-    <div class="seg scopeSeg">
-      <button type="button" data-v="cur" aria-pressed="true" data-en="Current slide">الشريحة الحالية</button>
-      <button type="button" data-v="all" aria-pressed="false" data-en="All slides">كل الشرائح</button>
-    </div>
-    <div class="sprow"><span class="splab" data-en="Spacing">تنسيق المسافات</span>
+    <div class="sep"></div>
+    <div class="sprow"><span class="splab gt2" data-en="Spacing">تنسيق المسافات</span>
       <button type="button" class="sec" id="spV" data-ar-title="ضبط المسافات بين الكائنات من الأعلى والأسفل" data-en-title="Fix the vertical gaps between objects"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 2v12M5 4.5 8 1.8l3 2.7M5 11.5 8 14.2l3-2.7"/></svg><span data-en="Vertical">رأسي</span></button>
       <button type="button" class="sec" id="spH" data-ar-title="محاذاة الكائنات إلى اليمين أو اليسار" data-en-title="Align objects to the right or left"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 8h12M4.5 5 1.8 8l2.7 3M11.5 5l2.7 3-2.7 3"/></svg><span data-en="Horizontal">أفقي</span></button>
     </div>
@@ -147,6 +148,7 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
       <button type="button" data-v="left" aria-pressed="false" data-en="Left">يسار</button>
     </div></div>
   </section>
+
 
   <section class="panel" data-pane="ins" hidden>
     <button type="button" class="sec" id="docxBtn" data-ar-title="كل جزء مميز في ملف الوورد يصبح مربعًا مستقلًا بستايل علا" data-en-title="Every tagged part of the Word file becomes its own UULA box"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3.5 1.5h6l3 3v10h-9z"/><path d="M5.5 7.5l1 4 1.5-3 1.5 3 1-4" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-en="Insert a Word file…">إدراج ملف وورد…</span></button>
@@ -162,10 +164,14 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
       <button type="button" data-v="all" aria-pressed="false" data-en="All slides">كل الشرائح</button>
     </div>
     <button type="button" class="sec" id="solBtn"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/><path id="solSlash" d="M2.5 13.5l11-11"/></svg><span id="solLbl">إخفاء الحلول</span></button>
+    <div class="sprow2"><span class="splab" data-en="Solution space">مكان الحل</span><div class="seg" id="solLines" style="width:186px">
+      <button type="button" data-v="0" aria-pressed="true" data-en="No lines">بدون سطور</button>
+      <button type="button" data-v="1" aria-pressed="false" data-en="Lines">سطور للكتابة</button>
+    </div></div>
     <div class="sep"></div>
     <label class="chk"><input type="checkbox" id="numChk" checked> <span data-en="Page numbers">ترقيم الصفحات</span></label>
     <div class="row" id="numRow"><span style="font-size:.82rem" data-en="Numbering starts at slide">يبدأ الترقيم من الشريحة</span><span style="display:flex;gap:6px;align-items:center"><input type="number" min="1" class="num" id="numStart" value="1"><button type="button" class="mini" id="numHere" data-en="Current">الحالية</button></span></div>
-    <button type="button" class="mini" id="numAll" style="justify-self:start" data-en="Update page numbers now">تحديث أرقام الصفحات الآن</button>
+    <div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="mini" id="numAll" data-en="Update page numbers now">تحديث أرقام الصفحات الآن</button><button type="button" class="mini" id="numDel" data-en="Delete page numbers">حذف أرقام الصفحات</button></div>
     <span class="note" data-en="The background, watermark and footer come from the slide layout; the tool leaves them as they are.">الخلفية والعلامة المائية والتذييل تأتي من تخطيط الشريحة (Layout)، والأداة لا تغيّرها.</span>
   </section>
 
@@ -1960,8 +1966,46 @@ function findSolutions(pkg) {
   }
   return found;
 }
-function hideSolutions(pkg, grids) {
-  grids = grids || {};
+// empty writing lines in the place of a hidden solution box (one group, removed again by showSolutions)
+// g: the box; ys (optional): the y of each line, else one under every text line of the box
+function writingLines(doc, g, ys) {
+  const x = Math.round(g.x), w = Math.round(g.w), top = Math.round(g.y);
+  if (!ys) { const n = Math.max(1, Math.round((g.h - 7.2 * PT) / ROW)); ys = []; for (let k = 1; k <= n; k++) ys.push(top + Math.round(3.6 * PT) + k * ROW); }
+  if (!ys.length) return null;
+  const y0 = ys[0], hh = Math.max(1, ys[ys.length - 1] - y0);
+  let lines = '';
+  ys.forEach((y, k) => {
+    lines += '<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="' + (NEXT++) + '" name="UULA SolLine ' + (k + 1) + '"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>'
+      + '<p:spPr><a:xfrm><a:off x="' + x + '" y="' + y + '"/><a:ext cx="' + w + '" cy="0"/></a:xfrm><a:prstGeom prst="line"><a:avLst/></a:prstGeom>'
+      + '<a:ln w="9525"><a:solidFill><a:srgbClr val="A6A6A6"/></a:solidFill></a:ln></p:spPr></p:cxnSp>';
+  });
+  return frag(doc, '<p:grpSp><p:nvGrpSpPr><p:cNvPr id="' + (NEXT++) + '" name="UULA SolView Lines"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>'
+    + '<p:grpSpPr><a:xfrm><a:off x="' + x + '" y="' + y0 + '"/><a:ext cx="' + w + '" cy="' + hh + '"/><a:chOff x="' + x + '" y="' + y0 + '"/><a:chExt cx="' + w + '" cy="' + hh + '"/></a:xfrm></p:grpSpPr>'
+    + lines + '</p:grpSp>');
+}
+let MEASURE = null;
+function paraLines(p, boxW) {
+  const sz = (runSz(p) || 1100) / 100;                      // pt
+  const room = Math.max(20, boxW / PT - 14.4);
+  // the paragraph's lines: a line break (Shift+Enter) starts a new one, long text wraps
+  const segs = [''];
+  for (const c of p.children) {
+    if (c.localName === 'br') segs.push('');
+    else if (c.localName !== 'pPr' && c.localName !== 'endParaRPr') segs[segs.length - 1] += [...c.getElementsByTagNameNS(NS.a, 't'), ...c.getElementsByTagNameNS(NS.m, 't')].map(t => t.textContent).join('');
+  }
+  let n = 0;
+  for (const txt of segs) {
+    let wd = txt.trim().length * sz * 0.5;
+    try {
+      if (!MEASURE) MEASURE = document.createElement('canvas').getContext('2d');
+      MEASURE.font = sz + 'px "UULA Sans", Arial, sans-serif'; wd = MEASURE.measureText(txt.trim()).width;
+    } catch (e) {}
+    n += Math.max(1, Math.ceil(wd / room));
+  }
+  return Math.max(1, n);
+}
+function hideSolutions(pkg, grids, opts) {
+  grids = grids || {}; opts = opts || {};
   const W = pkg.slideW;
   const doc = parseXml(pkg.files.slide);
   const ctx = { scheme: readTheme(pkg.files), bodySz: 1100 };
@@ -1976,6 +2020,16 @@ function hideSolutions(pkg, grids) {
     n++;
     const view = f.how === 'hide' ? null : t.el.cloneNode(true);
     for (const c of allCores(t.el)) { const nv = cnvOf(c); if (nv) { nv.setAttribute('hidden', '1'); nv.setAttribute('name', 'UULA SolHidden ' + (nv.getAttribute('name') || '')); } }
+    if (!view && opts.lines && t.kind === 'text') {
+      // one line under every text line: counted from the text itself (the box can be shorter than its text)
+      const ps = kids(kid(t.c, 'txBody', 'p'), 'p', 'a');
+      let n = 0; for (const p of ps) n += paraLines(p, t.g.w);
+      while (ps.length && n > 1 && !paraText(ps[ps.length - 1]).trim()) { n--; ps.pop(); }   // empty paragraphs at the end
+      n = Math.max(n, Math.round((t.g.h - 7.2 * PT) / ROW), 1);
+      const top = Math.round(t.g.y) + Math.round(3.6 * PT), ys = [];
+      for (let k = 1; k <= n; k++) ys.push(top + k * ROW);
+      const lg = writingLines(doc, t.g, ys); if (lg) t.el.parentNode.insertBefore(lg, t.el.nextSibling);
+    }
     if (!view) continue;
     for (const c of allCores(view)) { const nv = cnvOf(c); if (nv) { nv.setAttribute('id', String(NEXT++)); nv.setAttribute('name', 'UULA SolView ' + (nv.getAttribute('name') || '')); nv.removeAttribute('hidden'); } }
     const vt = { c: core(view), el: view, text: t.text, g: t.g, box: null, ph: null };
@@ -2005,6 +2059,17 @@ function hideSolutions(pkg, grids) {
         else { placeChild(pr, solid(doc, '000000'), RPR_ORDER); pr.setAttribute('b', '0'); }
       }
       for (const tn of [...desc(view, 'a', 't'), ...desc(view, 'm', 't')]) tn.textContent = [...tn.textContent].map(NEG).join('');
+      // a grey line under every line that disappeared (whole answer paragraphs)
+      if (opts.lines && !f.correct) {
+        let at = 0; const ys = [], top = Math.round(t.g.y) + Math.round(3.6 * PT);
+        for (const r of roles) {
+          const nl = paraLines(r.p, t.g.w);
+          if (r.text && r.role === 'answer') for (let k = 1; k <= nl; k++) ys.push(top + (at + k) * ROW);
+          at += nl;
+        }
+        const lg = ys.length && writingLines(doc, t.g, ys);
+        if (lg) t.el.parentNode.insertBefore(lg, t.el.nextSibling);
+      }
     } else if (t.kind === 'table') {
       for (const tr of desc(view, 'a', 'tr')) {
         const tcs = kids(tr, 'tc', 'a');
@@ -2146,12 +2211,12 @@ const LIST = [
   { g: 'أسئلة', id: 'mcq', name: 'اختيار متعدد', en: 'Choices', full: 'اختيار من متعدد' },
   { g: 'أسئلة', id: 'problem', name: 'مسألة', en: 'Problem', full: 'مسألة: معطيات وقانون وحل' },
   { g: 'أسئلة', id: 'other', name: 'صيغة أخرى', en: 'Other form', full: 'السؤال بصيغة أخرى' },
-  { g: 'حاويات', id: 'note', name: 'ملاحظة', en: 'Note', full: 'ملاحظة مهمة' },
-  { g: 'حاويات', id: 'quote', name: 'نص مقتطف', en: 'Quote' },
-  { g: 'حاويات', id: 'formula', name: 'قوانين', en: 'Formulas', full: 'معادلات وقوانين' },
-  { g: 'حاويات', id: 'activity', name: 'نشاط', en: 'Activity' },
-  { g: 'حاويات', id: 'mars', name: 'من المريخ', en: 'Challenge', full: 'أسئلة من المريخ' },
-  { g: 'حاويات', id: 'cancelled', name: 'محتوى معلّق', en: 'Suspended' },
+  { g: 'إطارات', id: 'note', name: 'ملاحظة', en: 'Note', full: 'ملاحظة مهمة' },
+  { g: 'إطارات', id: 'quote', name: 'نص مقتطف', en: 'Quote' },
+  { g: 'إطارات', id: 'formula', name: 'قوانين', en: 'Formulas', full: 'معادلات وقوانين' },
+  { g: 'إطارات', id: 'activity', name: 'نشاط', en: 'Activity' },
+  { g: 'إطارات', id: 'mars', name: 'من المريخ', en: 'Challenge', full: 'أسئلة من المريخ' },
+  { g: 'إطارات', id: 'cancelled', name: 'محتوى معلّق', en: 'Suspended' },
   { g: 'جداول', id: 'table', name: 'جدول', en: 'Table' },
   { g: 'جداول', id: 'tableMain', name: 'جدول رئيسي', en: 'Main table', full: 'جدول بعمود رئيسي' },
   { g: 'جداول', id: 'solTable', name: 'جدول الحل', en: 'Answers', full: 'جدول حل التمارين الموضوعية' },
@@ -2384,7 +2449,7 @@ function apply(pkg, id) {
   return { xml: UR.serialize(doc), rels, built, top: ft.top, first: total - els.length, count: els.length, bottom: pl.bottom, fits: pl.bottom <= pkg.slideH - UR.FOOT };
 }
 
-const GROUP_EN = { 'عناوين': 'Headings', 'نصوص': 'Text', 'أسئلة': 'Questions', 'حاويات': 'Containers', 'جداول': 'Tables', 'نهاية الدرس': 'Lesson end' };
+const GROUP_EN = { 'عناوين': 'Headings', 'نصوص': 'Text', 'أسئلة': 'Questions', 'إطارات': 'Frames', 'جداول': 'Tables', 'نهاية الدرس': 'Lesson end' };
 return { LIST, GROUP_EN, spec, build, place, freeTop, apply };
 })();
 if (typeof module !== 'undefined') module.exports = URT;
@@ -2411,7 +2476,7 @@ const TYPES = [
     ['body', 'فقرة', 'Paragraph', '8C8C8C'], ['bullets', 'نقاط', 'Bullets', '8C8C8C'], ['qhead', 'عنوان أسئلة', 'Q head', 'C00000'],
     ['question', 'سؤال', 'Question', 'FF0000'], ['choice', 'خيارات', 'Choices', '7030A0'], ['answer', 'حل', 'Solution', '1F71DE'],
     ['correct', 'الخيار الصحيح', 'Correct choice', '2070DF']] },
-  { g: 'حاويات', ge: 'Containers', items: [
+  { g: 'إطارات', ge: 'Frames', items: [
     ['note', 'ملاحظة', 'Note', 'E69138'], ['def', 'تعريف', 'Definition', '2AB672'], ['quote', 'نص مقتطف', 'Quote', '2AB672'],
     ['formula', 'قوانين', 'Formulas', '5B9BD5'], ['other', 'صيغة أخرى', 'Other form', 'C45A11'], ['activity', 'نشاط', 'Activity', '7F7F7F'],
     ['mars', 'من المريخ', 'Challenge', '595959']] },
@@ -3265,6 +3330,39 @@ async function renumber() {
     await ctx.sync();
   });
 }
+// delete the page numbers that are on the slides now: the tool's own, PowerPoint's slide-number boxes,
+// and small boxes at the bottom of the page holding only a number
+async function deleteNumbers() {
+  const { H } = await getSize();
+  let n = 0;
+  await run(async ctx => {
+    const slides = ctx.presentation.slides; slides.load('items/id'); await ctx.sync();
+    const cols = slides.items.map(s => { const sh = s.shapes; sh.load('items/name,items/type,items/top,items/height,items/width'); return sh; });
+    await ctx.sync();
+    const ask = [];
+    cols.forEach(c => c.items.forEach(x => {
+      const nm = x.name || '';
+      if (/^CustomPageNumber_/.test(nm) || /^(Slide Number|رقم الشريحة)/i.test(nm)) { x.delete(); n++; return; }
+      if (x.top >= H - 60 && x.width < 120 && x.height < 50 && /TextBox|Placeholder|GeometricShape/i.test(x.type || '')) { const tr = x.textFrame.textRange; tr.load('text'); ask.push([x, tr]); }
+    }));
+    await ctx.sync().catch(() => {});
+    for (const [x, tr] of ask) { let t = ''; try { t = tr.text || ''; } catch (e) { continue; } if (/^\s*[0-9٠-٩]{1,4}\s*$/.test(t)) { x.delete(); n++; } }
+    await ctx.sync();
+  });
+  return n;
+}
+$('numDel').addEventListener('click', async () => {
+  if (busy || !supported) return;
+  busy = true; lock(); res.innerHTML = '';
+  try {
+    say(L('حذف أرقام الصفحات…', 'Deleting page numbers…'));
+    const n = await deleteNumbers();
+    // numbering is turned off, so the next conversion does not put the numbers back
+    $('numChk').checked = false; saveNum();
+    say(n ? L('حُذف ', 'Deleted ') + n + L(' رقم صفحة، وأُوقف الترقيم التلقائي.', ' page numbers; automatic numbering is off.') : L('لا توجد أرقام صفحات.', 'No page numbers found.'));
+  } catch (e) { say(L('تعذّر الحذف: ', 'Could not delete: ') + errText(e)); }
+  finally { busy = false; lock(); }
+});
 $('numHere').addEventListener('click', async () => {
   if (!supported) return;
   try { const id = await currentId(); const all = await allIds(); const i = all.indexOf(id); if (i >= 0) { $('numStart').value = i + 1; saveNum(); } } catch (e) {}
@@ -3389,7 +3487,7 @@ async function insertTemplate(tid) {
 const ROLES = [
   { g: 'نصوص', ge: 'Text', items: [['chapter', 'اسم الوحدة', 'A6A6A6'], ['lesson', 'اسم الدرس', '1F71DD'], ['topic', 'موضوع', '000000'], ['body', 'فقرة', 'FFFFFF'], ['bullets', 'نقاط', 'FFFFFF'], ['qhead', 'عنوان أسئلة', 'FF0000'], ['question', 'سؤال', 'FF0000'], ['choice', 'خيارات', 'FFFFFF']] },
   { g: 'للحلول', ge: 'For solutions', items: [['answer', 'حل', '1F71DE'], ['correct', 'الخيار الصحيح', '2070DF'], ['given', 'شكل من السؤال', 'A6A6A6']] },
-  { g: 'حاويات', ge: 'Containers', items: [['note', 'ملاحظة', 'FBEBD3'], ['quote', 'نص مقتطف', 'E2F0D9'], ['def', 'تعريف', 'E2F0D9'], ['formula', 'قوانين', 'D3E4F5'], ['other', 'صيغة أخرى', 'FBEBD3'], ['activity', 'نشاط', 'F1F1F1'], ['mars', 'من المريخ', 'F1F1F1']] }
+  { g: 'إطارات', ge: 'Frames', items: [['note', 'ملاحظة', 'FBEBD3'], ['quote', 'نص مقتطف', 'E2F0D9'], ['def', 'تعريف', 'E2F0D9'], ['formula', 'قوانين', 'D3E4F5'], ['other', 'صيغة أخرى', 'FBEBD3'], ['activity', 'نشاط', 'F1F1F1'], ['mars', 'من المريخ', 'F1F1F1']] }
 ];
 const ROLE_EN = { chapter: 'Unit', lesson: 'Lesson', topic: 'Topic', body: 'Paragraph', bullets: 'Bullets', qhead: 'Q head', question: 'Question', answer: 'Solution', choice: 'Choices',
   correct: 'Correct choice', given: 'Part of question', note: 'Note', quote: 'Quote', def: 'Definition', formula: 'Formulas', other: 'Other form', activity: 'Activity', mars: 'Challenge' };
@@ -3605,6 +3703,11 @@ async function emptyGrid(b64, ext) {
   g.putImageData(im, 0, 0);
   return cv.toDataURL('image/png').split(',')[1];
 }
+// empty lines for the student in the place of a hidden solution, or nothing (saved on this device)
+let solLines = !!load('ur-sollines', false);
+function paintSolLines() { document.querySelectorAll('#solLines button').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.v === '1') === solLines))); }
+document.getElementById('solLines').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; solLines = b.dataset.v === '1'; save('ur-sollines', solLines); paintSolLines(); });
+paintSolLines();
 function solHidden() { const s = docSettings(); return !!(s && s.get('urSolHidden')); }
 function solLabel() { const h = solHidden(); $('solLbl').textContent = h ? L('إظهار الحلول', 'Show solutions') : L('إخفاء الحلول', 'Hide solutions'); $('solSlash').style.display = h ? 'none' : ''; }
 async function solSlide(id, mode) {
@@ -3620,7 +3723,7 @@ async function solSlide(id, mode) {
       const file = pkg.zip.file(f.media); if (!file || !/\.(png|jpe?g)$/i.test(f.media)) continue;
       try { const png = await emptyGrid(await file.async('base64'), f.media); if (png) grids[f.i] = png; } catch (e) {}
     }
-    r = UR.hideSolutions(pkg, grids);
+    r = UR.hideSolutions(pkg, grids, { lines: solLines });
   }
   if (!r.count) return 0;
   const newId = await insertAfter(await UR.buildPackage(pkg, r.xml, r.rels), id);
@@ -4003,7 +4106,7 @@ function lock() {
   $('solBtn').disabled = busy || !supported;
   $('spV').disabled = busy || !supported; $('spH').disabled = busy || !supported;
   document.querySelectorAll('.tbtn').forEach(b => { b.disabled = busy || !supported; });
-  ['docxBtn', 'wAuto', 'wUntag', 'wClear', 'wMark', 'wUnmark'].forEach(k => { if ($(k)) $(k).disabled = busy || !supported; });
+  ['docxBtn', 'numDel', 'wAuto', 'wUntag', 'wClear', 'wMark', 'wUnmark'].forEach(k => { if ($(k)) $(k).disabled = busy || !supported; });
 }
 $('goBtn').addEventListener('click', async () => {
   if (busy || !supported) return;
@@ -4024,7 +4127,7 @@ function setTab(t) {
 }
 $('tabs').addEventListener('click', e => { const b = e.target.closest('button[data-tab]'); if (b) setTab(b.dataset.tab); });
 $('wtabs').addEventListener('click', e => { const b = e.target.closest('button[data-tab]'); if (b) setTab(b.dataset.tab); });
-setTab(load('ur-tab', 'conv'));
+setTab((t => t === 'conv' || t === 'spc' ? 'obj' : t)(load('ur-tab', 'obj')));  // the old تحويل and تنسيق المسافات tabs are now inside تنسيق
 // language
 function applyLang() {
   document.documentElement.lang = lang; document.documentElement.dir = lang === 'en' ? 'ltr' : 'rtl';
@@ -4048,7 +4151,7 @@ $('aboutBtn').addEventListener('click', () => {
   menu(false);
   modal(L('حول الأداة', 'About'), (lang === 'en'
     ? '<p>Restyles A4 slides into the UULA study-guide style with one click, and inserts the ready study-guide objects.</p><ul><li>UULA Sans font, 11pt text on the page grid</li><li>Headings, questions and answers in UULA colors</li><li>Full-width containers, tables and pictures in one style</li><li>Hide / show the solutions</li><li>In Word: tag the parts (question, solution, definition…), then insert the Word file into PowerPoint</li></ul><p>No content is deleted; only old decoration is removed.</p>'
-    : '<p>تحوّل شرائح A4 إلى ستايل مذكرات علا بضغطة زر، وتضيف قوالب المذكرة الجاهزة.</p><ul><li>خط UULA Sans، والنص 11 على شبكة الصفحة</li><li>العناوين والأسئلة والإجابات بألوان علا</li><li>حاويات بعرض الصفحة، وجداول وصور بالشكل الموحّد</li><li>إخفاء الحلول وإظهارها</li><li>في الوورد: تمييز الأجزاء (سؤال، حل، تعريف…) ثم إدراج ملف الوورد في الباوربوينت</li></ul><p>لا يُحذف أي محتوى؛ تُحذف الزخارف القديمة فقط.</p>')
+    : '<p>تحوّل شرائح A4 إلى ستايل مذكرات علا بضغطة زر، وتضيف قوالب المذكرة الجاهزة.</p><ul><li>خط UULA Sans، والنص 11 على شبكة الصفحة</li><li>العناوين والأسئلة والإجابات بألوان علا</li><li>إطارات بعرض الصفحة، وجداول وصور بالشكل الموحّد</li><li>إخفاء الحلول وإظهارها</li><li>في الوورد: تمييز الأجزاء (سؤال، حل، تعريف…) ثم إدراج ملف الوورد في الباوربوينت</li></ul><p>لا يُحذف أي محتوى؛ تُحذف الزخارف القديمة فقط.</p>')
     + '<p class="foot" dir="ltr">Developed by <b>Zaher Alkablawi</b> · Version ' + VER + '<br>© 2026 UULA. All rights reserved.</p>');
 });
 

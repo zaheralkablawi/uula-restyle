@@ -237,6 +237,39 @@ async function renumber() {
     await ctx.sync();
   });
 }
+// delete the page numbers that are on the slides now: the tool's own, PowerPoint's slide-number boxes,
+// and small boxes at the bottom of the page holding only a number
+async function deleteNumbers() {
+  const { H } = await getSize();
+  let n = 0;
+  await run(async ctx => {
+    const slides = ctx.presentation.slides; slides.load('items/id'); await ctx.sync();
+    const cols = slides.items.map(s => { const sh = s.shapes; sh.load('items/name,items/type,items/top,items/height,items/width'); return sh; });
+    await ctx.sync();
+    const ask = [];
+    cols.forEach(c => c.items.forEach(x => {
+      const nm = x.name || '';
+      if (/^CustomPageNumber_/.test(nm) || /^(Slide Number|رقم الشريحة)/i.test(nm)) { x.delete(); n++; return; }
+      if (x.top >= H - 60 && x.width < 120 && x.height < 50 && /TextBox|Placeholder|GeometricShape/i.test(x.type || '')) { const tr = x.textFrame.textRange; tr.load('text'); ask.push([x, tr]); }
+    }));
+    await ctx.sync().catch(() => {});
+    for (const [x, tr] of ask) { let t = ''; try { t = tr.text || ''; } catch (e) { continue; } if (/^\s*[0-9٠-٩]{1,4}\s*$/.test(t)) { x.delete(); n++; } }
+    await ctx.sync();
+  });
+  return n;
+}
+$('numDel').addEventListener('click', async () => {
+  if (busy || !supported) return;
+  busy = true; lock(); res.innerHTML = '';
+  try {
+    say(L('حذف أرقام الصفحات…', 'Deleting page numbers…'));
+    const n = await deleteNumbers();
+    // numbering is turned off, so the next conversion does not put the numbers back
+    $('numChk').checked = false; saveNum();
+    say(n ? L('حُذف ', 'Deleted ') + n + L(' رقم صفحة، وأُوقف الترقيم التلقائي.', ' page numbers; automatic numbering is off.') : L('لا توجد أرقام صفحات.', 'No page numbers found.'));
+  } catch (e) { say(L('تعذّر الحذف: ', 'Could not delete: ') + errText(e)); }
+  finally { busy = false; lock(); }
+});
 $('numHere').addEventListener('click', async () => {
   if (!supported) return;
   try { const id = await currentId(); const all = await allIds(); const i = all.indexOf(id); if (i >= 0) { $('numStart').value = i + 1; saveNum(); } } catch (e) {}
@@ -361,7 +394,7 @@ async function insertTemplate(tid) {
 const ROLES = [
   { g: 'نصوص', ge: 'Text', items: [['chapter', 'اسم الوحدة', 'A6A6A6'], ['lesson', 'اسم الدرس', '1F71DD'], ['topic', 'موضوع', '000000'], ['body', 'فقرة', 'FFFFFF'], ['bullets', 'نقاط', 'FFFFFF'], ['qhead', 'عنوان أسئلة', 'FF0000'], ['question', 'سؤال', 'FF0000'], ['choice', 'خيارات', 'FFFFFF']] },
   { g: 'للحلول', ge: 'For solutions', items: [['answer', 'حل', '1F71DE'], ['correct', 'الخيار الصحيح', '2070DF'], ['given', 'شكل من السؤال', 'A6A6A6']] },
-  { g: 'حاويات', ge: 'Containers', items: [['note', 'ملاحظة', 'FBEBD3'], ['quote', 'نص مقتطف', 'E2F0D9'], ['def', 'تعريف', 'E2F0D9'], ['formula', 'قوانين', 'D3E4F5'], ['other', 'صيغة أخرى', 'FBEBD3'], ['activity', 'نشاط', 'F1F1F1'], ['mars', 'من المريخ', 'F1F1F1']] }
+  { g: 'إطارات', ge: 'Frames', items: [['note', 'ملاحظة', 'FBEBD3'], ['quote', 'نص مقتطف', 'E2F0D9'], ['def', 'تعريف', 'E2F0D9'], ['formula', 'قوانين', 'D3E4F5'], ['other', 'صيغة أخرى', 'FBEBD3'], ['activity', 'نشاط', 'F1F1F1'], ['mars', 'من المريخ', 'F1F1F1']] }
 ];
 const ROLE_EN = { chapter: 'Unit', lesson: 'Lesson', topic: 'Topic', body: 'Paragraph', bullets: 'Bullets', qhead: 'Q head', question: 'Question', answer: 'Solution', choice: 'Choices',
   correct: 'Correct choice', given: 'Part of question', note: 'Note', quote: 'Quote', def: 'Definition', formula: 'Formulas', other: 'Other form', activity: 'Activity', mars: 'Challenge' };
@@ -577,6 +610,11 @@ async function emptyGrid(b64, ext) {
   g.putImageData(im, 0, 0);
   return cv.toDataURL('image/png').split(',')[1];
 }
+// empty lines for the student in the place of a hidden solution, or nothing (saved on this device)
+let solLines = !!load('ur-sollines', false);
+function paintSolLines() { document.querySelectorAll('#solLines button').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.v === '1') === solLines))); }
+document.getElementById('solLines').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; solLines = b.dataset.v === '1'; save('ur-sollines', solLines); paintSolLines(); });
+paintSolLines();
 function solHidden() { const s = docSettings(); return !!(s && s.get('urSolHidden')); }
 function solLabel() { const h = solHidden(); $('solLbl').textContent = h ? L('إظهار الحلول', 'Show solutions') : L('إخفاء الحلول', 'Hide solutions'); $('solSlash').style.display = h ? 'none' : ''; }
 async function solSlide(id, mode) {
@@ -592,7 +630,7 @@ async function solSlide(id, mode) {
       const file = pkg.zip.file(f.media); if (!file || !/\.(png|jpe?g)$/i.test(f.media)) continue;
       try { const png = await emptyGrid(await file.async('base64'), f.media); if (png) grids[f.i] = png; } catch (e) {}
     }
-    r = UR.hideSolutions(pkg, grids);
+    r = UR.hideSolutions(pkg, grids, { lines: solLines });
   }
   if (!r.count) return 0;
   const newId = await insertAfter(await UR.buildPackage(pkg, r.xml, r.rels), id);
@@ -975,7 +1013,7 @@ function lock() {
   $('solBtn').disabled = busy || !supported;
   $('spV').disabled = busy || !supported; $('spH').disabled = busy || !supported;
   document.querySelectorAll('.tbtn').forEach(b => { b.disabled = busy || !supported; });
-  ['docxBtn', 'wAuto', 'wUntag', 'wClear', 'wMark', 'wUnmark'].forEach(k => { if ($(k)) $(k).disabled = busy || !supported; });
+  ['docxBtn', 'numDel', 'wAuto', 'wUntag', 'wClear', 'wMark', 'wUnmark'].forEach(k => { if ($(k)) $(k).disabled = busy || !supported; });
 }
 $('goBtn').addEventListener('click', async () => {
   if (busy || !supported) return;
@@ -996,7 +1034,7 @@ function setTab(t) {
 }
 $('tabs').addEventListener('click', e => { const b = e.target.closest('button[data-tab]'); if (b) setTab(b.dataset.tab); });
 $('wtabs').addEventListener('click', e => { const b = e.target.closest('button[data-tab]'); if (b) setTab(b.dataset.tab); });
-setTab(load('ur-tab', 'conv'));
+setTab((t => t === 'conv' || t === 'spc' ? 'obj' : t)(load('ur-tab', 'obj')));  // the old تحويل and تنسيق المسافات tabs are now inside تنسيق
 // language
 function applyLang() {
   document.documentElement.lang = lang; document.documentElement.dir = lang === 'en' ? 'ltr' : 'rtl';
@@ -1020,7 +1058,7 @@ $('aboutBtn').addEventListener('click', () => {
   menu(false);
   modal(L('حول الأداة', 'About'), (lang === 'en'
     ? '<p>Restyles A4 slides into the UULA study-guide style with one click, and inserts the ready study-guide objects.</p><ul><li>UULA Sans font, 11pt text on the page grid</li><li>Headings, questions and answers in UULA colors</li><li>Full-width containers, tables and pictures in one style</li><li>Hide / show the solutions</li><li>In Word: tag the parts (question, solution, definition…), then insert the Word file into PowerPoint</li></ul><p>No content is deleted; only old decoration is removed.</p>'
-    : '<p>تحوّل شرائح A4 إلى ستايل مذكرات علا بضغطة زر، وتضيف قوالب المذكرة الجاهزة.</p><ul><li>خط UULA Sans، والنص 11 على شبكة الصفحة</li><li>العناوين والأسئلة والإجابات بألوان علا</li><li>حاويات بعرض الصفحة، وجداول وصور بالشكل الموحّد</li><li>إخفاء الحلول وإظهارها</li><li>في الوورد: تمييز الأجزاء (سؤال، حل، تعريف…) ثم إدراج ملف الوورد في الباوربوينت</li></ul><p>لا يُحذف أي محتوى؛ تُحذف الزخارف القديمة فقط.</p>')
+    : '<p>تحوّل شرائح A4 إلى ستايل مذكرات علا بضغطة زر، وتضيف قوالب المذكرة الجاهزة.</p><ul><li>خط UULA Sans، والنص 11 على شبكة الصفحة</li><li>العناوين والأسئلة والإجابات بألوان علا</li><li>إطارات بعرض الصفحة، وجداول وصور بالشكل الموحّد</li><li>إخفاء الحلول وإظهارها</li><li>في الوورد: تمييز الأجزاء (سؤال، حل، تعريف…) ثم إدراج ملف الوورد في الباوربوينت</li></ul><p>لا يُحذف أي محتوى؛ تُحذف الزخارف القديمة فقط.</p>')
     + '<p class="foot" dir="ltr">Developed by <b>Zaher Alkablawi</b> · Version ' + VER + '<br>© 2026 UULA. All rights reserved.</p>');
 });
 

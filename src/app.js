@@ -327,19 +327,15 @@ function iconHtml(id, col) {
   }
   return '<i style="background:#' + (col || 'FFFFFF') + '"></i>';
 }
-// one card per group: a coloured strip, the title, and a click to fold it (remembered on this device)
+// one card per group: a coloured strip and the title; every group always open
 const GROUP_COL = { 'عناوين': '1F71DD', 'نصوص': '8C8C8C', 'أسئلة': 'FF0000', 'الحلول': '1F71DE', 'إطارات': 'E69138', 'إطارات حول المحدد': 'E69138', 'جداول': '44546A', 'تنسيق جدول محدد': '44546A', 'نهاية الدرس': '7030A0', 'أخرى': '00B050' };
 function groupCard(where, key, title) {
-  const closed = load('ur-closed', {});
-  const d = document.createElement('div'); d.className = 'tgroup' + (closed[where + ':' + key] ? ' closed' : '');
-  d.innerHTML = '<div class="gt" role="button" tabindex="0"><span class="bar" style="background:#' + (GROUP_COL[key] || '9aa3ad') + '"></span><span>' + title + '</span><span class="chev">▾</span></div>';
-  const head = d.firstChild;
-  const fold = () => { d.classList.toggle('closed'); const c = load('ur-closed', {}); c[where + ':' + key] = d.classList.contains('closed'); save('ur-closed', c); };
-  head.addEventListener('click', fold);
-  head.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fold(); } });
+  const d = document.createElement('div'); d.className = 'tgroup';
+  d.innerHTML = '<div class="gt"><span class="bar" style="background:#' + (GROUP_COL[key] || '9aa3ad') + '"></span><span>' + title + '</span></div>';
   const grid = document.createElement('div'); grid.className = 'tgrid'; d.appendChild(grid);
   return { d, grid };
 }
+try { localStorage.removeItem('ur-closed'); } catch (e) {}
 function buildTemplateList() {
   const host = $('tpls'); host.innerHTML = '';
   const groups = [];

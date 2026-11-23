@@ -486,69 +486,6 @@ async function clearSel(slideId) {
     await ctx.sync();
   }).catch(() => {});
 }
-// ---------- review marks: what «Hide solutions» will hide and what stays, drawn on the slide ----------
-// dashed outlines and small labels named "UULA Mark …", added and removed in place (no slide is rebuilt)
-const MARK_LOOK = {
-  question: ['00B050', 'سؤال', 'Question'], answer: ['1F71DE', 'حل', 'Solution'], grid: ['1F71DE', 'حل: رسم ← شبكة فارغة', 'Solution: graph → empty grid'],
-  correct: ['2070DF', 'خيار صحيح', 'Correct choice'], inside: ['7030A0', 'سؤال بداخله حل', 'Question with a solution inside'], given: ['808080', 'جزء من السؤال', 'Part of question'], stay: ['00B050', 'يبقى ظاهرًا', 'Stays']
-};
-async function dropMarks(ids) {
-  return run(async ctx => {
-    let n = 0;
-    for (const id of ids) {
-      const sh = ctx.presentation.slides.getItem(id).shapes; sh.load('items/name'); await ctx.sync();
-      sh.items.forEach(s => { if (/^UULA Mark/.test(s.name || '')) { s.delete(); n++; } });
-    }
-    await ctx.sync(); return n;
-  }).catch(() => 0);
-}
-async function drawMarks(id) {
-  const pkg = await UR.openPackage(await exportSlide(id));
-  const list = UR.solutionMarks(pkg);
-  if (!list) return -1;                                   // the solutions are hidden now
-  await run(async ctx => {
-    const sh = ctx.presentation.slides.getItem(id).shapes;
-    for (const m of list) {
-      const col = MARK_LOOK[m.kind][0];
-      // a light shade over the object: what will be hidden, what stays
-      const r = sh.addGeometricShape('Rectangle', { left: m.x / PT - 2, top: m.y / PT - 2, width: m.w / PT + 4, height: m.h / PT + 4 });
-      r.name = 'UULA Mark';
-      try { r.fill.setSolidColor('#' + col); r.fill.transparency = 0.82; r.lineFormat.visible = false; } catch (e) {}
-    }
-    await ctx.sync();
-  });
-  return list.length;
-}
-async function hasMarks(id) {
-  return run(async ctx => { const sh = ctx.presentation.slides.getItem(id).shapes; sh.load('items/name'); await ctx.sync(); return sh.items.some(s => /^UULA Mark/.test(s.name || '')); }).catch(() => false);
-}
-function markLabel(on) { $('markBtn').textContent = on ? L('إخفاء العلامات', 'Hide marks') : L('إظهار العلامات', 'Show marks'); $('markBtn').dataset.on = on ? '1' : ''; }
-$('markBtn').addEventListener('click', async () => {
-  if (busy || !supported) return;
-  busy = true; lock(); res.innerHTML = '';
-  try {
-    const ids = await targetIds();
-    if (!ids.length) { say(L('حدّد شريحة أولًا.', 'Select a slide first.')); return; }
-    if ($('markBtn').dataset.on) { markLabel(false); if (await dropMarks(ids)) { say(L('أُزيلت العلامات.', 'Marks removed.')); return; } }
-    let shown = 0, hidden = 0;
-    for (let k = 0; k < ids.length; k++) {
-      prog(k / ids.length);
-      await dropMarks([ids[k]]);
-      const n = await drawMarks(ids[k]); if (n < 0) hidden++; else shown += n;
-    }
-    prog(null); markLabel(shown > 0);
-    say(hidden && !shown ? L('الحلول مخفية الآن. أظهرها أولًا لترى العلامات.', 'The solutions are hidden now. Show them first to see the marks.')
-      : shown ? L('ظهرت العلامات: ', 'Marks shown: ') + shown + L('. اضغط «إخفاء العلامات» لإزالتها قبل الطباعة أو الحفظ النهائي (تُزال وحدها عند إخفاء الحلول أو التحويل).', '. Press «Hide marks» to remove them before printing or the final save (they go by themselves when hiding solutions or restyling).')
-      : L('لم أجد أسئلة أو حلولًا في الشريحة.', 'No questions or solutions found on the slide.'));
-  } catch (e) { prog(null); say(L('حدث خطأ: ', 'Error: ') + errText(e)); }
-  finally { busy = false; lock(); }
-});
-// after marking an object while the marks are shown, they are drawn again for that slide
-async function refreshMarks() {
-  if (!$('markBtn').dataset.on) return;
-  const id = await currentId(); if (!id || !(await hasMarks(id))) return;
-  await dropMarks([id]); await drawMarks(id);
-}
 // solution marks change only the selected objects, in place: no slide is rebuilt, nothing moves
 const QUIET = { answer: '1F71DE', correct: '2070DF', given: null };
 async function quietMark(role) {
@@ -557,7 +494,7 @@ async function quietMark(role) {
   const W = hiddenNow ? (await getSize()).W : 0;
   return run(async ctx => {
     const shapes = ctx.presentation.getSelectedShapes(); shapes.load('items/name,items/type,items/left'); await ctx.sync();
-    const sel = shapes.items.filter(x => !/^UULA Mark/.test(x.name || ''));
+    const sel = shapes.items;
     if (!sel.length) return 0;
     let all = null;
     if (hiddenNow) { all = ctx.presentation.slides.getItem(id).shapes; all.load('items/name,items/left'); await ctx.sync(); }
@@ -586,12 +523,11 @@ async function pinRole(role) {
   if (role in QUIET) {
     try {
       const n = await quietMark(role);
-      if (n < 0) { rsay(L('عُلِّم كحل وأُخفي، لأن حلول الشريحة مخفية الآن. يظهر مع «إظهار الحلول».', 'Marked as a solution and hidden, since the slide\'s solutions are hidden now. «Show solutions» brings it back.')); await refreshMarks().catch(() => {}); return; }
+      if (n < 0) { rsay(L('عُلِّم كحل وأُخفي، لأن حلول الشريحة مخفية الآن. يظهر مع «إظهار الحلول».', 'Marked as a solution and hidden, since the slide\'s solutions are hidden now. «Show solutions» brings it back.')); return; }
       rsay(!n ? L('حدّد مربعًا في الشريحة أولًا.', 'Select a box on the slide first.')
         : role === 'given' ? L('عُلِّم كجزء من السؤال: يبقى ظاهرًا عند إخفاء الحلول.', 'Marked as part of the question: it stays when solutions are hidden.')
         : role === 'correct' ? L('عُلِّم كخيار صحيح (أزرق عريض): يتحول للأسود عند إخفاء الحلول.', 'Marked as the correct choice (bold blue): it turns black when solutions are hidden.')
         : L('عُلِّم كحل (أزرق): يُخفى عند إخفاء الحلول.', 'Marked as a solution (blue): it is hidden when solutions are hidden.'));
-      await refreshMarks().catch(() => {});
     } catch (e) { rsay(L('تعذّر التمييز: ', 'Could not mark: ') + errText(e)); }
     finally { busy = false; lock(); }
     return;
@@ -769,7 +705,6 @@ async function spacingRun(kind) {
   try {
     const ids = await targetIds();
     if (!ids.length) { say(L('حدّد شريحة أولًا.', 'Select a slide first.')); return; }
-    if (await dropMarks(ids)) markLabel(false);
     const over = [], skipped = [], spread = [];
     for (let k = 0; k < ids.length; k++) {
       prog(k / ids.length); say(L('تنسيق المسافات ', 'Spacing ') + (k + 1) + L(' من ', ' of ') + ids.length + '…');
@@ -864,20 +799,23 @@ async function slideSolHidden(id) {
 function solHidden() { return solState; }
 function solPaint() { const h = solState; $('solLbl').textContent = h ? L('إظهار الحلول', 'Show solutions') : L('إخفاء الحلول', 'Hide solutions'); $('solSlash').style.display = h ? 'none' : ''; }
 async function solLabel() {
-  if ($('markBtn')) markLabel(false);
   solPaint();
   if (!supported) return;
   try { solState = await slideSolHidden(await currentId()); } catch (e) {}
   solPaint();
 }
 // another slide chosen: the button is checked again
-let solTimer = 0;
+let solTimer = 0, solSlideId = null;
 let solWatching = false;
 function solWatch() {
   if (solWatching) return; solWatching = true;
   try {
     Office.context.document.addHandlerAsync(Office.EventType.DocumentSelectionChanged, () => {
-      clearTimeout(solTimer); solTimer = setTimeout(() => { if (!busy && !isWord) solLabel(); }, 250);
+      clearTimeout(solTimer); solTimer = setTimeout(async () => {
+        if (busy || isWord) return;
+        const id = await currentId().catch(() => null);
+        if (id && id !== solSlideId) { solSlideId = id; solLabel(); }
+      }, 300);
     });
   } catch (e) {}
   window.addEventListener('focus', () => { if (!busy && !isWord) solLabel(); });

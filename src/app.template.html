@@ -69,7 +69,6 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
 .tbtn span{overflow:hidden;text-overflow:ellipsis}
 .tbtn i{flex:none;width:10px;height:10px;border-radius:2px;border:1px solid rgb(0 0 0 / .12)}
 #roles .tbtn,#solRoles .tbtn,#tpls .tbtn{white-space:normal}
-.mk{display:inline-block;width:12px;height:9px;border-radius:2px;vertical-align:middle;margin-inline-end:3px;opacity:.35}
 #roles .tbtn span,#solRoles .tbtn span,#tpls .tbtn span{text-overflow:clip}
 .modal{position:fixed;inset:0;z-index:60;background:rgb(0 0 0 / .35);display:grid;place-items:center;padding:16px}
 .mbox{background:var(--panel);border-radius:12px;max-width:420px;width:100%;max-height:80vh;overflow:auto;padding:14px 16px;box-shadow:0 16px 40px rgb(0 0 0 / .3)}
@@ -174,8 +173,6 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
     </div></div>
     <span class="note" data-en="Before hiding, mark what the tool should treat differently: select it on the slide, then press its type.">قبل الإخفاء، ميّز ما تريد أن تعامله الأداة بشكل خاص: حدّده في الشريحة ثم اضغط نوعه.</span>
     <div class="tgrid" id="solRoles"></div>
-    <div class="sprow2" style="margin-top:6px"><button type="button" class="mini" id="markBtn" data-en="Show marks">إظهار العلامات</button><span class="note" style="margin:0" data-en="Shades on the slide what will be hidden and what stays.">يظلّل على الشريحة ما سيُخفى وما سيبقى.</span></div>
-    <div class="note" id="markKey" style="display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:4px"><span><i class="mk" style="background:#00B050"></i><span data-en="Question / stays">سؤال أو يبقى ظاهرًا</span></span><span><i class="mk" style="background:#1F71DE"></i><span data-en="Solution">حل</span></span><span><i class="mk" style="background:#7030A0"></i><span data-en="Question with a solution inside">سؤال بداخله حل</span></span><span><i class="mk" style="background:#808080"></i><span data-en="Part of question">جزء من السؤال</span></span></div>
     <div class="sep"></div>
     <label class="chk"><input type="checkbox" id="numChk" checked> <span data-en="Page numbers">ترقيم الصفحات</span></label>
     <div class="row" id="numRow"><span style="font-size:.82rem" data-en="Numbering starts at slide">يبدأ الترقيم من الشريحة</span><span style="display:flex;gap:6px;align-items:center"><input type="number" min="1" class="num" id="numStart" value="1"><button type="button" class="mini" id="numHere" data-en="Current">الحالية</button></span></div>

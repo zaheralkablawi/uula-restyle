@@ -1523,32 +1523,6 @@ function questionFlags(pkg) {
   });
 }
 
-// what «Hide solutions» will do with each object of the slide, for the review marks:
-// [{ x, y, w, h (EMU), kind: 'answer' | 'grid' | 'correct' | 'inside' | 'given' | 'question' | 'stay' }]
-function solutionMarks(pkg) {
-  if (hasSolutions(pkg.files.slide)) return null;
-  const doc = parseXml(pkg.files.slide);
-  const found = findSolutions(pkg);
-  const flags = questionFlags(pkg);
-  const out = [];
-  topItems(doc).forEach((el, i) => {
-    const c = core(el), n = cnvOf(c), name = n ? n.getAttribute('name') || '' : '';
-    const g = geomOf(el, pkg);
-    if (!g || g.w <= 0 || g.h <= 0 || g.x >= pkg.slideW || g.x + g.w <= 0) return;
-    if (/^UULA (Footer|Watermark)|Container( Line)?$|Icon$|^CustomPageNumber_/.test(name)) return;
-    const f = found.find(x => x.i === i);
-    let kind = null;
-    if (f) kind = f.correct ? 'correct' : f.how === 'grid' ? 'grid' : f.how === 'hide' ? 'answer' : 'inside';
-    else if (/^UULA:given/.test(name)) kind = 'given';
-    else if (flags[i] || /^UULA:(question|choice)/.test(name)) kind = 'question';
-    else if (c.localName !== 'sp' || /\S/.test(textOf(c))) kind = 'stay';          // any other content: it stays
-    if (g.y >= pkg.slideH - FOOT) kind = kind === 'stay' ? null : kind;      // the page number / year at the bottom
-    if (kind) out.push({ x: g.x, y: g.y, w: g.w, h: g.h, kind, bare: c.localName === 'sp' && !/\S/.test(textOf(c)) });
-  });
-  // a frame or shape that only holds other marked things is not shaded itself (no double shading)
-  const holds = (b, o) => { const cx = o.x + o.w / 2, cy = o.y + o.h / 2; return o !== b && cx >= b.x && cx <= b.x + b.w && cy >= b.y && cy <= b.y + b.h; };
-  return out.filter(b => !(b.kind === 'stay' && (b.bare || b.w * b.h > 0) && out.some(o => holds(b, o) && o.w * o.h < b.w * b.h)));
-}
 function spacing(rects, W, H) {
   const free = rects.filter(r => !r.fixed);
   const inside = (o, b) => { const cx = o.x + o.w / 2, cy = o.y + o.h / 2; return cx >= b.x && cx <= b.x + b.w && cy >= b.y && cy <= b.y + b.h; };
@@ -2093,7 +2067,7 @@ function splitPoint(plan, lay) {
 
 return {
   questionFlags,
-  NS, PT, ROW, M, FOOT, C, STY, BOX, openPackage, buildPackage, parseXml, serialize, restyle, layout, applyLayout, splitParts, splitPoint, markNames, MARK, applyRole, wrapBox, gridOver, WRAP, reflow, spacing, align, findSolutions, solutionMarks, hideSolutions, showSolutions, hasSolutions, TEXT_ROLES, BOX_ROLES, G, Y0, snapUp, snapX,
+  NS, PT, ROW, M, FOOT, C, STY, BOX, openPackage, buildPackage, parseXml, serialize, restyle, layout, applyLayout, splitParts, splitPoint, markNames, MARK, applyRole, wrapBox, gridOver, WRAP, reflow, spacing, align, findSolutions, hideSolutions, showSolutions, hasSolutions, TEXT_ROLES, BOX_ROLES, G, Y0, snapUp, snapX,
   // used by the templates module
   util: { pX, txX, boxX, gradBoxX, picX, pillX, pillW, lineX, tableX, makeRels, frag, topItems, core, cnvOf, maxId, spTreeOf, kid, kids, desc, xfrmOf, geomOf, setNext: n => { NEXT = n; }, yearText, pageNumX, estimateText, iconW, iconH }
 };

@@ -16,15 +16,15 @@ const PT = 12700;
 // id, Arabic, English, frame colour in Word (and the swatch in the pane)
 const TYPES = [
   { g: 'نصوص', ge: 'Text', items: [
-    ['chapter', 'اسم الوحدة', 'Unit', 'A6A6A6'], ['lesson', 'اسم الدرس', 'Lesson', '1F71DD'], ['topic', 'موضوع', 'Topic', '404040'],
-    ['body', 'فقرة', 'Paragraph', '8C8C8C'], ['bullets', 'نقاط', 'Bullets', '8C8C8C'], ['qhead', 'عنوان أسئلة', 'Q head', 'C00000'],
-    ['question', 'سؤال', 'Question', 'FF0000'], ['choice', 'خيارات', 'Choices', '7030A0'], ['answer', 'حل', 'Solution', '1F71DE'],
+    ['chapter', 'عنوان الوحدة', 'Unit title', 'A6A6A6'], ['lesson', 'عنوان الدرس', 'Lesson title', '1F71DD'], ['topic', 'عنوان موضوع', 'Topic heading', '404040'],
+    ['body', 'فقرة شرح', 'Paragraph', '8C8C8C'], ['bullets', 'نقاط مرقّمة', 'Bullet list', '8C8C8C'], ['qhead', 'عنوان الأسئلة', 'Questions heading', 'C00000'],
+    ['question', 'نص السؤال', 'Question text', 'FF0000'], ['choice', 'خيارات السؤال', 'Choices', '7030A0'], ['answer', 'حل السؤال', 'Solution', '1F71DE'],
     ['correct', 'الخيار الصحيح', 'Correct choice', '2070DF']] },
   { g: 'إطارات', ge: 'Frames', items: [
     ['note', 'ملاحظة', 'Note', 'E69138'], ['def', 'تعريف', 'Definition', '2AB672'], ['quote', 'نص مقتطف', 'Quote', '2AB672'],
     ['formula', 'قوانين', 'Formulas', '5B9BD5'], ['other', 'صيغة أخرى', 'Other form', 'C45A11'], ['activity', 'نشاط', 'Activity', '7F7F7F'],
-    ['mars', 'من المريخ', 'Challenge', '595959']] },
-  { g: 'أخرى', ge: 'Other', items: [['table', 'جدول', 'Table', '44546A'], ['figure', 'شكل', 'Figure', '00B050'], ['given', 'شكل من السؤال', 'Part of question', 'A6A6A6']] }
+    ['mars', 'من المريخ', 'From Mars', '595959']] },
+  { g: 'أخرى', ge: 'Other', items: [['table', 'جدول', 'Table', '44546A'], ['figure', 'صورة أو شكل', 'Picture / figure', '00B050'], ['given', 'جزء من السؤال', 'Part of question', 'A6A6A6']] }
 ];
 const TYPE = {};
 TYPES.forEach(g => g.items.forEach(([id, ar, en, col]) => { TYPE[id] = { id, ar, en, col }; }));

@@ -467,6 +467,17 @@ function buildRoleList() {
   }
 }
 $('roles').addEventListener('click', e => { const b = e.target.closest('.tbtn'); if (b) pinRole(b.dataset.role); });
+// the same solution buttons beside «Hide solutions»
+function buildSolRoles() {
+  const host = $('solRoles'); if (!host) return; host.innerHTML = '';
+  for (const [id, nameAr, col] of ROLES.find(g => g.items.some(x => x[0] === 'given')).items) {
+    const name = L(nameAr, ROLE_EN[id]);
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'tbtn'; b.dataset.role = id;
+    b.title = L(ROLE_TIP[id][0], ROLE_TIP[id][1]); b.innerHTML = '<i style="background:#' + col + '"></i><span>' + name + '</span>';
+    host.appendChild(b);
+  }
+}
+$('solRoles').addEventListener('click', e => { const b = e.target.closest('.tbtn'); if (b) pinRole(b.dataset.role); });
 const rsay = m => say(m);
 async function clearSel(slideId) {
   await run(async ctx => {
@@ -1166,7 +1177,7 @@ function applyLang() {
   document.querySelectorAll('[data-en]').forEach(el => { if (el.dataset.ar == null) el.dataset.ar = el.textContent; el.textContent = lang === 'en' ? el.dataset.en : el.dataset.ar; });
   document.querySelectorAll('[data-en-title]').forEach(el => { el.title = lang === 'en' ? el.dataset.enTitle : el.dataset.arTitle; });
   $('langBtn').textContent = lang === 'en' ? 'ع' : 'EN';
-  buildTemplateList(); buildRoleList(); buildWordRoles(); solLabel(); lock();
+  buildTemplateList(); buildRoleList(); buildSolRoles(); buildWordRoles(); solLabel(); lock();
   if (isWord && supported && !$('wlist').closest('[data-pane]').hidden) reviewList().catch(() => {});
 }
 $('langBtn').addEventListener('click', () => { lang = lang === 'en' ? 'ar' : 'en'; save('ur-lang', lang); applyLang(); say(''); });

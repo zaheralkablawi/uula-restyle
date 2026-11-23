@@ -23,17 +23,17 @@ const P = {
 // ---------- the list shown in the pane ----------
 // group: section title in the pane; id; name; spec(W)
 const LIST = [
-  { g: 'عناوين', id: 'header', name: 'اسم الدرس', en: 'Lesson' },
-  { g: 'عناوين', id: 'topic', name: 'موضوع', en: 'Topic', full: 'عنوان موضوع' },
-  { g: 'نصوص', id: 'body', name: 'فقرة', en: 'Paragraph' },
-  { g: 'نصوص', id: 'bullets', name: 'نقاط', en: 'Bullets' },
-  { g: 'نصوص', id: 'cols', name: 'أعمدة نقاط', en: 'Columns', full: 'نقاط قصيرة بأعمدة' },
-  { g: 'نصوص', id: 'pill', name: 'كبسولة', en: 'Term pill', full: 'كبسولة تعريف' },
-  { g: 'أسئلة', id: 'qhead', name: 'عنوان أسئلة', en: 'Q head' },
+  { g: 'عناوين', id: 'header', name: 'عنوان الدرس', en: 'Lesson title' },
+  { g: 'عناوين', id: 'topic', name: 'عنوان موضوع', en: 'Topic heading', full: 'عنوان موضوع' },
+  { g: 'نصوص', id: 'body', name: 'فقرة شرح', en: 'Paragraph' },
+  { g: 'نصوص', id: 'bullets', name: 'نقاط مرقّمة', en: 'Bullet list' },
+  { g: 'نصوص', id: 'cols', name: 'نقاط بأعمدة', en: 'Bullet columns', full: 'نقاط قصيرة بأعمدة' },
+  { g: 'نصوص', id: 'pill', name: 'كبسولة تعريف', en: 'Term pill', full: 'كبسولة تعريف' },
+  { g: 'أسئلة', id: 'qhead', name: 'عنوان الأسئلة', en: 'Questions heading' },
   { g: 'أسئلة', id: 'question', name: 'سؤال', en: 'Question' },
-  { g: 'أسئلة', id: 'qa', name: 'سؤال وجواب', en: 'Q + A' },
-  { g: 'أسئلة', id: 'answer', name: 'جواب', en: 'Answer' },
-  { g: 'أسئلة', id: 'qqr', name: 'سؤال مع QR', en: 'Q + QR' },
+  { g: 'أسئلة', id: 'qa', name: 'سؤال وحله', en: 'Question + solution' },
+  { g: 'أسئلة', id: 'answer', name: 'حل السؤال', en: 'Solution' },
+  { g: 'أسئلة', id: 'qqr', name: 'سؤال مع QR', en: 'Question + QR' },
   { g: 'أسئلة', id: 'mcq', name: 'اختيار متعدد', en: 'Choices', full: 'اختيار من متعدد' },
   { g: 'أسئلة', id: 'problem', name: 'مسألة', en: 'Problem', full: 'مسألة: معطيات وقانون وحل' },
   { g: 'أسئلة', id: 'other', name: 'صيغة أخرى', en: 'Other form', full: 'السؤال بصيغة أخرى' },
@@ -41,13 +41,13 @@ const LIST = [
   { g: 'إطارات', id: 'quote', name: 'نص مقتطف', en: 'Quote' },
   { g: 'إطارات', id: 'formula', name: 'قوانين', en: 'Formulas', full: 'معادلات وقوانين' },
   { g: 'إطارات', id: 'activity', name: 'نشاط', en: 'Activity' },
-  { g: 'إطارات', id: 'mars', name: 'من المريخ', en: 'Challenge', full: 'أسئلة من المريخ' },
+  { g: 'إطارات', id: 'mars', name: 'من المريخ', en: 'From Mars', full: 'أسئلة من المريخ' },
   { g: 'إطارات', id: 'cancelled', name: 'محتوى معلّق', en: 'Suspended' },
-  { g: 'جداول', id: 'table', name: 'جدول', en: 'Table' },
-  { g: 'جداول', id: 'tableMain', name: 'جدول رئيسي', en: 'Main table', full: 'جدول بعمود رئيسي' },
-  { g: 'جداول', id: 'solTable', name: 'جدول الحل', en: 'Answers', full: 'جدول حل التمارين الموضوعية' },
+  { g: 'جداول', id: 'table', name: 'جدول برأس', en: 'Table with header' },
+  { g: 'جداول', id: 'tableMain', name: 'رأس وعمود رئيسي', en: 'Header + main column', full: 'جدول بعمود رئيسي' },
+  { g: 'جداول', id: 'solTable', name: 'جدول الحل', en: 'Answer table', full: 'جدول حل التمارين الموضوعية' },
   { g: 'جداول', id: 'grid', name: 'شبكة بيانية', en: 'Graph grid', full: 'شبكة بيانية فارغة' },
-  { g: 'نهاية الدرس', id: 'practice', name: 'تدرب وتفوق', en: 'Practice' }
+  { g: 'نهاية الدرس', id: 'practice', name: 'تدرب وتفوق', en: 'Practice & excel' }
 ];
 
 // ---------- specs ----------

@@ -486,13 +486,90 @@ async function clearSel(slideId) {
     await ctx.sync();
   }).catch(() => {});
 }
+// ---------- review marks: what «Hide solutions» will hide and what stays, drawn on the slide ----------
+// dashed outlines and small labels named "UULA Mark …", added and removed in place (no slide is rebuilt)
+const MARK_LOOK = {
+  question: ['00B050', 'سؤال', 'Question'], answer: ['1F71DE', 'حل', 'Solution'], grid: ['1F71DE', 'حل: رسم ← شبكة فارغة', 'Solution: graph → empty grid'],
+  correct: ['2070DF', 'خيار صحيح', 'Correct choice'], inside: ['7030A0', 'سؤال بداخله حل', 'Question with a solution inside'], given: ['808080', 'جزء من السؤال', 'Part of question'], stay: ['00B050', 'يبقى ظاهرًا', 'Stays']
+};
+async function dropMarks(ids) {
+  return run(async ctx => {
+    let n = 0;
+    for (const id of ids) {
+      const sh = ctx.presentation.slides.getItem(id).shapes; sh.load('items/name'); await ctx.sync();
+      sh.items.forEach(s => { if (/^UULA Mark/.test(s.name || '')) { s.delete(); n++; } });
+    }
+    await ctx.sync(); return n;
+  }).catch(() => 0);
+}
+async function drawMarks(id) {
+  const pkg = await UR.openPackage(await exportSlide(id));
+  const list = UR.solutionMarks(pkg);
+  if (!list) return -1;                                   // the solutions are hidden now
+  await run(async ctx => {
+    const sh = ctx.presentation.slides.getItem(id).shapes;
+    const labels = [];
+    for (const m of list) {
+      const [col, ar, en] = MARK_LOOK[m.kind];
+      const x = m.x / PT, y = m.y / PT, w = m.w / PT, h = m.h / PT;
+      const r = sh.addGeometricShape('Rectangle', { left: x - 2, top: y - 2, width: w + 4, height: h + 4 });
+      r.name = 'UULA Mark Box';
+      try { r.fill.clear(); r.lineFormat.color = '#' + col; r.lineFormat.weight = 1.25; r.lineFormat.dashStyle = 'Dash'; } catch (e) {}
+      const t = sh.addTextBox(L(ar, en), { left: x + w - 60, top: Math.max(0, y - 13), width: 60, height: 12 });
+      t.name = 'UULA Mark Label';
+      try {
+        t.fill.setSolidColor('#' + col); t.lineFormat.visible = false;
+        const tf = t.textFrame; tf.wordWrap = false; tf.autoSizeSetting = 'AutoSizeShapeToFitText';
+        tf.leftMargin = 3; tf.rightMargin = 3; tf.topMargin = 0; tf.bottomMargin = 0;
+        tf.textRange.font.color = '#FFFFFF'; tf.textRange.font.size = 8; tf.textRange.font.bold = true;
+      } catch (e) {}
+      labels.push({ t, right: x + w + 2 });
+    }
+    await ctx.sync();
+    // labels at the top-right corner of their object (RTL), once their width is known
+    labels.forEach(l => l.t.load('width')); await ctx.sync();
+    labels.forEach(l => { if (l.t.width) l.t.left = l.right - l.t.width; });
+    await ctx.sync();
+  });
+  return list.length;
+}
+async function hasMarks(id) {
+  return run(async ctx => { const sh = ctx.presentation.slides.getItem(id).shapes; sh.load('items/name'); await ctx.sync(); return sh.items.some(s => /^UULA Mark/.test(s.name || '')); }).catch(() => false);
+}
+function markLabel(on) { $('markBtn').textContent = on ? L('إخفاء العلامات', 'Hide marks') : L('إظهار العلامات', 'Show marks'); $('markBtn').dataset.on = on ? '1' : ''; }
+$('markBtn').addEventListener('click', async () => {
+  if (busy || !supported) return;
+  busy = true; lock(); res.innerHTML = '';
+  try {
+    const ids = await targetIds();
+    if (!ids.length) { say(L('حدّد شريحة أولًا.', 'Select a slide first.')); return; }
+    if ($('markBtn').dataset.on) { markLabel(false); if (await dropMarks(ids)) { say(L('أُزيلت العلامات.', 'Marks removed.')); return; } }
+    let shown = 0, hidden = 0;
+    for (let k = 0; k < ids.length; k++) {
+      prog(k / ids.length);
+      await dropMarks([ids[k]]);
+      const n = await drawMarks(ids[k]); if (n < 0) hidden++; else shown += n;
+    }
+    prog(null); markLabel(shown > 0);
+    say(hidden && !shown ? L('الحلول مخفية الآن. أظهرها أولًا لترى العلامات.', 'The solutions are hidden now. Show them first to see the marks.')
+      : shown ? L('ظهرت العلامات: ', 'Marks shown: ') + shown + L('. اضغط «إخفاء العلامات» لإزالتها قبل الطباعة أو الحفظ النهائي (تُزال وحدها عند إخفاء الحلول أو التحويل).', '. Press «Hide marks» to remove them before printing or the final save (they go by themselves when hiding solutions or restyling).')
+      : L('لم أجد أسئلة أو حلولًا في الشريحة.', 'No questions or solutions found on the slide.'));
+  } catch (e) { prog(null); say(L('حدث خطأ: ', 'Error: ') + errText(e)); }
+  finally { busy = false; lock(); }
+});
+// after marking an object while the marks are shown, they are drawn again for that slide
+async function refreshMarks() {
+  if (!$('markBtn').dataset.on) return;
+  const id = await currentId(); if (!id || !(await hasMarks(id))) return;
+  await dropMarks([id]); await drawMarks(id);
+}
 // solution marks change only the selected objects, in place: no slide is rebuilt, nothing moves
 const QUIET = { answer: '1F71DE', correct: '2070DF', given: null };
 async function quietMark(role) {
   return run(async ctx => {
     const shapes = ctx.presentation.getSelectedShapes(); shapes.load('items/name,items/type'); await ctx.sync();
     if (!shapes.items.length) return 0;
-    for (const s of shapes.items) {
+    for (const s of shapes.items.filter(x => !/^UULA Mark/.test(x.name || ''))) {
       s.name = 'UULA:' + role + ' ' + (s.name || '').replace(/ #ursel$/, '').replace(/^UULA:[a-z]+\s*/, '');
       if (QUIET[role] && ['TextBox', 'GeometricShape'].includes(s.type)) {
         try { const f = s.textFrame.textRange.font; f.color = '#' + QUIET[role]; if (role === 'correct') f.bold = true; } catch (e) {}
@@ -512,6 +589,7 @@ async function pinRole(role) {
         : role === 'given' ? L('عُلِّم كجزء من السؤال: يبقى ظاهرًا عند إخفاء الحلول.', 'Marked as part of the question: it stays when solutions are hidden.')
         : role === 'correct' ? L('عُلِّم كخيار صحيح (أزرق عريض): يتحول للأسود عند إخفاء الحلول.', 'Marked as the correct choice (bold blue): it turns black when solutions are hidden.')
         : L('عُلِّم كحل (أزرق): يُخفى عند إخفاء الحلول.', 'Marked as a solution (blue): it is hidden when solutions are hidden.'));
+      await refreshMarks().catch(() => {});
     } catch (e) { rsay(L('تعذّر التمييز: ', 'Could not mark: ') + errText(e)); }
     finally { busy = false; lock(); }
     return;
@@ -689,6 +767,7 @@ async function spacingRun(kind) {
   try {
     const ids = await targetIds();
     if (!ids.length) { say(L('حدّد شريحة أولًا.', 'Select a slide first.')); return; }
+    if (await dropMarks(ids)) markLabel(false);
     const over = [], skipped = [], spread = [];
     for (let k = 0; k < ids.length; k++) {
       prog(k / ids.length); say(L('تنسيق المسافات ', 'Spacing ') + (k + 1) + L(' من ', ' of ') + ids.length + '…');
@@ -774,8 +853,33 @@ let solLines = !!load('ur-sollines', false);
 function paintSolLines() { document.querySelectorAll('#solLines button').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.v === '1') === solLines))); }
 document.getElementById('solLines').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; solLines = b.dataset.v === '1'; save('ur-sollines', solLines); paintSolLines(); });
 paintSolLines();
-function solHidden() { const s = docSettings(); return !!(s && s.get('urSolHidden')); }
-function solLabel() { const h = solHidden(); $('solLbl').textContent = h ? L('إظهار الحلول', 'Show solutions') : L('إخفاء الحلول', 'Hide solutions'); $('solSlash').style.display = h ? 'none' : ''; }
+// the button follows the slide on screen: its solutions hidden → «Show solutions», shown → «Hide solutions»
+let solState = false;
+async function slideSolHidden(id) {
+  if (!id) return false;
+  return run(async ctx => { const sh = ctx.presentation.slides.getItem(id).shapes; sh.load('items/name'); await ctx.sync(); return sh.items.some(x => /^UULA Sol(Hidden|View) /.test(x.name || '')); }).catch(() => false);
+}
+function solHidden() { return solState; }
+function solPaint() { const h = solState; $('solLbl').textContent = h ? L('إظهار الحلول', 'Show solutions') : L('إخفاء الحلول', 'Hide solutions'); $('solSlash').style.display = h ? 'none' : ''; }
+async function solLabel() {
+  if ($('markBtn')) markLabel(false);
+  solPaint();
+  if (!supported) return;
+  try { solState = await slideSolHidden(await currentId()); } catch (e) {}
+  solPaint();
+}
+// another slide chosen: the button is checked again
+let solTimer = 0;
+let solWatching = false;
+function solWatch() {
+  if (solWatching) return; solWatching = true;
+  try {
+    Office.context.document.addHandlerAsync(Office.EventType.DocumentSelectionChanged, () => {
+      clearTimeout(solTimer); solTimer = setTimeout(() => { if (!busy && !isWord) solLabel(); }, 250);
+    });
+  } catch (e) {}
+  window.addEventListener('focus', () => { if (!busy && !isWord) solLabel(); });
+}
 async function solSlide(id, mode) {
   const pkg = await UR.openPackage(await exportSlide(id));
   let r;
@@ -804,7 +908,8 @@ async function solSlide(id, mode) {
 $('solBtn').addEventListener('click', async () => {
   if (busy || !supported) return;
   busy = true; lock(); res.innerHTML = '';
-  const mode = solHidden() ? 'show' : 'hide';
+  solState = await slideSolHidden(await currentId().catch(() => null));
+  const mode = solState ? 'show' : 'hide';
   try {
     const ids = await targetIds();
     if (!ids.length) { say(L('حدّد شريحة أولًا.', 'Select a slide first.')); return; }
@@ -815,8 +920,7 @@ $('solBtn').addEventListener('click', async () => {
       catch (e) { line('err', '✗ ' + esc(errText(e))); }
     }
     prog(null);
-    const s = docSettings(); if (s) { s.set('urSolHidden', mode === 'hide'); s.saveAsync(); }
-    solLabel();
+    await solLabel();
     say(total ? (mode === 'hide' ? L('أُخفيت الحلول في ', 'Solutions hidden in ') : L('ظهرت الحلول في ', 'Solutions shown in ')) + cnt(slides) + '.' : (mode === 'hide' ? L('لم أجد حلولًا لإخفائها.', 'No solutions found to hide.') : L('لا توجد حلول مخفية.', 'No hidden solutions.')));
   } catch (e) { prog(null); say(L('حدث خطأ: ', 'Error: ') + errText(e)); }
   finally { busy = false; lock(); }
@@ -1204,7 +1308,7 @@ function applyLang() {
   document.querySelectorAll('[data-en]').forEach(el => { if (el.dataset.ar == null) el.dataset.ar = el.textContent; el.textContent = lang === 'en' ? el.dataset.en : el.dataset.ar; });
   document.querySelectorAll('[data-en-title]').forEach(el => { el.title = lang === 'en' ? el.dataset.enTitle : el.dataset.arTitle; });
   $('langBtn').textContent = lang === 'en' ? 'ع' : 'EN';
-  buildTemplateList(); buildRoleList(); buildSolRoles(); buildWordRoles(); solLabel(); lock();
+  buildTemplateList(); buildRoleList(); buildSolRoles(); buildWordRoles(); solLabel(); lock(); if (!isWord) solWatch();
   if (isWord && supported && !$('wlist').closest('[data-pane]').hidden) reviewList().catch(() => {});
 }
 $('langBtn').addEventListener('click', () => { lang = lang === 'en' ? 'ar' : 'en'; save('ur-lang', lang); applyLang(); say(''); });

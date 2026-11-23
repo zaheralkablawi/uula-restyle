@@ -68,6 +68,8 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
 .tbtn:disabled{opacity:.5;cursor:default}
 .tbtn span{overflow:hidden;text-overflow:ellipsis}
 .tbtn i{flex:none;width:10px;height:10px;border-radius:2px;border:1px solid rgb(0 0 0 / .12)}
+#roles .tbtn{white-space:normal}
+#roles .tbtn span{text-overflow:clip}
 .modal{position:fixed;inset:0;z-index:60;background:rgb(0 0 0 / .35);display:grid;place-items:center;padding:16px}
 .mbox{background:var(--panel);border-radius:12px;max-width:420px;width:100%;max-height:80vh;overflow:auto;padding:14px 16px;box-shadow:0 16px 40px rgb(0 0 0 / .3)}
 .mbox h3{margin:0 0 8px;font-size:1rem}.mbox p{margin:6px 0}.mbox ul{margin:6px 0;padding-inline-start:1.2em}
@@ -135,7 +137,7 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
     <span class="note" data-en="Converts the font to the UULA font">تحويل الخط إلى خط علا</span>
     <button type="button" class="big" id="goBtn" data-en="Convert">تحويل</button>
     <div class="sep"></div>
-    <span class="note" data-en="Select a box on the slide, then pick what it is.">حدّد مربعًا في الشريحة، ثم اختر نوعه.</span>
+    <span class="note" data-en="Select one or more objects on the slide, then press what they are. Rest the pointer on a button to see what it does.">حدّد مربعًا أو أكثر في الشريحة، ثم اضغط على نوعه. ضع المؤشر على أي زر لترى ماذا يفعل.</span>
     <div id="roles" style="display:grid;gap:4px"></div>
     <div class="sep"></div>
     <div class="sprow"><span class="splab gt2" data-en="Spacing">تنسيق المسافات</span>

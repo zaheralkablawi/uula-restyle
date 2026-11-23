@@ -1406,7 +1406,15 @@ function applyRole(pkg, role) {
       styleTable(t, ctx, W); rename(t, 'table'); out.push({ idx: t.i, kind: 'table' }); continue;
     }
     if (/^table/.test(role)) continue;                                        // a table style chosen for something that is not a table
-    if (['given', 'correct'].includes(role)) { rename(t, role); continue; }       // marks only: no styling, no moving
+    if (role === 'given') { rename(t, role); continue; }                       // a mark only: never hidden as a solution, no styling, no moving
+    if (role === 'correct') {
+      // the correct choice: its text bold 2070DF (the skill), the box stays where it is
+      for (const c of allCores(t.el)) for (const pr of [...desc(c, 'a', 'rPr'), ...desc(c, 'a', 'endParaRPr')]) {
+        removeKids(pr, ['noFill', 'solidFill', 'gradFill', 'blipFill', 'pattFill', 'grpFill']);
+        placeChild(pr, solid(doc, C.answerOk), RPR_ORDER); pr.setAttribute('b', '1');
+      }
+      rename(t, role); continue;
+    }
     if (t.kind === 'pic' || t.kind === 'grpSp') { stylePic(t, false); rename(t, role === 'answer' ? 'answer' : 'pic'); out.push({ idx: t.i, kind: 'pic' }); continue; }
     if (t.kind !== 'text') { rename(t, role); continue; }
     const isBox = BOX_ROLES.includes(role);
@@ -1419,12 +1427,12 @@ function applyRole(pkg, role) {
     else if (role === 'lesson') setGeom(t.el, { x: M, y: 42.7 * PT, w: CW });
     else if (isBox) {
       const B = BOX[role];
-      const iconW = B.icon ? 15 * PT : 0;
+      const iconGap = B.icon ? 15 * PT : 0;
       // something beside the text (a graph …): the container covers only the text's side
       const beside = items.some(o => o !== t && o.g.w && !/^UULA (Footer|Watermark)|^CustomPageNumber_/.test(o.name)
         && Math.min(o.g.y + o.g.h, t.g.y + t.g.h) - Math.max(o.g.y, t.g.y) > 4 * PT && (o.g.x + o.g.w <= t.g.x + 2 * PT || o.g.x >= t.g.x + t.g.w - 2 * PT));
       const narrow = role === 'other' || beside;
-      const tx = narrow ? t.g.x : M, tw = role === 'other' ? t.g.w - 24 * PT : narrow ? Math.min(t.g.w, W - M - iconW - t.g.x) : CW - iconW;
+      const tx = narrow ? t.g.x : M, tw = role === 'other' ? t.g.w - 24 * PT : narrow ? Math.min(t.g.w, W - M - iconGap - t.g.x) : CW - iconGap;
       const est = estimateText(t.c, tw);
       const top = role === 'other' ? t.g.y - 4 * PT : t.g.y - ROW;
       const boxH = role === 'other' ? est + 8 * PT : est + 3 * ROW;

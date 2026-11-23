@@ -419,14 +419,38 @@ async function insertTemplate(tid) {
 
 // ---------- one object at a time ----------
 const ROLES = [
-  { g: 'نصوص', ge: 'Text', items: [['chapter', 'اسم الوحدة', 'A6A6A6'], ['lesson', 'اسم الدرس', '1F71DD'], ['topic', 'موضوع', '000000'], ['body', 'فقرة', 'FFFFFF'], ['bullets', 'نقاط', 'FFFFFF'], ['qhead', 'عنوان أسئلة', 'FF0000'], ['question', 'سؤال', 'FF0000'], ['choice', 'خيارات', 'FFFFFF']] },
-  { g: 'للحلول', ge: 'For solutions', items: [['answer', 'حل', '1F71DE'], ['correct', 'الخيار الصحيح', '2070DF'], ['given', 'شكل من السؤال', 'A6A6A6']] },
-  { g: 'إطارات', ge: 'Frames', items: [['note', 'ملاحظة', 'FBEBD3'], ['quote', 'نص مقتطف', 'E2F0D9'], ['def', 'تعريف', 'E2F0D9'], ['formula', 'قوانين', 'D3E4F5'], ['other', 'صيغة أخرى', 'FBEBD3'], ['activity', 'نشاط', 'F1F1F1'], ['mars', 'من المريخ', 'F1F1F1']] },
-  { g: 'جداول', ge: 'Tables', items: [['table', 'جدول', 'CAD0D8'], ['tableMain', 'جدول رئيسي', 'DAE0E9'], ['tablePlain', 'جدول بلا رأس', 'F1F1F1']] }
+  { g: 'نوع النص', ge: 'Text type', items: [['chapter', 'عنوان الوحدة', 'A6A6A6'], ['lesson', 'عنوان الدرس', '1F71DD'], ['topic', 'عنوان موضوع', '000000'], ['body', 'فقرة شرح', 'FFFFFF'], ['bullets', 'نقاط مرقّمة', 'FFFFFF'], ['qhead', 'عنوان الأسئلة', 'FF0000'], ['question', 'نص السؤال', 'FF0000'], ['choice', 'خيارات السؤال', 'FFFFFF']] },
+  { g: 'الحلول', ge: 'Solutions', items: [['answer', 'حل السؤال', '1F71DE'], ['correct', 'الخيار الصحيح', '2070DF'], ['given', 'جزء من السؤال', 'A6A6A6']] },
+  { g: 'إطارات حول المحدد', ge: 'Frames around the selection', items: [['note', 'ملاحظة', 'FBEBD3'], ['quote', 'نص مقتطف', 'E2F0D9'], ['def', 'تعريف', 'E2F0D9'], ['formula', 'قوانين', 'D3E4F5'], ['other', 'صيغة أخرى', 'FBEBD3'], ['activity', 'نشاط', 'F1F1F1'], ['mars', 'من المريخ', 'F1F1F1']] },
+  { g: 'تنسيق جدول محدد', ge: 'Selected table', items: [['table', 'جدول برأس', 'CAD0D8'], ['tableMain', 'رأس وعمود رئيسي', 'DAE0E9'], ['tablePlain', 'جدول بلا رأس', 'F1F1F1']] }
 ];
+// what each button does (shown when the pointer rests on it)
+const ROLE_TIP = {
+  chapter: ['اسم الوحدة أعلى الصفحة (رمادي صغير)', 'Unit name at the top (small gray)'],
+  lesson: ['اسم الدرس أعلى الصفحة (أزرق كبير)', 'Lesson name at the top (large blue)'],
+  topic: ['عنوان موضوع داخل الدرس (أسود عريض)', 'A topic heading inside the lesson (bold black)'],
+  body: ['فقرة شرح عادية بخط المذكرة', 'A normal paragraph in the booklet font'],
+  bullets: ['قائمة نقاط، كل سطر نقطة', 'A bullet list, one point per line'],
+  qhead: ['عنوان قسم الأسئلة (أحمر عريض)', 'Heading of a questions section (bold red)'],
+  question: ['نص السؤال مع علامة السؤال الحمراء', 'Question text with the red question mark'],
+  choice: ['خيارات سؤال الاختيار من متعدد', 'The choices of a multiple-choice question'],
+  answer: ['حل السؤال بالأزرق، ويُخفى عند «إخفاء الحلول»', 'The solution in blue, hidden by «Hide solutions»'],
+  correct: ['الخيار الصحيح بالأزرق العريض، ويتحول للأسود عند «إخفاء الحلول»', 'The correct choice in bold blue, turns black when solutions are hidden'],
+  given: ['شكل أو نص من السؤال نفسه: يبقى ظاهرًا عند «إخفاء الحلول» حتى لو كان أزرق', 'A shape or text that belongs to the question: it stays when solutions are hidden, even if blue'],
+  note: ['إطار ملاحظة حول ما حددته (مربع أو أكثر)', 'A note frame around the selection'],
+  quote: ['إطار نص مقتطف حول ما حددته', 'A quote frame around the selection'],
+  def: ['إطار تعريف حول ما حددته', 'A definition frame around the selection'],
+  formula: ['إطار قوانين حول ما حددته', 'A formulas frame around the selection'],
+  other: ['إطار صغير «صيغة أخرى» حول ما حددته', 'A small «other form» frame around the selection'],
+  activity: ['إطار نشاط حول ما حددته', 'An activity frame around the selection'],
+  mars: ['إطار «من المريخ» حول ما حددته', 'A «from Mars» frame around the selection'],
+  table: ['حدّد جدولًا: صف رأس رمادي وصفوف متبادلة', 'Select a table: gray header row, alternating rows'],
+  tableMain: ['حدّد جدولًا: صف رأس وعمود أول رئيسي', 'Select a table: header row and a main first column'],
+  tablePlain: ['حدّد جدولًا: بلا صف رأس، صفوف متبادلة', 'Select a table: no header row, alternating rows']
+};
 const FRAME_ROLES = ['note', 'quote', 'def', 'formula', 'other', 'activity', 'mars'];
-const ROLE_EN = { chapter: 'Unit', lesson: 'Lesson', topic: 'Topic', body: 'Paragraph', bullets: 'Bullets', qhead: 'Q head', question: 'Question', answer: 'Solution', choice: 'Choices',
-  correct: 'Correct choice', given: 'Part of question', note: 'Note', quote: 'Quote', def: 'Definition', formula: 'Formulas', other: 'Other form', activity: 'Activity', mars: 'Challenge', table: 'Table', tableMain: 'Main table', tablePlain: 'No header' };
+const ROLE_EN = { chapter: 'Unit title', lesson: 'Lesson title', topic: 'Topic heading', body: 'Paragraph', bullets: 'Bullet list', qhead: 'Questions heading', question: 'Question text', answer: 'Solution', choice: 'Choices',
+  correct: 'Correct choice', given: 'Part of question', note: 'Note', quote: 'Quote', def: 'Definition', formula: 'Formulas', other: 'Other form', activity: 'Activity', mars: 'From Mars', table: 'With header', tableMain: 'Header + main column', tablePlain: 'No header' };
 function buildRoleList() {
   const host = $('roles'); host.innerHTML = '';
   for (const g of ROLES) {
@@ -436,7 +460,7 @@ function buildRoleList() {
     for (const [id, nameAr, col] of g.items) {
       const name = L(nameAr, ROLE_EN[id]);
       const b = document.createElement('button'); b.type = 'button'; b.className = 'tbtn'; b.dataset.role = id;
-      b.title = name === 'موضوع' ? 'عنوان موضوع' : name; b.innerHTML = '<i style="background:#' + col + '"></i><span>' + name + '</span>';
+      b.title = ROLE_TIP[id] ? L(ROLE_TIP[id][0], ROLE_TIP[id][1]) : name; b.innerHTML = '<i style="background:#' + col + '"></i><span>' + name + '</span>';
       grid.appendChild(b);
     }
     d.appendChild(grid); host.appendChild(d);
@@ -520,7 +544,8 @@ async function pinRole(role) {
       try { const ids = r.targets.map(t => map[t.idx]).filter(Boolean).map(s => s.id); ctx.presentation.slides.getItem(newId).setSelectedShapes(ids); await ctx.sync(); } catch (e) {}
     });
     await unmark(newId);
-    rsay(L('تم.', 'Done.'));
+    rsay(role === 'given' ? L('عُلِّم كشكل من السؤال: يبقى ظاهرًا عند إخفاء الحلول.', 'Marked as part of the question: it stays when solutions are hidden.')
+      : role === 'correct' ? L('عُلِّم كخيار صحيح (أزرق عريض): يتحول للأسود عند إخفاء الحلول.', 'Marked as the correct choice (bold blue): it turns black when solutions are hidden.') : L('تم.', 'Done.'));
   } catch (e) { if (slideId) await clearSel(slideId); rsay(L('تعذّر التحويل: ', 'Could not restyle: ') + errText(e)); }
   finally { busy = false; lock(); }
 }

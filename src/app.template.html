@@ -56,8 +56,14 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
 .res .ok{color:var(--ok)}.res .warn{color:var(--warn)}.res .err{color:var(--err)}
 .res a{color:var(--accent);cursor:pointer;text-decoration:underline;unicode-bidi:isolate}
 .note{font-size:.74rem;color:var(--muted)}
-.tgroup{display:grid;gap:3px}
-.tgroup .gt{font-size:.7rem;color:var(--muted);font-weight:600;margin-top:1px}
+.tgroup{display:grid;gap:5px;border:1px solid var(--line);border-radius:9px;padding:5px 7px 7px;background:#fafbfc}
+.tgroup .gt{font-size:.7rem;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
+.tgroup .gt .bar{flex:none;width:3px;height:12px;border-radius:2px}
+.tgroup .gt .chev{margin-inline-start:auto;font-size:10px;opacity:.6;transition:transform .15s}
+.tgroup.closed .tgrid{display:none}
+.tgroup.closed .gt .chev{transform:rotate(90deg)}
+[dir="ltr"] .tgroup.closed .gt .chev{transform:rotate(-90deg)}
+#roles,#tpls{display:grid;gap:6px}
 .tgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
 .tbtn{font:inherit;font-size:.72rem;min-height:24px;padding:1px 5px;white-space:nowrap;overflow:hidden;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);cursor:pointer;text-align:start;display:flex;align-items:center;gap:4px;line-height:1.2}
 .drop{display:flex;align-items:center;gap:7px;width:100%;padding:0;border:0;background:none;color:var(--ink);font:inherit;font-size:.95rem;cursor:pointer;text-align:start}

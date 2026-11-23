@@ -15,11 +15,13 @@ const PT = 12700;
 // ---------- the types ----------
 // id, Arabic, English, frame colour in Word (and the swatch in the pane)
 const TYPES = [
+  { g: 'عناوين', ge: 'Headings', items: [
+    ['chapter', 'عنوان الوحدة', 'Unit title', 'A6A6A6'], ['lesson', 'عنوان الدرس', 'Lesson title', '1F71DD'], ['topic', 'عنوان موضوع', 'Topic heading', '404040']] },
   { g: 'نصوص', ge: 'Text', items: [
-    ['chapter', 'عنوان الوحدة', 'Unit title', 'A6A6A6'], ['lesson', 'عنوان الدرس', 'Lesson title', '1F71DD'], ['topic', 'عنوان موضوع', 'Topic heading', '404040'],
-    ['body', 'فقرة شرح', 'Paragraph', '8C8C8C'], ['bullets', 'نقاط مرقّمة', 'Bullet list', '8C8C8C'], ['qhead', 'عنوان الأسئلة', 'Questions heading', 'C00000'],
-    ['question', 'نص السؤال', 'Question text', 'FF0000'], ['choice', 'خيارات السؤال', 'Choices', '7030A0'], ['answer', 'حل السؤال', 'Solution', '1F71DE'],
-    ['correct', 'الخيار الصحيح', 'Correct choice', '2070DF']] },
+    ['body', 'فقرة شرح', 'Paragraph', '8C8C8C'], ['bullets', 'نقاط مرقّمة', 'Bullet list', '8C8C8C']] },
+  { g: 'أسئلة', ge: 'Questions', items: [
+    ['qhead', 'عنوان الأسئلة', 'Questions heading', 'C00000'], ['question', 'نص السؤال', 'Question text', 'FF0000'], ['choice', 'خيارات السؤال', 'Choices', '7030A0'],
+    ['answer', 'حل السؤال', 'Solution', '1F71DE'], ['correct', 'الخيار الصحيح', 'Correct choice', '2070DF']] },
   { g: 'إطارات', ge: 'Frames', items: [
     ['note', 'ملاحظة', 'Note', 'E69138'], ['def', 'تعريف', 'Definition', '2AB672'], ['quote', 'نص مقتطف', 'Quote', '2AB672'],
     ['formula', 'قوانين', 'Formulas', '5B9BD5'], ['other', 'صيغة أخرى', 'Other form', 'C45A11'], ['activity', 'نشاط', 'Activity', '7F7F7F'],

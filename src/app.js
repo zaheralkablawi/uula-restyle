@@ -308,6 +308,7 @@ function iconHtml(id, col) {
     case 'mcq': case 'choice': return g('ⓐ', id === 'mcq' ? 'FF0000' : '595959', ';font-size:13px;font-weight:400');
     case 'answer': return g('✓', '1F71DE', ';font-size:13px');
     case 'correct': return '<i class="ic"><b style="width:11px;height:11px;border-radius:50%;background:#2070DF;color:#fff;font-size:8px;line-height:11px;text-align:center">a</b></i>';
+    case 'figure': return '<i class="ic"><svg viewBox="0 0 14 12" width="14" height="12"><rect x=".5" y=".5" width="13" height="11" rx="1.5" fill="#fff" stroke="#00B050"/><circle cx="4.5" cy="4" r="1.4" fill="#00B050"/><path d="M1 11l4-4 3 3 2-2 3 3" fill="none" stroke="#00B050"/></svg></i>';
     case 'given': return '<i class="ic"><b style="width:12px;height:10px;border:1.5px dashed #808080"></b></i>';
     case 'problem': return g('Q', '00B050', ';font-size:13px');
     case 'note': return img('bulb') || box('FBEBD3', 'E69138');
@@ -326,14 +327,25 @@ function iconHtml(id, col) {
   }
   return '<i style="background:#' + (col || 'FFFFFF') + '"></i>';
 }
+// one card per group: a coloured strip, the title, and a click to fold it (remembered on this device)
+const GROUP_COL = { 'عناوين': '1F71DD', 'نصوص': '8C8C8C', 'أسئلة': 'FF0000', 'الحلول': '1F71DE', 'إطارات': 'E69138', 'إطارات حول المحدد': 'E69138', 'جداول': '44546A', 'تنسيق جدول محدد': '44546A', 'نهاية الدرس': '7030A0', 'أخرى': '00B050' };
+function groupCard(where, key, title) {
+  const closed = load('ur-closed', {});
+  const d = document.createElement('div'); d.className = 'tgroup' + (closed[where + ':' + key] ? ' closed' : '');
+  d.innerHTML = '<div class="gt" role="button" tabindex="0"><span class="bar" style="background:#' + (GROUP_COL[key] || '9aa3ad') + '"></span><span>' + title + '</span><span class="chev">▾</span></div>';
+  const head = d.firstChild;
+  const fold = () => { d.classList.toggle('closed'); const c = load('ur-closed', {}); c[where + ':' + key] = d.classList.contains('closed'); save('ur-closed', c); };
+  head.addEventListener('click', fold);
+  head.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fold(); } });
+  const grid = document.createElement('div'); grid.className = 'tgrid'; d.appendChild(grid);
+  return { d, grid };
+}
 function buildTemplateList() {
   const host = $('tpls'); host.innerHTML = '';
   const groups = [];
   for (const t of URT.LIST) { let g = groups.find(x => x.name === t.g); if (!g) groups.push(g = { name: t.g, items: [] }); g.items.push(t); }
   for (const g of groups) {
-    const d = document.createElement('div'); d.className = 'tgroup';
-    d.innerHTML = '<div class="gt">' + L(g.name, URT.GROUP_EN[g.name] || g.name) + '</div>';
-    const grid = document.createElement('div'); grid.className = 'tgrid';
+    const { d, grid } = groupCard('ins', g.name, L(g.name, URT.GROUP_EN[g.name] || g.name));
     for (const t of g.items) {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'tbtn'; b.dataset.id = t.id;
       b.title = L(t.full || t.name, t.en); b.innerHTML = iconHtml(t.id, SW[t.id]) + '<span>' + L(t.name, t.en) + '</span>';
@@ -487,7 +499,9 @@ async function insertTemplate(tid) {
 
 // ---------- one object at a time ----------
 const ROLES = [
-  { g: 'نوع النص', ge: 'Text type', items: [['chapter', 'عنوان الوحدة', 'A6A6A6'], ['lesson', 'عنوان الدرس', '1F71DD'], ['topic', 'عنوان موضوع', '000000'], ['body', 'فقرة شرح', 'FFFFFF'], ['bullets', 'نقاط مرقّمة', 'FFFFFF'], ['qhead', 'عنوان الأسئلة', 'FF0000'], ['question', 'نص السؤال', 'FF0000'], ['choice', 'خيارات السؤال', 'FFFFFF']] },
+  { g: 'عناوين', ge: 'Headings', items: [['chapter', 'عنوان الوحدة', 'A6A6A6'], ['lesson', 'عنوان الدرس', '1F71DD'], ['topic', 'عنوان موضوع', '000000']] },
+  { g: 'نصوص', ge: 'Text', items: [['body', 'فقرة شرح', 'FFFFFF'], ['bullets', 'نقاط مرقّمة', 'FFFFFF']] },
+  { g: 'أسئلة', ge: 'Questions', items: [['qhead', 'عنوان الأسئلة', 'FF0000'], ['question', 'نص السؤال', 'FF0000'], ['choice', 'خيارات السؤال', 'FFFFFF']] },
   { g: 'الحلول', ge: 'Solutions', items: [['answer', 'حل السؤال', '1F71DE'], ['correct', 'الخيار الصحيح', '2070DF'], ['given', 'جزء من السؤال', 'A6A6A6']] },
   { g: 'إطارات حول المحدد', ge: 'Frames around the selection', items: [['note', 'ملاحظة', 'FBEBD3'], ['quote', 'نص مقتطف', 'E2F0D9'], ['def', 'تعريف', 'E2F0D9'], ['formula', 'قوانين', 'D3E4F5'], ['other', 'صيغة أخرى', 'FBEBD3'], ['activity', 'نشاط', 'F1F1F1'], ['mars', 'من المريخ', 'F1F1F1']] },
   { g: 'تنسيق جدول محدد', ge: 'Selected table', items: [['table', 'جدول برأس', 'CAD0D8'], ['tableMain', 'رأس وعمود رئيسي', 'DAE0E9'], ['tablePlain', 'جدول بلا رأس', 'F1F1F1']] }
@@ -528,9 +542,7 @@ const ROLE_EN = { chapter: 'Unit title', lesson: 'Lesson title', topic: 'Topic h
 function buildRoleList() {
   const host = $('roles'); host.innerHTML = '';
   for (const g of ROLES) {
-    const d = document.createElement('div'); d.className = 'tgroup';
-    d.innerHTML = '<div class="gt">' + L(g.g, g.ge) + '</div>';
-    const grid = document.createElement('div'); grid.className = 'tgrid';
+    const { d, grid } = groupCard('obj', g.g, L(g.g, g.ge));
     for (const [id, nameAr, col] of g.items) {
       const name = L(nameAr, ROLE_EN[id]);
       const b = document.createElement('button'); b.type = 'button'; b.className = 'tbtn'; b.dataset.role = id;
@@ -1106,12 +1118,10 @@ const wname = id => { const t = wtype(id); return t ? L(t.ar, t.en) : id; };
 function buildWordRoles() {
   const host = $('wroles'); host.innerHTML = '';
   for (const g of UW.TYPES) {
-    const d = document.createElement('div'); d.className = 'tgroup';
-    d.innerHTML = '<div class="gt">' + L(g.g, g.ge) + '</div>';
-    const grid = document.createElement('div'); grid.className = 'tgrid';
+    const { d, grid } = groupCard('word', g.g, L(g.g, g.ge));
     for (const [id, ar, en, col] of g.items) {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'tbtn'; b.dataset.wrole = id;
-      b.title = L(ar, en); b.innerHTML = '<i style="background:#' + col + '"></i><span>' + L(ar, en) + '</span>';
+      b.title = L(ar, en); b.innerHTML = iconHtml(id, col) + '<span>' + L(ar, en) + '</span>';
       grid.appendChild(b);
     }
     d.appendChild(grid); host.appendChild(d);

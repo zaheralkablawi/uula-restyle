@@ -1542,9 +1542,12 @@ function solutionMarks(pkg) {
     else if (/^UULA:given/.test(name)) kind = 'given';
     else if (flags[i] || /^UULA:(question|choice)/.test(name)) kind = 'question';
     else if (c.localName !== 'sp' || /\S/.test(textOf(c))) kind = 'stay';          // any other content: it stays
-    if (kind) out.push({ x: g.x, y: g.y, w: g.w, h: g.h, kind });
+    if (g.y >= pkg.slideH - FOOT) kind = kind === 'stay' ? null : kind;      // the page number / year at the bottom
+    if (kind) out.push({ x: g.x, y: g.y, w: g.w, h: g.h, kind, bare: c.localName === 'sp' && !/\S/.test(textOf(c)) });
   });
-  return out;
+  // a frame or shape that only holds other marked things is not shaded itself (no double shading)
+  const holds = (b, o) => { const cx = o.x + o.w / 2, cy = o.y + o.h / 2; return o !== b && cx >= b.x && cx <= b.x + b.w && cy >= b.y && cy <= b.y + b.h; };
+  return out.filter(b => !(b.kind === 'stay' && (b.bare || b.w * b.h > 0) && out.some(o => holds(b, o) && o.w * o.h < b.w * b.h)));
 }
 function spacing(rects, W, H) {
   const free = rects.filter(r => !r.fixed);

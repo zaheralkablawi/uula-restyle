@@ -508,27 +508,13 @@ async function drawMarks(id) {
   if (!list) return -1;                                   // the solutions are hidden now
   await run(async ctx => {
     const sh = ctx.presentation.slides.getItem(id).shapes;
-    const labels = [];
     for (const m of list) {
-      const [col, ar, en] = MARK_LOOK[m.kind];
-      const x = m.x / PT, y = m.y / PT, w = m.w / PT, h = m.h / PT;
-      const r = sh.addGeometricShape('Rectangle', { left: x - 2, top: y - 2, width: w + 4, height: h + 4 });
-      r.name = 'UULA Mark Box';
-      try { r.fill.clear(); r.lineFormat.color = '#' + col; r.lineFormat.weight = 1.25; r.lineFormat.dashStyle = 'Dash'; } catch (e) {}
-      const t = sh.addTextBox(L(ar, en), { left: x + w - 60, top: Math.max(0, y - 13), width: 60, height: 12 });
-      t.name = 'UULA Mark Label';
-      try {
-        t.fill.setSolidColor('#' + col); t.lineFormat.visible = false;
-        const tf = t.textFrame; tf.wordWrap = false; tf.autoSizeSetting = 'AutoSizeShapeToFitText';
-        tf.leftMargin = 3; tf.rightMargin = 3; tf.topMargin = 0; tf.bottomMargin = 0;
-        tf.textRange.font.color = '#FFFFFF'; tf.textRange.font.size = 8; tf.textRange.font.bold = true;
-      } catch (e) {}
-      labels.push({ t, right: x + w + 2 });
+      const col = MARK_LOOK[m.kind][0];
+      // a light shade over the object: what will be hidden, what stays
+      const r = sh.addGeometricShape('Rectangle', { left: m.x / PT - 2, top: m.y / PT - 2, width: m.w / PT + 4, height: m.h / PT + 4 });
+      r.name = 'UULA Mark';
+      try { r.fill.setSolidColor('#' + col); r.fill.transparency = 0.82; r.lineFormat.visible = false; } catch (e) {}
     }
-    await ctx.sync();
-    // labels at the top-right corner of their object (RTL), once their width is known
-    labels.forEach(l => l.t.load('width')); await ctx.sync();
-    labels.forEach(l => { if (l.t.width) l.t.left = l.right - l.t.width; });
     await ctx.sync();
   });
   return list.length;

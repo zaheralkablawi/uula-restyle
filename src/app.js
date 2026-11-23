@@ -288,6 +288,44 @@ $('numAll').addEventListener('click', async () => {
 // ---------- templates ----------
 const SW = { header: '1F71DD', topic: '000000', body: 'FFFFFF', bullets: 'FFFFFF', cols: 'FFFFFF', pill: '1F71DC', qhead: 'FF0000', question: 'FF0000', qa: '1F71DE', answer: '1F71DE', qqr: 'FF0000', mcq: 'FF0000', problem: '00B050', other: 'FBEBD3',
   note: 'FBEBD3', quote: 'E2F0D9', formula: 'D3E4F5', activity: 'F1F1F1', mars: 'F1F1F1', cancelled: 'FFC000', table: 'CAD0D8', tableMain: 'DAE0E9', solTable: 'CAD0D8', grid: 'D3D8E0', practice: 'EBE6FE' };
+// a small sign on every button, like the booklet's own: the red Q of a question, the bulb of a note …
+function iconHtml(id, col) {
+  const img = k => typeof UR_ASSETS !== 'undefined' && UR_ASSETS[k] ? '<i class="ic"><img alt="" src="data:image/png;base64,' + UR_ASSETS[k] + '"></i>' : null;
+  const g = (t, c, extra) => '<i class="ic" style="color:#' + c + (extra || '') + '">' + t + '</i>';
+  const box = (fill, line, t) => '<i class="ic"><b style="width:13px;height:11px;background:#' + fill + ';border:1px solid #' + line + ';font-size:8px;line-height:10px;color:#555">' + (t || '') + '</b></i>';
+  const tbl = (head, col1) => '<i class="ic"><svg viewBox="0 0 14 12" width="14" height="12"><rect x=".5" y=".5" width="13" height="11" fill="#fff" stroke="#9aa3ad"/>' + (head ? '<rect x=".5" y=".5" width="13" height="3.5" fill="#' + head + '"/>' : '') + (col1 ? '<rect x="9.5" y="4" width="4" height="7.5" fill="#' + col1 + '"/>' : '') + '<path d="M.5 4h13M.5 7.7h13M5 .5v11M9.5 .5v11" stroke="#9aa3ad" stroke-width=".6"/></svg></i>';
+  switch (id) {
+    case 'chapter': return g('Aa', 'A6A6A6', ';font-size:9px');
+    case 'lesson': case 'header': return g('Aa', '1F71DD', ';font-size:12px');
+    case 'topic': return g('Aa', '000000', ';font-size:11px');
+    case 'body': return g('≡', '8C8C8C', ';font-size:14px');
+    case 'bullets': return g('•≡', '595959', ';font-size:11px');
+    case 'cols': return g('••', '595959', ';font-size:11px;letter-spacing:2px');
+    case 'pill': return '<i class="ic"><b style="width:14px;height:8px;border-radius:5px;background:#1F71DC"></b></i>';
+    case 'qhead': return g('Q≡', 'FF0000', ';font-size:10px');
+    case 'question': case 'qqr': return g('Q', 'FF0000', ';font-size:13px');
+    case 'qa': return g('Q<span style="color:#1F71DE">✓</span>', 'FF0000', ';font-size:11px');
+    case 'mcq': case 'choice': return g('ⓐ', id === 'mcq' ? 'FF0000' : '595959', ';font-size:13px;font-weight:400');
+    case 'answer': return g('✓', '1F71DE', ';font-size:13px');
+    case 'correct': return '<i class="ic"><b style="width:11px;height:11px;border-radius:50%;background:#2070DF;color:#fff;font-size:8px;line-height:11px;text-align:center">a</b></i>';
+    case 'given': return '<i class="ic"><b style="width:12px;height:10px;border:1.5px dashed #808080"></b></i>';
+    case 'problem': return g('Q', '00B050', ';font-size:13px');
+    case 'note': return img('bulb') || box('FBEBD3', 'E69138');
+    case 'quote': case 'def': return img('book') || box('E2F0D9', '2AB672');
+    case 'other': return img('star') || box('FBEBD3', 'C45A11');
+    case 'activity': return img('palette') || box('F1F1F1', 'A6A6A6');
+    case 'mars': return img('target') || box('F1F1F1', '595959');
+    case 'formula': return box('D3E4F5', '5B9BD5', '∑');
+    case 'practice': return img('trophy') || box('EBE6FE', '7030A0');
+    case 'cancelled': return box('FFF2CC', 'FFC000', '⏸');
+    case 'table': return tbl('CAD0D8');
+    case 'tableMain': return tbl('CAD0D8', 'DAE0E9');
+    case 'tablePlain': return tbl(null);
+    case 'solTable': return tbl('CAD0D8', null);
+    case 'grid': return '<i class="ic"><svg viewBox="0 0 14 12" width="14" height="12"><path d="M1 0v12M4.5 0v12M8 0v12M11.5 0v12M0 1.5h14M0 5h14M0 8.5h14M0 11.5h14" stroke="#9aa3ad" stroke-width=".7"/><path d="M8 0v12M0 5h14" stroke="#333" stroke-width=".9"/></svg></i>';
+  }
+  return '<i style="background:#' + (col || 'FFFFFF') + '"></i>';
+}
 function buildTemplateList() {
   const host = $('tpls'); host.innerHTML = '';
   const groups = [];
@@ -298,7 +336,7 @@ function buildTemplateList() {
     const grid = document.createElement('div'); grid.className = 'tgrid';
     for (const t of g.items) {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'tbtn'; b.dataset.id = t.id;
-      b.title = L(t.full || t.name, t.en); b.innerHTML = '<i style="background:#' + (SW[t.id] || 'FFFFFF') + '"></i><span>' + L(t.name, t.en) + '</span>';
+      b.title = L(t.full || t.name, t.en); b.innerHTML = iconHtml(t.id, SW[t.id]) + '<span>' + L(t.name, t.en) + '</span>';
       grid.appendChild(b);
     }
     d.appendChild(grid); host.appendChild(d);
@@ -316,6 +354,36 @@ async function gridSelected(id) {
     return pics.length;
   }).catch(() => 0);
   if (!n) return 0;
+  // in place: the grid drawn from lines and grouped, the picture removed (nothing moves on screen)
+  const quick = await run(async ctx => {
+    const sh = ctx.presentation.slides.getItem(id).shapes;
+    sh.load('items/id,items/name,items/left,items/top,items/width,items/height'); await ctx.sync();
+    const pics = sh.items.filter(s => / #ursel$/.test(s.name || ''));
+    const made = [], groups = [];
+    try {
+      for (const p of pics) {
+        const x0 = p.left, y0 = p.top, w = p.width, h = p.height, step = 13.39;
+        const lines = [];
+        const add = (l, t, ww, hh) => { const ln = sh.addLine('Straight', { left: l, top: t, width: ww, height: hh }); ln.lineFormat.color = '#D3D8E0'; ln.lineFormat.weight = 0.5; ln.name = 'UULA Graph Grid Line'; lines.push(ln); made.push(ln); };
+        for (let x = (w / 2) % step; x <= w + 0.01; x += step) add(x0 + x, y0, 0, h);
+        for (let y = (h / 2) % step; y <= h + 0.01; y += step) add(x0, y0 + y, w, 0);
+        lines.forEach(l => l.load('id'));
+        groups.push({ p, lines });
+      }
+      await ctx.sync();
+      const sel = [];
+      for (const gr of groups) { const g = sh.addGroup(gr.lines.map(l => l.id)); g.name = 'UULA Graph Grid'; g.load('id'); sel.push(g); }
+      await ctx.sync();
+      groups.forEach(gr => gr.p.delete());
+      await ctx.sync();
+      try { ctx.presentation.slides.getItem(id).setSelectedShapes(sel.map(g => g.id)); await ctx.sync(); } catch (e) {}
+      return pics.length;
+    } catch (e) {
+      made.forEach(l => { try { l.delete(); } catch (x) {} }); await ctx.sync().catch(() => {});
+      return null;
+    }
+  }).catch(() => null);
+  if (quick) return quick;
   const pkg = await UR.openPackage(await exportSlide(id));
   const r = UR.gridOver(pkg);
   if (!r.count) { await clearSel(id); return 0; }
@@ -466,7 +534,7 @@ function buildRoleList() {
     for (const [id, nameAr, col] of g.items) {
       const name = L(nameAr, ROLE_EN[id]);
       const b = document.createElement('button'); b.type = 'button'; b.className = 'tbtn'; b.dataset.role = id;
-      b.title = ROLE_TIP[id] ? L(ROLE_TIP[id][0], ROLE_TIP[id][1]) : name; b.innerHTML = '<i style="background:#' + col + '"></i><span>' + name + '</span>';
+      b.title = ROLE_TIP[id] ? L(ROLE_TIP[id][0], ROLE_TIP[id][1]) : name; b.innerHTML = iconHtml(id, col) + '<span>' + name + '</span>';
       grid.appendChild(b);
     }
     d.appendChild(grid); host.appendChild(d);
@@ -479,7 +547,7 @@ function buildSolRoles() {
   for (const [id, nameAr, col] of ROLES.find(g => g.items.some(x => x[0] === 'given')).items) {
     const name = L(nameAr, ROLE_EN[id]);
     const b = document.createElement('button'); b.type = 'button'; b.className = 'tbtn'; b.dataset.role = id;
-    b.title = L(SOL_TIP[id][0], SOL_TIP[id][1]); b.innerHTML = '<i style="background:#' + col + '"></i><span>' + name + '</span>';
+    b.title = L(SOL_TIP[id][0], SOL_TIP[id][1]); b.innerHTML = iconHtml(id, col) + '<span>' + name + '</span>';
     host.appendChild(b);
   }
 }
@@ -592,8 +660,13 @@ async function pinRole(role, keepColour) {
     let r;
     try { r = UR.applyRole(pkg, role); if (['given', 'correct'].includes(role)) r.targets = []; }
     catch (e) { await clearSel(slideId); rsay(e.message === 'nosel' ? L('حدّد مربعًا في الشريحة أولًا.', 'Select a box on the slide first.') : L('تعذّر التحويل: ', 'Could not restyle: ') + errText(e)); return; }
-    const newId = await insertAfter(await UR.buildPackage(pkg, r.xml, r.rels), slideId);
-    await deleteSlide(slideId); slideId = null;
+    // in place when it can be done exactly (nothing moves on screen); otherwise the slide is rebuilt
+    let newId = slideId;
+    if (!(await UQ.apply(slideId, pkg.files.slide, r.xml, exportSlide).catch(() => false))) {
+      newId = await insertAfter(await UR.buildPackage(pkg, r.xml, r.rels), slideId);
+      await deleteSlide(slideId);
+    }
+    slideId = null;
     // real text heights: fit the container around the text
     await run(async ctx => {
       const { map } = await shapesByMark(ctx, newId);

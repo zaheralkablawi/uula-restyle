@@ -1713,6 +1713,20 @@ function tableBlueRuns(tbl) {
   return out;
 }
 
+// small circles filled in blue (a chosen answer: ⓐ ⓑ … coloured in), on their own, with their letter, or inside a group
+function blueDots(el, ctx) {
+  const out = [];
+  for (const sp of [el, ...el.getElementsByTagName('*')].filter(n => n.localName === 'sp')) {
+    const pg = desc(sp, 'a', 'prstGeom')[0];
+    if (!pg || !/ellipse|flowChartConnector/.test(pg.getAttribute('prst') || '')) continue;
+    const spPr = kid(sp, 'spPr', 'p'), ext = spPr && desc(spPr, 'a', 'ext')[0];
+    if (!ext || +ext.getAttribute('cx') > 40 * PT || +ext.getAttribute('cy') > 40 * PT) continue;
+    const c = colorOf(kid(spPr, 'solidFill', 'a'), ctx);
+    if (c && isBlue(rgb(c))) out.push(sp);
+  }
+  return out;
+}
+
 function findSolutions(pkg) {
   const W = pkg.slideW, H = pkg.slideH;
   const doc = parseXml(pkg.files.slide);
@@ -1732,6 +1746,7 @@ function findSolutions(pkg) {
       if (t.kind === 'pic') { const blip = desc(t.c, 'a', 'blip')[0], rid = blip && blip.getAttributeNS(NS.r, 'embed'), target = rid && relT(rid); if (target) { found.push({ i: t.i, how: 'grid', pinned: true, media: 'ppt/media/' + target.split('/').pop(), w: t.g.w / PT, h: t.g.h / PT }); continue; } }
       found.push({ i: t.i, how: 'hide' }); continue;
     }
+    if (blueDots(t.el, ctx).length) { found.push({ i: t.i, how: 'copy', dots: true }); continue; }
     if (t.kind === 'text') {
       if (['lesson', 'chapter'].includes(t.role) || t.fill) continue;
       const roles = paraRoles(t, ctx, pkg).filter(r => r.text);
@@ -1859,6 +1874,12 @@ function hideSolutions(pkg, grids, opts) {
     if (!view) continue;
     for (const c of allCores(view)) { const nv = cnvOf(c); if (nv) { nv.setAttribute('id', String(NEXT++)); nv.setAttribute('name', 'UULA SolView ' + (nv.getAttribute('name') || '')); nv.removeAttribute('hidden'); } }
     const vt = { c: core(view), el: view, text: t.text, g: t.g, box: null, ph: null };
+    if (f.dots) {
+      // the coloured-in circles lose their colour (the circle, its outline and its letter stay)
+      for (const sp of blueDots(view, ctx)) { const spPr = kid(sp, 'spPr', 'p'); removeKids(spPr, FILLS); placeChild(spPr, mk(doc, 'a', 'noFill'), SPPR_ORDER); for (const pr of desc(sp, 'a', 'rPr')) { removeKids(pr, FILLS); placeChild(pr, solid(doc, '000000'), RPR_ORDER); } }
+      t.el.parentNode.insertBefore(view, t.el.nextSibling);
+      continue;
+    }
     if (f.how === 'grid') {
       const id = rels.image('grid' + f.i + '_' + Date.now().toString(36), grids[f.i]);
       for (const b of desc(view, 'a', 'blip')) { b.setAttributeNS(NS.r, 'r:embed', id); for (const e of [...b.children]) b.removeChild(e); }

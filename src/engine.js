@@ -692,10 +692,12 @@ function styleTable(it, ctx, W) {
   const cellText = tc => textOf(tc).trim();
   // the answer table at the end of the objective exercises: a cell reading exactly "الحل"
   const sol = rows.some(r => kids(r, 'tc', 'a').some(tc => /^(الحل|الإجابة|الاجابة)$/.test(cellText(tc)))) && !/شرط الحل/.test(textOf(tbl));
-  const firstColHead = rows.length > 1 && rows.every(r => { const t = kids(r, 'tc', 'a')[0]; return t && cellText(t); }) && grid.length > 2 && !sol
-    ? false : false;
+  // chosen by hand (Format → Tables): with a main column (labels column DAE0E9) / without a header row
+  const opt = it.tableOpt || {};
+  const firstColHead = !!opt.mainCol && !sol;
   // a header row has short labels; a table of statements (true / false, sentences) has none
-  const headRow = rows.length > 1 && kids(rows[0], 'tc', 'a').every(tc => cellText(tc).length <= 25 && !/[.؟?]\s*$/.test(cellText(tc)));
+  const headRow = opt.head === false ? false : opt.head === true ? rows.length > 1
+    : rows.length > 1 && kids(rows[0], 'tc', 'a').every(tc => cellText(tc).length <= 25 && !/[.؟?]\s*$/.test(cellText(tc)));
   rows.forEach((tr, ri) => {
     tr.setAttribute('h', '254000');
     kids(tr, 'tc', 'a').forEach((tc, ci) => {
@@ -1398,7 +1400,12 @@ function applyRole(pkg, role) {
   let shift = 0;
   for (const t of sel.sort((a, b) => a.g.y - b.g.y)) {
     t.g = Object.assign({}, t.g, { y: t.g.y + shift });
-    if (t.kind === 'table') { t.fullW = false; styleTable(t, ctx, W); rename(t, 'table'); out.push({ idx: t.i, kind: 'table' }); continue; }
+    if (t.kind === 'table') {
+      t.fullW = false;
+      t.tableOpt = role === 'tableMain' ? { head: true, mainCol: true } : role === 'tablePlain' ? { head: false } : role === 'table' ? { head: true } : {};
+      styleTable(t, ctx, W); rename(t, 'table'); out.push({ idx: t.i, kind: 'table' }); continue;
+    }
+    if (/^table/.test(role)) continue;                                        // a table style chosen for something that is not a table
     if (['given', 'correct'].includes(role)) { rename(t, role); continue; }       // marks only: no styling, no moving
     if (t.kind === 'pic' || t.kind === 'grpSp') { stylePic(t, false); rename(t, role === 'answer' ? 'answer' : 'pic'); out.push({ idx: t.i, kind: 'pic' }); continue; }
     if (t.kind !== 'text') { rename(t, role); continue; }
@@ -1621,6 +1628,32 @@ function align(rects, W, mode, only) {
 // the selected objects (" #ursel" at the end of their name) get the container behind them: full width, one line
 // above and two below the content, the icon on the right and the content kept clear of it. Their text keeps its roles.
 const WRAP = { note: 'note', quote: 'quote', formula: 'formula', activity: 'activity', mars: 'mars', other: 'other', cancelled: 'cancelled', practice: 'practice' };
+// the selected pictures (graphs …) give their place to the UULA empty grid, cut to each picture's size
+// (light lines D3D8E0 every two page-grid steps, running off the edges, the cut centred on the picture)
+function gridCutX(id, name, g) {
+  const w = Math.max(1, Math.round(g.w)), h = Math.max(1, Math.round(g.h)), step = ROW;
+  const ox = (w / 2) % step, oy = (h / 2) % step;
+  let path = '';
+  for (let x = ox; x <= w + 1; x += step) { const v = Math.min(w, Math.round(x)); path += '<a:moveTo><a:pt x="' + v + '" y="0"/></a:moveTo><a:lnTo><a:pt x="' + v + '" y="' + h + '"/></a:lnTo>'; }
+  for (let y = oy; y <= h + 1; y += step) { const v = Math.min(h, Math.round(y)); path += '<a:moveTo><a:pt x="0" y="' + v + '"/></a:moveTo><a:lnTo><a:pt x="' + w + '" y="' + v + '"/></a:lnTo>'; }
+  return '<p:sp><p:nvSpPr><p:cNvPr id="' + id + '" name="' + name + '"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="' + Math.round(g.x) + '" y="' + Math.round(g.y) + '"/><a:ext cx="' + w + '" cy="' + h + '"/></a:xfrm>'
+    + '<a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="0" t="0" r="r" b="b"/><a:pathLst><a:path w="' + w + '" h="' + h + '" fill="none">' + path + '</a:path></a:pathLst></a:custGeom>'
+    + '<a:noFill/><a:ln w="6350"><a:solidFill><a:srgbClr val="D3D8E0"/></a:solidFill></a:ln></p:spPr></p:sp>';
+}
+function gridOver(pkg) {
+  const doc = parseXml(pkg.files.slide);
+  NEXT = maxId(doc) + 1;
+  const all = topItems(doc).map(el => { const c = core(el), n = cnvOf(c); return { el, c, name: n ? n.getAttribute('name') || '' : '', g: geomOf(el, pkg) }; });
+  const sel = all.filter(t => / #ursel$/.test(t.name));
+  for (const t of sel) for (const c of allCores(t.el)) { const n = cnvOf(c); if (n) n.setAttribute('name', (n.getAttribute('name') || '').replace(/ #ursel$/, '')); }
+  // a picture, a group (a graph drawn from shapes) or a chart; not a text box or a table
+  const pics = sel.filter(t => t.g && t.g.w > 0 && t.g.h > 0 && (t.c.localName === 'pic' || t.el.localName === 'grpSp' || (t.c.localName === 'graphicFrame' && !desc(t.c, 'a', 'tbl').length)));
+  for (const t of pics) {
+    const sp = frag(doc, gridCutX(NEXT++, 'UULA Graph Grid #ursel', t.g));
+    t.el.parentNode.replaceChild(sp, t.el);
+  }
+  return { xml: serialize(doc), count: pics.length, sel: sel.length };
+}
 function wrapBox(pkg, type) {
   const W = pkg.slideW, H = pkg.slideH;
   const doc = parseXml(pkg.files.slide);
@@ -2020,7 +2053,7 @@ function splitPoint(plan, lay) {
 
 return {
   questionFlags,
-  NS, PT, ROW, M, FOOT, C, STY, BOX, openPackage, buildPackage, parseXml, serialize, restyle, layout, applyLayout, splitParts, splitPoint, markNames, MARK, applyRole, wrapBox, WRAP, reflow, spacing, align, findSolutions, hideSolutions, showSolutions, hasSolutions, TEXT_ROLES, BOX_ROLES, G, Y0, snapUp, snapX,
+  NS, PT, ROW, M, FOOT, C, STY, BOX, openPackage, buildPackage, parseXml, serialize, restyle, layout, applyLayout, splitParts, splitPoint, markNames, MARK, applyRole, wrapBox, gridOver, WRAP, reflow, spacing, align, findSolutions, hideSolutions, showSolutions, hasSolutions, TEXT_ROLES, BOX_ROLES, G, Y0, snapUp, snapX,
   // used by the templates module
   util: { pX, txX, boxX, gradBoxX, picX, pillX, pillW, lineX, tableX, makeRels, frag, topItems, core, cnvOf, maxId, spTreeOf, kid, kids, desc, xfrmOf, geomOf, setNext: n => { NEXT = n; }, yearText, pageNumX, estimateText, iconW, iconH }
 };

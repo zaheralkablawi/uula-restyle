@@ -305,6 +305,32 @@ function buildTemplateList() {
   }
 }
 $('tpls').addEventListener('click', e => { const b = e.target.closest('.tbtn'); if (b) insertTemplate(b.dataset.id); });
+// the graph grid chosen while pictures are selected: the grid takes each picture's place and size
+async function gridSelected(id) {
+  const n = await run(async ctx => {
+    const shapes = ctx.presentation.getSelectedShapes(); shapes.load('items/name,items/type'); await ctx.sync();
+    const pics = shapes.items.filter(s => !['TextBox', 'GeometricShape', 'Table', 'Line'].includes(s.type));
+    if (!pics.length) return 0;
+    pics.forEach(s => { s.name = (s.name || '').replace(/ #ursel$/, '') + ' #ursel'; });
+    await ctx.sync();
+    return pics.length;
+  }).catch(() => 0);
+  if (!n) return 0;
+  const pkg = await UR.openPackage(await exportSlide(id));
+  const r = UR.gridOver(pkg);
+  if (!r.count) { await clearSel(id); return 0; }
+  const newId = await insertAfter(await UR.buildPackage(pkg, r.xml, null), id);
+  await deleteSlide(id);
+  await run(async ctx => {
+    ctx.presentation.setSelectedSlides([newId]); await ctx.sync();
+    const sh = ctx.presentation.slides.getItem(newId).shapes; sh.load('items/id,items/name'); await ctx.sync();
+    const sel = sh.items.filter(s => / #ursel$/.test(s.name || ''));
+    sel.forEach(s => { s.name = s.name.replace(/ #ursel$/, ''); });
+    await ctx.sync();
+    try { ctx.presentation.slides.getItem(newId).setSelectedShapes(sel.map(s => s.id)); await ctx.sync(); } catch (e) {}
+  }).catch(() => {});
+  return r.count;
+}
 // a container chosen while objects are selected: it goes around them (without the template's own text)
 async function wrapSelected(id, tid) {
   const n = await run(async ctx => {
@@ -354,6 +380,7 @@ async function insertTemplate(tid) {
   try {
     const id = await currentId();
     if (!id) { tsay(L('حدّد شريحة أولًا.', 'Select a slide first.')); return; }
+    if (tid === 'grid') { const n = await gridSelected(id); if (n) { tsay(n > 1 ? L('وُضعت الشبكة البيانية مكان ' + n + ' صور، كلٌّ بمقاسها.', 'The graph grid replaced ' + n + ' pictures, each at its size.') : L('وُضعت الشبكة البيانية مكان الصورة وبمقاسها.', 'The graph grid replaced the picture, at its size.')); return; } }
     if (UR.WRAP[tid] && await wrapSelected(id, tid)) { tsay(L('وُضعت الحاوية حول العناصر المحددة.', 'The container was put around the selected objects.')); return; }
     const pkg = await UR.openPackage(await exportSlide(id));
     const r = URT.apply(pkg, tid);
@@ -394,11 +421,12 @@ async function insertTemplate(tid) {
 const ROLES = [
   { g: 'نصوص', ge: 'Text', items: [['chapter', 'اسم الوحدة', 'A6A6A6'], ['lesson', 'اسم الدرس', '1F71DD'], ['topic', 'موضوع', '000000'], ['body', 'فقرة', 'FFFFFF'], ['bullets', 'نقاط', 'FFFFFF'], ['qhead', 'عنوان أسئلة', 'FF0000'], ['question', 'سؤال', 'FF0000'], ['choice', 'خيارات', 'FFFFFF']] },
   { g: 'للحلول', ge: 'For solutions', items: [['answer', 'حل', '1F71DE'], ['correct', 'الخيار الصحيح', '2070DF'], ['given', 'شكل من السؤال', 'A6A6A6']] },
-  { g: 'إطارات', ge: 'Frames', items: [['note', 'ملاحظة', 'FBEBD3'], ['quote', 'نص مقتطف', 'E2F0D9'], ['def', 'تعريف', 'E2F0D9'], ['formula', 'قوانين', 'D3E4F5'], ['other', 'صيغة أخرى', 'FBEBD3'], ['activity', 'نشاط', 'F1F1F1'], ['mars', 'من المريخ', 'F1F1F1']] }
+  { g: 'إطارات', ge: 'Frames', items: [['note', 'ملاحظة', 'FBEBD3'], ['quote', 'نص مقتطف', 'E2F0D9'], ['def', 'تعريف', 'E2F0D9'], ['formula', 'قوانين', 'D3E4F5'], ['other', 'صيغة أخرى', 'FBEBD3'], ['activity', 'نشاط', 'F1F1F1'], ['mars', 'من المريخ', 'F1F1F1']] },
+  { g: 'جداول', ge: 'Tables', items: [['table', 'جدول', 'CAD0D8'], ['tableMain', 'جدول رئيسي', 'DAE0E9'], ['tablePlain', 'جدول بلا رأس', 'F1F1F1']] }
 ];
 const FRAME_ROLES = ['note', 'quote', 'def', 'formula', 'other', 'activity', 'mars'];
 const ROLE_EN = { chapter: 'Unit', lesson: 'Lesson', topic: 'Topic', body: 'Paragraph', bullets: 'Bullets', qhead: 'Q head', question: 'Question', answer: 'Solution', choice: 'Choices',
-  correct: 'Correct choice', given: 'Part of question', note: 'Note', quote: 'Quote', def: 'Definition', formula: 'Formulas', other: 'Other form', activity: 'Activity', mars: 'Challenge' };
+  correct: 'Correct choice', given: 'Part of question', note: 'Note', quote: 'Quote', def: 'Definition', formula: 'Formulas', other: 'Other form', activity: 'Activity', mars: 'Challenge', table: 'Table', tableMain: 'Main table', tablePlain: 'No header' };
 function buildRoleList() {
   const host = $('roles'); host.innerHTML = '';
   for (const g of ROLES) {

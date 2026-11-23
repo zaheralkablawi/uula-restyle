@@ -1701,13 +1701,10 @@ const NEG = c => { const p = c.codePointAt(0);
   return c; };
 const hasSolutions = xml => /name="UULA SolHidden /.test(xml);
 // what would be hidden on this slide; pics that need an empty-grid image are listed with their media path
-// blue text inside a table (a filled-in answer): its cells, but not the header row / the labels column
+// blue text inside a table is a solution, in any cell (header and labels too): only the black text stays
 function tableBlueRuns(tbl) {
   const out = [];
   for (const tc of desc(tbl, 'a', 'tc')) {
-    const pr = kid(tc, 'tcPr', 'a'), f = pr && desc(pr, 'a', 'srgbClr')[0];
-    const fill = f ? (f.getAttribute('val') || '').toUpperCase() : '';
-    if (fill === C.head || fill === C.mainCol) continue;
     for (const r of desc(tc, 'a', 'rPr')) {
       const c = desc(r, 'a', 'srgbClr')[0], v = c ? (c.getAttribute('val') || '') : '';
       if (/^[0-9A-F]{6}$/i.test(v) && isBlue(rgb(v.toUpperCase()))) out.push(r);
@@ -1732,7 +1729,7 @@ function findSolutions(pkg) {
     if (pin && pin[1] === 'given') continue;                                   // part of the question: never touched
     if (pin && pin[1] === 'correct') { found.push({ i: t.i, how: 'copy', correct: true }); continue; }
     if (pin && pin[1] === 'answer') {
-      if (t.kind === 'pic') { const blip = desc(t.c, 'a', 'blip')[0], rid = blip && blip.getAttributeNS(NS.r, 'embed'), target = rid && relT(rid); if (target) { found.push({ i: t.i, how: 'grid', pinned: true, media: 'ppt/media/' + target.split('/').pop() }); continue; } }
+      if (t.kind === 'pic') { const blip = desc(t.c, 'a', 'blip')[0], rid = blip && blip.getAttributeNS(NS.r, 'embed'), target = rid && relT(rid); if (target) { found.push({ i: t.i, how: 'grid', pinned: true, media: 'ppt/media/' + target.split('/').pop(), w: t.g.w / PT, h: t.g.h / PT }); continue; } }
       found.push({ i: t.i, how: 'hide' }); continue;
     }
     if (t.kind === 'text') {
@@ -1770,7 +1767,7 @@ function findSolutions(pkg) {
       if (!given && (qs.length || above.length || besideAns)) {
         const blip = desc(t.c, 'a', 'blip')[0], rid = blip && blip.getAttributeNS(NS.r, 'embed');
         const target = rid && relT(rid);
-        if (target) found.push({ i: t.i, how: 'grid', media: 'ppt/media/' + target.split('/').pop() });
+        if (target) found.push({ i: t.i, how: 'grid', media: 'ppt/media/' + target.split('/').pop(), w: t.g.w / PT, h: t.g.h / PT });
       }
     }
   }
@@ -1858,6 +1855,8 @@ function hideSolutions(pkg, grids, opts) {
     if (f.how === 'grid') {
       const id = rels.image('grid' + f.i + '_' + Date.now().toString(36), grids[f.i]);
       for (const b of desc(view, 'a', 'blip')) { b.setAttributeNS(NS.r, 'r:embed', id); for (const e of [...b.children]) b.removeChild(e); }
+      // the empty grid is drawn at the picture's own size: no crop of the old picture on it
+      for (const s of desc(view, 'a', 'srcRect')) s.parentNode.removeChild(s);
     } else if (t.kind === 'text') {
       const roles = paraRoles(vt, ctx, pkg);
       const W45 = W * 0.45;

@@ -625,6 +625,21 @@ $('spD').addEventListener('click', () => spacingRun('d'));
 
 // ---------- hide / show the solutions ----------
 // an empty grid from a graph picture: the coloured drawing is removed and the grid lines / axes it covered are drawn again
+// the UULA empty grid (light lines D3D8E0 on a clear background, cells of two page-grid steps), cut to w×h points
+function gridPicture(wPt, hPt) {
+  const S = 4, cell = 13.39, cv = document.createElement('canvas');
+  cv.width = Math.max(4, Math.round(wPt * S)); cv.height = Math.max(4, Math.round(hPt * S));
+  const g = cv.getContext('2d');
+  g.strokeStyle = '#D3D8E0'; g.lineWidth = 0.5 * S;
+  const step = cell * S;
+  // the lines run off the edges, as a grid cut out of a bigger sheet; the cut is centred on the picture
+  const ox = ((cv.width / 2) % step), oy = ((cv.height / 2) % step);
+  g.beginPath();
+  for (let x = ox; x <= cv.width; x += step) { g.moveTo(Math.round(x) + 0.5, 0); g.lineTo(Math.round(x) + 0.5, cv.height); }
+  for (let y = oy; y <= cv.height; y += step) { g.moveTo(0, Math.round(y) + 0.5); g.lineTo(cv.width, Math.round(y) + 0.5); }
+  g.stroke();
+  return cv.toDataURL('image/png').split(',')[1];
+}
 async function emptyGrid(b64, ext) {
   const mime = /jpe?g/i.test(ext) ? 'image/jpeg' : 'image/png';
   const img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = 'data:' + mime + ';base64,' + b64; });
@@ -681,7 +696,11 @@ async function solSlide(id, mode) {
     const grids = {};
     for (const f of found.filter(x => x.how === 'grid')) {
       const file = pkg.zip.file(f.media); if (!file || !/\.(png|jpe?g)$/i.test(f.media)) continue;
-      try { const png = await emptyGrid(await file.async('base64'), f.media); if (png) grids[f.i] = png; } catch (e) {}
+      try {
+        // a graph that is part of a solution: in its place the UULA empty grid, cut to the picture's size
+        const drawn = await emptyGrid(await file.async('base64'), f.media);
+        if (drawn) grids[f.i] = f.w && f.h ? gridPicture(f.w, f.h) : drawn;
+      } catch (e) {}
     }
     r = UR.hideSolutions(pkg, grids, { lines: solLines });
   }

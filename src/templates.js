@@ -35,6 +35,7 @@ const LIST = [
   { g: 'أسئلة', id: 'answer', name: 'حل السؤال', en: 'Solution' },
   { g: 'أسئلة', id: 'qqr', name: 'سؤال مع QR', en: 'Question + QR' },
   { g: 'أسئلة', id: 'mcq', name: 'اختيار متعدد', en: 'Choices', full: 'اختيار من متعدد' },
+  { g: 'أسئلة', id: 'mcqV', name: 'خيارات عمودية', en: 'Options in a column' },
   { g: 'أسئلة', id: 'problem', name: 'مسألة', en: 'Problem', full: 'مسألة: معطيات وقانون وحل' },
   { g: 'أسئلة', id: 'other', name: 'صيغة أخرى', en: 'Other form', full: 'السؤال بصيغة أخرى' },
   { g: 'إطارات', id: 'note', name: 'ملاحظة', en: 'Note', full: 'ملاحظة مهمة' },
@@ -86,6 +87,11 @@ function spec(id, W) {
       return { gap: 0, rows: [
         { side: true, cells: L.map((l, k) => txt(P.runs([T(l + ' '), T(ltr ? 'Option' : 'خيار')], { marL: 182880, ar: !ltr }), { x: ltr ? M + k * w : R - (k + 1) * w, w })) }
       ] };
+    }
+    // the options one under the other: ⓐ on the first line … ⓓ on the fourth, each line its own text box
+    case 'mcqV': {
+      const L = ['ⓐ', 'ⓑ', 'ⓒ', 'ⓓ'], ltr = OPT.dirNow === 'ltr';
+      return { gap: 0, rows: L.map((l, k) => ({ gap: 0, cells: [txt(P.runs([T(l + ' '), T(ltr ? 'Option' : 'خيار')], { marL: 182880, ar: !ltr }))] })) };
     }
     case 'problem': return { gap: 1, rows: [
       { cells: [txt(P.q('اكتب نص المسألة هنا؟'))] },
@@ -287,7 +293,7 @@ function dirFor(pkg) {
   return low && !/[\u0600-\u06FF]/.test(low.t) ? 'ltr' : 'rtl';
 }
 function apply(pkg, id) {
-  if (id === 'mcq') OPT.dirNow = dirFor(pkg);
+  if (id === 'mcq' || id === 'mcqV') OPT.dirNow = dirFor(pkg);
   const s = spec(id, pkg.slideW); if (!s) throw new Error('template?');
   const doc = UR.parseXml(pkg.files.slide);
   const mx = U.maxId(doc);

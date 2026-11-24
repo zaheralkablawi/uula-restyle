@@ -547,15 +547,48 @@ const ROLE_TIP = {
 const FRAME_ROLES = ['note', 'quote', 'def', 'formula', 'other', 'activity', 'mars'];
 const ROLE_EN = { chapter: 'Unit title', lesson: 'Lesson title', topic: 'Topic heading', body: 'Paragraph', bullets: 'Bullet list', qhead: 'Questions heading', question: 'Question text', answer: 'Solution', choice: 'Choices',
   correct: 'Correct choice', given: 'Part of question', note: 'Note', quote: 'Quote', def: 'Definition', formula: 'Formulas', other: 'Other form', activity: 'Activity', mars: 'From Mars', cancelled: 'Suspended', table: 'With header', tableMain: 'Header + main column', tablePlain: 'No header' };
+function mergedBtn(it) {
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'tbtn'; b.dataset.item = it.id;
+  if (it.role) b.dataset.role = it.role; if (it.tpl) b.dataset.id = it.tpl;
+  b.title = mergedTip(it); b.innerHTML = iconHtml(it.tpl === 'header' ? 'lesson' : it.id, it.col) + '<span>' + L(it.ar, it.en) + '</span>';
+  tint(b, it.id); return b;
+}
+// direction of multiple-choice options: auto / right-to-left / left-to-right (kept in the file)
+let mcqDir = 'auto';
+function dirSeg() {
+  const d = document.createElement('div'); d.className = 'seg seg3 icoseg dirseg'; d.style.gridColumn = 'span 2';
+  const ic = { auto: '<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5l1.3 3.2 3.2 1.3-3.2 1.3L8 11.5 6.7 8.3 3.5 7l3.2-1.3z"/></svg>',
+    rtl: '<svg viewBox="0 0 18 14" width="17" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="14" cy="7" r="3"/><path d="M9 7H2M4.5 4.5L2 7l2.5 2.5"/></svg>',
+    ltr: '<svg viewBox="0 0 18 14" width="17" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="4" cy="7" r="3"/><path d="M9 7h7M13.5 4.5L16 7l-2.5 2.5"/></svg>' };
+  const tip = { auto: ['اتجاه الخيارات تلقائي: سؤال عربي ← الخيارات من اليمين، سؤال إنجليزي → من اليسار', 'Options direction automatic: Arabic question → from the right, English question → from the left'],
+    rtl: ['الخيارات من اليمين إلى اليسار: ⓐ في اليمين', 'Options right-to-left: ⓐ on the right'], ltr: ['الخيارات من اليسار إلى اليمين: ⓐ في اليسار (كالإنجليزي)', 'Options left-to-right: ⓐ on the left (as in English)'] };
+  for (const v of ['auto', 'rtl', 'ltr']) {
+    const b = document.createElement('button'); b.type = 'button'; b.dataset.v = v; b.title = L(tip[v][0], tip[v][1]);
+    b.setAttribute('aria-pressed', String(v === mcqDir)); b.innerHTML = ic[v]; d.appendChild(b);
+  }
+  d.addEventListener('click', e => { e.stopPropagation(); const b = e.target.closest('button'); if (!b) return; setMcqDir(b.dataset.v, true); });
+  return d;
+}
+function setMcqDir(v, store) {
+  mcqDir = v; URT.setOpt({ mcqDir: v });
+  document.querySelectorAll('.dirseg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v)));
+  if (store) { const st = docSettings(); if (st) { st.set('urMcqDir', v); st.saveAsync(); } }
+}
 function buildRoleList() {
   const host = $('roles'); host.innerHTML = '';
   for (const g of MERGED) {
     const { d, grid } = groupCard('obj', g.g, L(g.g, g.ge));
-    for (const it of g.items) {
-      const b = document.createElement('button'); b.type = 'button'; b.className = 'tbtn'; b.dataset.item = it.id;
-      if (it.role) b.dataset.role = it.role; if (it.tpl) b.dataset.id = it.tpl;
-      b.title = mergedTip(it); b.innerHTML = iconHtml(it.tpl === 'header' ? 'lesson' : it.id, it.col) + '<span>' + L(it.ar, it.en) + '</span>';
-      tint(b, it.id); grid.appendChild(b);
+    if (g.items) g.items.forEach(it => grid.appendChild(mergedBtn(it)));
+    else {
+      grid.className = 'subrows';
+      for (const r of g.rows) {
+        const row = document.createElement('div'); row.className = 'subrow';
+        const lab = document.createElement('span'); lab.className = 'sublab'; lab.textContent = r.label ? L(r.label, r.le) : '';
+        const tg = document.createElement('div'); tg.className = 'tgrid';
+        r.items.forEach(it => tg.appendChild(mergedBtn(it)));
+        if (r.dir) tg.appendChild(dirSeg());
+        row.appendChild(lab); row.appendChild(tg); grid.appendChild(row);
+      }
     }
     d.appendChild(grid); host.appendChild(d);
   }
@@ -572,15 +605,19 @@ const MERGED = [
     { id: 'bullets', ar: 'نقاط مرقّمة', en: 'Bullet list', col: 'FFFFFF', role: 'bullets', tpl: 'bullets' },
     { id: 'cols', ar: 'نقاط بأعمدة', en: 'Bullet columns', col: 'FFFFFF', tpl: 'cols' },
     { id: 'pill', ar: 'كبسولة تعريف', en: 'Term pill', col: '1F71DC', tpl: 'pill' }] },
-  { g: 'أسئلة', ge: 'Questions', items: [
-    { id: 'qhead', ar: 'عنوان الأسئلة', en: 'Questions heading', col: 'FF0000', role: 'qhead', tpl: 'qhead' },
-    { id: 'question', ar: 'سؤال', en: 'Question', col: 'FF0000', role: 'question', tpl: 'question' },
-    { id: 'mcq', ar: 'اختيار متعدد', en: 'Multiple choice', col: 'FF0000', role: 'choice', tpl: 'mcq' },
-    { id: 'qqr', ar: 'سؤال مع QR', en: 'Question + QR', col: 'FF0000', tpl: 'qqr' },
-    { id: 'problem', ar: 'مسألة', en: 'Problem', col: '00B050', tpl: 'problem' }] },
-  { g: 'الحلول', ge: 'Solutions', items: [
-    { id: 'answer', ar: 'حل السؤال', en: 'Solution', col: '1F71DE', role: 'answer', tpl: 'answer' },
-    { id: 'correct', ar: 'الخيار الصحيح', en: 'Correct choice', col: '2070DF', role: 'correct' }] },
+  // one card for questions: the general ones, then written (essay) questions with their solution,
+  // then multiple choice with the correct choice and the direction of the options
+  { g: 'أسئلة', ge: 'Questions', rows: [
+    { items: [
+      { id: 'qhead', ar: 'عنوان الأسئلة', en: 'Questions heading', col: 'FF0000', role: 'qhead', tpl: 'qhead' },
+      { id: 'question', ar: 'سؤال', en: 'Question', col: 'FF0000', role: 'question', tpl: 'question' }] },
+    { label: 'مقالي', le: 'Essay', items: [
+      { id: 'problem', ar: 'مسألة', en: 'Problem', col: '00B050', tpl: 'problem' },
+      { id: 'qqr', ar: 'سؤال مع QR', en: 'Question + QR', col: 'FF0000', tpl: 'qqr' },
+      { id: 'answer', ar: 'حل السؤال', en: 'Solution', col: '1F71DE', role: 'answer', tpl: 'answer' }] },
+    { label: 'اختياري', le: 'Choice', dir: true, items: [
+      { id: 'mcq', ar: 'اختيار متعدد', en: 'Multiple choice', col: 'FF0000', role: 'choice', tpl: 'mcq' },
+      { id: 'correct', ar: 'الخيار الصحيح', en: 'Correct choice', col: '2070DF', role: 'correct' }] }] },
   { g: 'إطارات', ge: 'Frames', items: [
     { id: 'note', ar: 'ملاحظة', en: 'Note', role: 'note', tpl: 'note' },
     { id: 'quote', ar: 'نص مقتطف', en: 'Quote', role: 'quote', tpl: 'quote' },
@@ -599,8 +636,9 @@ const MERGED = [
   { g: 'نهاية الدرس', ge: 'End of lesson', items: [
     { id: 'practice', ar: 'تدرب وتفوق', en: 'Practice & excel', col: 'EBE6FE', tpl: 'practice' }] }
 ];
-const ITEM = Object.fromEntries(MERGED.flatMap(g => g.items).map(x => [x.id, x]));
-function tplName(tid) { const it = MERGED.flatMap(g => g.items).find(x => x.tpl === tid); return it ? [it.ar, it.en] : ['قالب', 'block']; }
+const ALL_ITEMS = MERGED.flatMap(g => g.items || g.rows.flatMap(r => r.items));
+const ITEM = Object.fromEntries(ALL_ITEMS.map(x => [x.id, x]));
+function tplName(tid) { const it = ALL_ITEMS.find(x => x.tpl === tid); return it ? [it.ar, it.en] : ['قالب', 'block']; }
 function mergedTip(it) {
   const own = ROLE_TIP[it.role || it.id];
   const parts = [];
@@ -844,7 +882,7 @@ async function pinRole(role, keepColour) {
     slideId = got.id;
     const pkg = await UR.openPackage(await exportSlide(slideId));
     let r;
-    try { r = UR.applyRole(pkg, role); if (['given', 'correct'].includes(role)) r.targets = []; }
+    try { r = UR.applyRole(pkg, role, { dir: mcqDir }); if (['given', 'correct'].includes(role)) r.targets = []; }
     catch (e) { await clearSel(slideId); rsay(e.message === 'nosel' ? L('حدّد مربعًا في الشريحة أولًا.', 'Select a box on the slide first.') : L('تعذّر التحويل: ', 'Could not restyle: ') + errText(e)); return; }
     // in place when it can be done exactly (nothing moves on screen); otherwise the slide is rebuilt
     let newId = slideId;
@@ -1644,6 +1682,7 @@ ready.then(info => {
   const s = docSettings();
   if (s) {
     const st = s.get('urNumStart'); if (st) $('numStart').value = st;
+    const md = s.get('urMcqDir'); if (md) setMcqDir(md);
     const on = s.get('urNum'); if (on === false) $('numChk').checked = false;
   }
   $('numRow').style.opacity = $('numChk').checked ? '' : '.5';

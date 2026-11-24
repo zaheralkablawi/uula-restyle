@@ -61,6 +61,11 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
 .tgroup{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:start;gap:6px;border:1px solid var(--line);border-radius:9px;padding:6px 7px;background:#fafbfc}
 .tgroup .gt{font-size:.7rem;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:5px;white-space:nowrap;min-height:24px}
 .tgroup .tgrid{grid-template-columns:repeat(4,minmax(0,1fr))}
+.tgroup .subrows{display:grid;gap:4px;min-width:0}
+.subrow{display:grid;grid-template-columns:38px minmax(0,1fr);gap:4px;align-items:center}
+.sublab{font-size:.66rem;color:var(--muted);font-weight:600;white-space:nowrap;overflow:hidden}
+.dirseg{width:auto!important;margin:0!important;height:24px}
+.dirseg button{height:22px}
 .tgroup .tbtn{white-space:nowrap!important;min-width:0;container-type:inline-size}
 .tgroup .tbtn span{text-overflow:ellipsis!important;min-width:0}
 @container (max-width: 62px){ .tbtn span{display:none} .tbtn i{margin-inline:auto} }

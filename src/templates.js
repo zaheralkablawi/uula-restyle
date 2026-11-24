@@ -80,9 +80,11 @@ function spec(id, W) {
     ] }] };
     case 'mcq': {
       const w = CW / 4, L = ['ⓐ', 'ⓑ', 'ⓒ', 'ⓓ'];
-      // the options only (the question has its own button), under the last object
+      // the options only (the question has its own button), under the last object;
+      // right-to-left: ⓐ on the right … ⓓ on the left; left-to-right (English): ⓐ on the left … ⓓ on the right
+      const ltr = OPT.dirNow === 'ltr';
       return { gap: 0, rows: [
-        { side: true, cells: L.map((l, k) => txt(P.runs([T(l + ' '), T('خيار')], { marL: 182880 }), { x: R - (k + 1) * w, w })) }
+        { side: true, cells: L.map((l, k) => txt(P.runs([T(l + ' '), T(ltr ? 'Option' : 'خيار')], { marL: 182880, ar: !ltr }), { x: ltr ? M + k * w : R - (k + 1) * w, w })) }
       ] };
     }
     case 'problem': return { gap: 1, rows: [
@@ -267,7 +269,25 @@ function freeTop(pkg, gapRows, fixed) {
 }
 
 // put a template on a slide package; returns the new slide XML + what is needed to refine it later
+// settings from the pane: the direction of multiple-choice options ('auto' | 'rtl' | 'ltr')
+const OPT = { mcqDir: 'auto', dirNow: 'rtl' };
+function setOpt(o) { Object.assign(OPT, o); }
+// «auto»: the question above (the lowest text on the slide) decides: Arabic → right-to-left, otherwise left-to-right
+function dirFor(pkg) {
+  if (OPT.mcqDir === 'rtl' || OPT.mcqDir === 'ltr') return OPT.mcqDir;
+  const doc = UR.parseXml(pkg.files.slide);
+  let low = null;
+  for (const el of U.topItems(doc)) {
+    const c = U.core(el), n = U.cnvOf(c), name = n ? n.getAttribute('name') || '' : '';
+    if (/^UULA (Footer|Watermark)|^CustomPageNumber_/.test(name)) continue;
+    const t = U.desc(c, 'a', 't').map(x => x.textContent).join('').trim(); if (!t) continue;
+    const g = U.geomOf(el, pkg); if (!g || g.y >= pkg.slideH - UR.FOOT * 0.6) continue;
+    if (!low || g.y + g.h > low.b) low = { b: g.y + g.h, t };
+  }
+  return low && !/[\u0600-\u06FF]/.test(low.t) ? 'ltr' : 'rtl';
+}
 function apply(pkg, id) {
+  if (id === 'mcq') OPT.dirNow = dirFor(pkg);
   const s = spec(id, pkg.slideW); if (!s) throw new Error('template?');
   const doc = UR.parseXml(pkg.files.slide);
   const mx = U.maxId(doc);
@@ -302,6 +322,6 @@ function apply(pkg, id) {
 }
 
 const GROUP_EN = { 'عناوين': 'Headings', 'نصوص': 'Text', 'أسئلة': 'Questions', 'إطارات': 'Frames', 'جداول': 'Tables', 'نهاية الدرس': 'Lesson end' };
-return { LIST, GROUP_EN, spec, build, place, freeTop, apply };
+return { LIST, GROUP_EN, spec, build, place, freeTop, apply, setOpt };
 })();
 if (typeof module !== 'undefined') module.exports = URT;

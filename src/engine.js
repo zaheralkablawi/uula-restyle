@@ -635,6 +635,7 @@ function styleText(it, ctx, pkg, forcedRole) {
   for (const pr of roles) {
     const st = STY[pr.role] || STY.body;
     let ar = pr.text ? AR.test(pr.text) : arAll;
+    if (pr.role === 'choice' && ctx.choiceDir) ar = ctx.choiceDir === 'rtl';
     // an equation line inside an Arabic box stays on the right with the text around it
     if (!ar && arAll && pr.role !== 'question' && desc(pr.p, 'm', 'oMath').length && !desc(pr.p, 'a', 't').some(x => /[A-Za-z]{3,}/.test(x.textContent))) ar = true;
     let bullet = null, marL = 0, indent = 0;
@@ -1388,10 +1389,11 @@ function markNames(doc) {
 // ---------- one object at a time ----------
 // the user picks what a selected object is; its name keeps the choice ("UULA:answer …") so a later
 // full conversion respects it. Selected shapes carry " #ursel" at the end of their name.
-function applyRole(pkg, role) {
+function applyRole(pkg, role, opt) {
   const W = pkg.slideW, H = pkg.slideH, CW = W - 2 * M;
   const doc = parseXml(pkg.files.slide);
   const ctx = { scheme: readTheme(pkg.files), bodySz: 1100 };
+  opt = opt || {};
   const rels = makeRels(pkg);
   NEXT = maxId(doc) + 1;
   const spTree = spTreeOf(doc);
@@ -1424,7 +1426,21 @@ function applyRole(pkg, role) {
     if (t.kind === 'pic' || t.kind === 'grpSp') { stylePic(t, false); rename(t, role === 'answer' ? 'answer' : 'pic'); out.push({ idx: t.i, kind: 'pic' }); continue; }
     if (t.kind !== 'text') { rename(t, role); continue; }
     const isBox = BOX_ROLES.includes(role);
+    // multiple-choice options: right-to-left (ⓐ on the right) or left-to-right (ⓐ on the left, as in English).
+    // «auto»: Arabic options, or an Arabic question above them → right-to-left; otherwise left-to-right
+    if (role === 'choice') {
+      let dir = opt.dir || 'auto';
+      if (dir === 'auto') {
+        if (AR.test(t.text || '')) dir = 'rtl';
+        else {
+          const above = items.filter(o => o !== t && o.kind === 'text' && o.g.y + o.g.h <= t.g.y + 2 * PT && (o.text || '').trim()).sort((a, b) => (b.g.y + b.g.h) - (a.g.y + a.g.h))[0];
+          dir = above ? (AR.test(above.text) ? 'rtl' : 'ltr') : 'rtl';
+        }
+      }
+      ctx.choiceDir = dir;
+    }
     styleText(t, ctx, pkg, isBox ? 'body' : role);
+    ctx.choiceDir = null;
     setBody(t.c, {});
     plainShape(t.c, false);
     rename(t, role);

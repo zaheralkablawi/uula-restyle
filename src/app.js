@@ -332,6 +332,7 @@ function iconHtml(id, col) {
     case 'tableMain': return tbl('CAD0D8', 'DAE0E9');
     case 'tablePlain': return tbl(null);
     case 'solTable': return tbl('CAD0D8', null);
+    case 'graph': return '<i class="ic"><svg viewBox="0 0 14 12" width="14" height="12"><path d="M1 0v12M4.5 0v12M8 0v12M11.5 0v12M0 1.5h14M0 5h14M0 8.5h14M0 11.5h14" stroke="#c5ccd6" stroke-width=".6"/><path d="M1 10.5C4 10 5 2 8 2s3.5 5 5 6" fill="none" stroke="#1F71DE" stroke-width="1.4" stroke-linecap="round"/></svg></i>';
     case 'grid': return '<i class="ic"><svg viewBox="0 0 14 12" width="14" height="12"><path d="M1 0v12M4.5 0v12M8 0v12M11.5 0v12M0 1.5h14M0 5h14M0 8.5h14M0 11.5h14" stroke="#9aa3ad" stroke-width=".7"/><path d="M8 0v12M0 5h14" stroke="#333" stroke-width=".9"/></svg></i>';
   }
   return '<i style="background:#' + (col || 'FFFFFF') + '"></i>';
@@ -361,6 +362,23 @@ function buildTemplateList() {
 }
 
 // the graph grid chosen while pictures are selected: the grid takes each picture's place and size
+// the empty grid drawn over one object (thin filled rectangles grouped), the object parked aside as its hidden original:
+// the pair behaves like a solution («إظهار الحلول» → the object, «إخفاء الحلول» → the grid)
+async function gridOverShape(ctx, sh, p, W, made) {
+  const base = (p.name || '').replace(/ #ursel$/, '').replace(/^UULA Sol(Hidden|View) /, '').replace(/^UULA:[a-z]+\s*/, '') || 'Graph';
+  const x0 = p.left, y0 = p.top, w = p.width, h = p.height, step = 13.39 * 1.75, T = 0.75;
+  const lines = [];
+  // each line a very thin filled rectangle (a zero-wide line is tilted by PowerPoint for Mac)
+  const add = (l, t, ww, hh) => { const ln = sh.addGeometricShape('Rectangle', { left: l, top: t, width: ww, height: hh }); ln.fill.setSolidColor('#A0A8B4'); ln.lineFormat.visible = false; ln.name = 'UULA Graph Grid Line'; lines.push(ln); made.push(ln); };
+  for (let x = (w / 2) % step; x <= w + 0.01; x += step) add(x0 + Math.min(x, w - T), y0, T, h);
+  for (let y = (h / 2) % step; y <= h + 0.01; y += step) add(x0, y0 + Math.min(y, h - T), w, T);
+  lines.forEach(l => l.load('id')); await ctx.sync();
+  const g = sh.addGroup(lines.map(l => l.id)); g.name = 'UULA SolView UULA:graph ' + base; g.load('id');
+  await ctx.sync();
+  p.name = 'UULA SolHidden UULA:graph ' + base; p.left = x0 + 3 * W;
+  await ctx.sync();
+  return g;
+}
 async function gridSelected(id) {
   const n = await run(async ctx => {
     const shapes = ctx.presentation.getSelectedShapes(); shapes.load('items/name,items/type'); await ctx.sync();
@@ -371,30 +389,17 @@ async function gridSelected(id) {
     return pics.length;
   }).catch(() => 0);
   if (!n) return 0;
-  // in place: the grid drawn from lines and grouped, the picture removed (nothing moves on screen)
+  // in place: the grid drawn from lines and grouped; the picture is kept, linked to the grid as a hidden solution
+  // («إظهار الحلول» brings the picture back, «إخفاء الحلول» shows the grid again)
+  const W = (await getSize()).W;
   const quick = await run(async ctx => {
     const sh = ctx.presentation.slides.getItem(id).shapes;
     sh.load('items/id,items/name,items/left,items/top,items/width,items/height'); await ctx.sync();
     const pics = sh.items.filter(s => / #ursel$/.test(s.name || ''));
-    const made = [], groups = [];
+    const made = [];
     try {
-      for (const p of pics) {
-        const x0 = p.left, y0 = p.top, w = p.width, h = p.height, step = 13.39 * 1.75;
-        const lines = [];
-        // each line a very thin filled rectangle (a zero-wide line is tilted by PowerPoint for Mac)
-        const T = 0.75;
-        const add = (l, t, ww, hh) => { const ln = sh.addGeometricShape('Rectangle', { left: l, top: t, width: ww, height: hh }); ln.fill.setSolidColor('#A0A8B4'); ln.lineFormat.visible = false; ln.name = 'UULA Graph Grid Line'; lines.push(ln); made.push(ln); };
-        for (let x = (w / 2) % step; x <= w + 0.01; x += step) add(x0 + Math.min(x, w - T), y0, T, h);
-        for (let y = (h / 2) % step; y <= h + 0.01; y += step) add(x0, y0 + Math.min(y, h - T), w, T);
-        lines.forEach(l => l.load('id'));
-        groups.push({ p, lines });
-      }
-      await ctx.sync();
       const sel = [];
-      for (const gr of groups) { const g = sh.addGroup(gr.lines.map(l => l.id)); g.name = 'UULA Graph Grid'; g.load('id'); sel.push(g); }
-      await ctx.sync();
-      groups.forEach(gr => gr.p.delete());
-      await ctx.sync();
+      for (const p of pics) { const g = await gridOverShape(ctx, sh, p, W, made); sel.push(g); }
       try { ctx.presentation.slides.getItem(id).setSelectedShapes(sel.map(g => g.id)); await ctx.sync(); } catch (e) {}
       return pics.length;
     } catch (e) {
@@ -518,7 +523,8 @@ const ROLES = [
 const SOL_TIP = {
   answer: ['يعلّم المحدد كحل فيُخفى عند «إخفاء الحلول». لا يغيّر اللون ولا يتحرك شيء.', 'Marks the selection as a solution, so «Hide solutions» hides it. The colour stays and nothing moves.'],
   correct: ['يعلّم المحدد كخيار صحيح، فيتحول للأسود عند «إخفاء الحلول». لا يغيّر اللون.', 'Marks the selection as the correct choice; it turns black when solutions are hidden. The colour stays.'],
-  given: ['شكل أو نص من السؤال نفسه: يبقى ظاهرًا عند «إخفاء الحلول» حتى لو كان أزرق.', 'A shape or text that belongs to the question: it stays when solutions are hidden, even if blue.']
+  given: ['شكل أو نص من السؤال نفسه: يبقى ظاهرًا عند «إخفاء الحلول» حتى لو كان أزرق.', 'A shape or text that belongs to the question: it stays when solutions are hidden, even if blue.'],
+  graph: ['تمثيل بياني هو حل: عند «إخفاء الحلول» تحل مكانه شبكة بيانية فارغة بنفس مقاسه، ويرجع عند «إظهار الحلول». (أي رسم آخر كالمثلث ميّزه «حل السؤال» فيُخفى بلا شبكة)', 'A graph that is a solution: on «Hide solutions» an empty graph grid of the same size takes its place; it comes back on «Show solutions». (Other drawings, like a triangle: mark them «Solution» to hide them without a grid)']
 };
 // what each button does (shown when the pointer rests on it)
 const ROLE_TIP = {
@@ -547,7 +553,7 @@ const ROLE_TIP = {
 };
 const FRAME_ROLES = ['note', 'quote', 'def', 'formula', 'other', 'activity', 'mars'];
 const ROLE_EN = { chapter: 'Unit title', lesson: 'Lesson title', topic: 'Topic heading', body: 'Paragraph', bullets: 'Bullet list', qhead: 'Questions heading', question: 'Question text', answer: 'Solution', choice: 'Choices',
-  correct: 'Correct choice', given: 'Part of question', note: 'Note', quote: 'Quote', def: 'Definition', formula: 'Formulas', other: 'Other form', activity: 'Activity', mars: 'From Mars', cancelled: 'Suspended', table: 'With header', tableMain: 'Header + main column', tablePlain: 'No header' };
+  correct: 'Correct choice', given: 'Part of question', graph: 'Graph solution', note: 'Note', quote: 'Quote', def: 'Definition', formula: 'Formulas', other: 'Other form', activity: 'Activity', mars: 'From Mars', cancelled: 'Suspended', table: 'With header', tableMain: 'Header + main column', tablePlain: 'No header' };
 function mergedBtn(it) {
   const b = document.createElement('button'); b.type = 'button'; b.className = 'tbtn'; b.dataset.item = it.id;
   if (it.role) b.dataset.role = it.role; if (it.tpl) b.dataset.id = it.tpl;
@@ -653,7 +659,8 @@ const MERGED = [
     { label: 'مقالي', le: 'Essay', items: [
       { id: 'problem', ar: 'مسألة', en: 'Problem', col: '00B050', tpl: 'problem' },
       { id: 'qqr', ar: 'سؤال مع QR', en: 'Question + QR', col: 'FF0000', tpl: 'qqr' },
-      { id: 'answer', ar: 'حل السؤال', en: 'Solution', col: '1F71DE', role: 'answer', tpl: 'answer' }] },
+      { id: 'answer', ar: 'حل السؤال', en: 'Solution', col: '1F71DE', role: 'answer', tpl: 'answer' },
+      { id: 'graph', ar: 'حل بياني', en: 'Graph solution', col: 'A0A8B4', role: 'graph' }] },
     { label: 'اختياري', le: 'Choice', dir: true, items: [
       { id: 'mcq', ar: 'خيارات أفقية', en: 'Options in a row', col: 'FF0000', role: 'choice', tpl: 'mcq' },
       { id: 'mcqV', ar: 'خيارات عمودية', en: 'Options in a column', col: 'FF0000', tpl: 'mcqV' },
@@ -733,7 +740,7 @@ $('roles').addEventListener('click', e => { const b = e.target.closest('.tbtn');
 // the same solution buttons beside «Hide solutions»
 function buildSolRoles() {
   const host = $('solRoles'); if (!host) return; host.innerHTML = '';
-  for (const [id, nameAr, col] of [['answer', 'حل السؤال', '1F71DE'], ['correct', 'الخيار الصحيح', '2070DF'], ['given', 'جزء من السؤال', 'A6A6A6']]) {
+  for (const [id, nameAr, col] of [['answer', 'حل السؤال', '1F71DE'], ['graph', 'حل بياني', 'A0A8B4'], ['correct', 'الخيار الصحيح', '2070DF'], ['given', 'جزء من السؤال', 'A6A6A6']]) {
     const name = L(nameAr, ROLE_EN[id]);
     const b = document.createElement('button'); b.type = 'button'; b.className = 'tbtn'; b.dataset.role = id;
     b.title = L(SOL_TIP[id][0], SOL_TIP[id][1]); b.innerHTML = iconHtml(id, col) + '<span>' + name + '</span>'; tint(b, id);
@@ -761,7 +768,7 @@ async function clearSel(slideId) {
   }).catch(() => {});
 }
 // solution marks change only the selected objects, in place: no slide is rebuilt, nothing moves
-const QUIET = { answer: '1F71DE', correct: '2070DF', given: null };
+const QUIET = { answer: '1F71DE', correct: '2070DF', given: null, graph: null };
 // «Undo» / «Redo» of the marks given with the solution buttons (name, text colour, place), in place
 const undoStack = [], redoStack = [];
 function undoPaint() {
@@ -795,10 +802,10 @@ async function stepMark(dir) {
 }
 async function quietMark(role, keepColour) {
   const id = await currentId();
-  const hiddenNow = role === 'answer' && await slideSolHidden(id);
+  const hiddenNow = (role === 'answer' || role === 'graph') && await slideSolHidden(id);
   const W = hiddenNow ? (await getSize()).W : 0;
   return run(async ctx => {
-    const shapes = ctx.presentation.getSelectedShapes(); shapes.load('items/name,items/type,items/left'); await ctx.sync();
+    const shapes = ctx.presentation.getSelectedShapes(); shapes.load('items/name,items/type,items/left,items/top,items/width,items/height'); await ctx.sync();
     const sel = shapes.items;
     if (!sel.length) return 0;
     // what they were, for «Undo»
@@ -823,6 +830,8 @@ async function quietMark(role, keepColour) {
         try { const f = s.textFrame.textRange.font; f.color = '#' + QUIET[role]; if (role === 'correct') f.bold = true; } catch (e) {}
       }
       // the solutions of this slide are hidden now: this one goes aside too, and «Show solutions» brings it back
+      // (a graph leaves the empty grid in its place)
+      if (hiddenNow && role === 'graph') { await ctx.sync(); await gridOverShape(ctx, ctx.presentation.slides.getItem(id).shapes, s, W, []); continue; }
       if (hiddenNow) { s.name = 'UULA SolHidden ' + s.name; s.left = s.left + 3 * W; }
     }
     await ctx.sync();
@@ -890,10 +899,12 @@ async function pinRole(role, keepColour) {
   if (role in QUIET) {
     try {
       const n = await quietMark(role, keepColour);
+      if (n < 0 && role === 'graph') { rsay(L('عُلِّم كحل بياني ووُضعت مكانه الشبكة الفارغة، لأن حلول الشريحة مخفية الآن. يرجع مع «إظهار الحلول».', 'Marked as a graph solution and replaced by the empty grid, since the slide\'s solutions are hidden now. «Show solutions» brings it back.')); return; }
       if (n < 0) { rsay(L('عُلِّم كحل وأُخفي، لأن حلول الشريحة مخفية الآن. يظهر مع «إظهار الحلول».', 'Marked as a solution and hidden, since the slide\'s solutions are hidden now. «Show solutions» brings it back.')); return; }
       rsay(!n ? L('حدّد أولًا الكائن الذي تريد تمييزه.', 'First select the object to mark.')
         : role === 'given' ? L('عُلِّم كجزء من السؤال: يبقى ظاهرًا عند إخفاء الحلول.', 'Marked as part of the question: it stays when solutions are hidden.')
         : role === 'correct' ? (keepColour ? L('عُلِّم كخيار صحيح: يتحول للأسود عند إخفاء الحلول.', 'Marked as the correct choice: it turns black when solutions are hidden.') : L('عُلِّم كخيار صحيح (أزرق عريض): يتحول للأسود عند إخفاء الحلول.', 'Marked as the correct choice (bold blue): it turns black when solutions are hidden.'))
+        : role === 'graph' ? L('عُلِّم كحل بياني: تحل مكانه شبكة فارغة عند إخفاء الحلول.', 'Marked as a graph solution: an empty grid takes its place when solutions are hidden.')
         : keepColour ? L('عُلِّم كحل: يُخفى عند إخفاء الحلول.', 'Marked as a solution: it is hidden when solutions are hidden.') : L('عُلِّم كحل (أزرق): يُخفى عند إخفاء الحلول.', 'Marked as a solution (blue): it is hidden when solutions are hidden.'));
     } catch (e) { rsay(L('تعذّر التمييز: ', 'Could not mark: ') + errText(e)); }
     finally { busy = false; lock(); }
@@ -1244,7 +1255,9 @@ async function solSlide(id, mode) {
     if (!found.length) return 0;
     const grids = {};
     for (const f of found.filter(x => x.how === 'grid')) {
-      const file = pkg.zip.file(f.media); if (!file || !/\.(png|jpe?g)$/i.test(f.media)) continue;
+      // marked «حل بياني»: the empty grid at its size, whatever the object is
+      if (f.pinned && f.w && f.h) { grids[f.i] = gridPicture(f.w, f.h); continue; }
+      const file = f.media && pkg.zip.file(f.media); if (!file || !/\.(png|jpe?g)$/i.test(f.media)) continue;
       try {
         // a graph that is part of a solution: in its place the UULA empty grid, cut to the picture's size
         const drawn = await emptyGrid(await file.async('base64'), f.media);

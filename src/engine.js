@@ -1678,9 +1678,13 @@ function gridOver(pkg) {
   for (const t of sel) for (const c of allCores(t.el)) { const n = cnvOf(c); if (n) n.setAttribute('name', (n.getAttribute('name') || '').replace(/ #ursel$/, '')); }
   // a picture, a group (a graph drawn from shapes) or a chart; not a text box or a table
   const pics = sel.filter(t => t.g && t.g.w > 0 && t.g.h > 0 && (t.c.localName === 'pic' || t.el.localName === 'grpSp' || (t.c.localName === 'graphicFrame' && !desc(t.c, 'a', 'tbl').length)));
+  // the picture stays, parked aside as the hidden original; the grid is its view (as a hidden graph solution)
   for (const t of pics) {
-    const sp = frag(doc, gridCutX(NEXT++, 'UULA Graph Grid #ursel', t.g));
-    t.el.parentNode.replaceChild(sp, t.el);
+    const base = (cnvOf(t.c) && cnvOf(t.c).getAttribute('name') || 'Graph').replace(/^UULA:[a-z]+\s*/, '') || 'Graph';
+    const sp = frag(doc, gridCutX(NEXT++, 'UULA SolView UULA:graph ' + base + ' #ursel', t.g));
+    t.el.parentNode.insertBefore(sp, t.el.nextSibling);
+    for (const c of allCores(t.el)) { const n = cnvOf(c); if (n) n.setAttribute('name', 'UULA SolHidden UULA:graph ' + (n.getAttribute('name') || '').replace(/^UULA:[a-z]+\s*/, '')); }
+    setGeom(t.el, { x: t.g.x + PARK * pkg.slideW });
   }
   return { xml: serialize(doc), count: pics.length, sel: sel.length };
 }
@@ -1841,8 +1845,10 @@ function findSolutions(pkg) {
     const pin = PIN.exec(t.name);
     if (pin && pin[1] === 'given') continue;                                   // part of the question: never touched
     if (pin && pin[1] === 'correct') { found.push({ i: t.i, how: 'copy', correct: true }); continue; }
+    // marked by hand as a graph solution: on hiding, the empty graph grid of the same size takes its place
+    if (pin && pin[1] === 'graph') { found.push({ i: t.i, how: 'grid', pinned: true, w: t.g.w / PT, h: t.g.h / PT }); continue; }
+    // marked as a solution: hidden whole (a drawing of a triangle … gets no grid)
     if (pin && pin[1] === 'answer') {
-      if (t.kind === 'pic') { const blip = desc(t.c, 'a', 'blip')[0], rid = blip && blip.getAttributeNS(NS.r, 'embed'), target = rid && relT(rid); if (target) { found.push({ i: t.i, how: 'grid', pinned: true, media: 'ppt/media/' + target.split('/').pop(), w: t.g.w / PT, h: t.g.h / PT }); continue; } }
       found.push({ i: t.i, how: 'hide' }); continue;
     }
     if (blueDots(t.el, ctx).length) { found.push({ i: t.i, how: 'copy', dots: true }); continue; }
@@ -1886,7 +1892,8 @@ function findSolutions(pkg) {
       if (!given && (qs.length || above.length || besideAns)) {
         const blip = desc(t.c, 'a', 'blip')[0], rid = blip && blip.getAttributeNS(NS.r, 'embed');
         const target = rid && relT(rid);
-        if (target) found.push({ i: t.i, how: 'grid', media: 'ppt/media/' + target.split('/').pop(), w: t.g.w / PT, h: t.g.h / PT });
+        // graphs are marked by hand («حل بياني»): an unmarked picture is never swapped for a grid
+        void target;
       }
     }
   }
@@ -1954,9 +1961,14 @@ function hideSolutions(pkg, grids, opts) {
   let n = 0;
   for (const f of list) {
     const t = items.find(x => x.i === f.i); if (!t) continue;
-    if (f.how === 'grid' && !grids[f.i]) { if (!f.pinned) continue; f.how = 'hide'; }   // no drawing found: hide it (marked) or leave it
+    if (f.how === 'grid' && !grids[f.i]) { if (!f.pinned) continue; f.how = 'hide'; }   // no grid picture: hide it (marked) or leave it
     n++;
-    const view = f.how === 'hide' ? null : t.el.cloneNode(true);
+    let view = f.how === 'hide' ? null : t.el.cloneNode(true);
+    // a graph that is not a picture (drawn shapes, a chart): its view is a new picture of the grid at its place and size
+    if (f.how === 'grid' && t.kind !== 'pic') {
+      const id = rels.image('grid' + f.i + '_' + Date.now().toString(36), grids[f.i]);
+      view = frag(doc, picX(t.name.replace(/^UULA:[a-z]+\s*/, '') || 'Graph', id, t.g.x, t.g.y, t.g.w, t.g.h));
+    }
     for (const c of allCores(t.el)) { const nv = cnvOf(c); if (nv) { nv.setAttribute('hidden', '1'); nv.setAttribute('name', 'UULA SolHidden ' + (nv.getAttribute('name') || '')); } }
     // the original also waits off the slide (PowerPoint does not always keep "hidden" on shapes with equations)
     setGeom(t.el, { x: t.g.x + PARK * W });

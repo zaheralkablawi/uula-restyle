@@ -590,11 +590,20 @@ async function flipSelected(dir) {
     if (!slideId) return;
     const pkg = await UR.openPackage(await exportSlide(slideId));
     const r = UR.flipChoices(pkg, dir);
+    let newId = slideId;
     if (!(await UQ.apply(slideId, pkg.files.slide, r.xml, exportSlide).catch(() => false))) {
-      await insertAfter(await UR.buildPackage(pkg, r.xml, null), slideId);
+      newId = await insertAfter(await UR.buildPackage(pkg, r.xml, null), slideId);
       await deleteSlide(slideId);
     }
-    await clearSel(slideId).catch(() => {});
+    // the same options stay selected, so the other direction can be pressed again right away
+    await run(async ctx => {
+      ctx.presentation.setSelectedSlides([newId]); await ctx.sync();
+      const sh = ctx.presentation.slides.getItem(newId).shapes; sh.load('items/id,items/name'); await ctx.sync();
+      const sel = sh.items.filter(x => / #ursel$/.test(x.name || ''));
+      sel.forEach(x => { x.name = x.name.replace(/ #ursel$/, ''); }); await ctx.sync();
+      try { ctx.presentation.slides.getItem(newId).setSelectedShapes(sel.map(x => x.id)); await ctx.sync(); } catch (e) {}
+    }).catch(() => {});
+    slideId = null;
     say(dir === 'rtl' ? L('حُوِّلت الخيارات المحددة إلى الاتجاه من اليمين لليسار.', 'The selected options now run right-to-left.') : L('حُوِّلت الخيارات المحددة إلى الاتجاه من اليسار لليمين.', 'The selected options now run left-to-right.'));
   } catch (e) { if (slideId) await clearSel(slideId); say(L('تعذّر تحويل الاتجاه: ', 'Could not change the direction: ') + errText(e)); }
   finally { busy = false; lock(); }

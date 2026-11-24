@@ -1690,7 +1690,7 @@ function flipChoices(pkg, dir) {
   const doc = parseXml(pkg.files.slide);
   const items = topItems(doc).map(el => { const c = core(el), n = cnvOf(c); return { el, c, n, name: n ? n.getAttribute('name') || '' : '', g: geomOf(el, pkg), text: textOf(c).trim() }; });
   const sel = items.filter(t => / #ursel$/.test(t.name));
-  for (const t of items) if (t.n) t.n.setAttribute('name', t.name.replace(/ #ursel$/, ''));
+  // the selected ones keep their mark: the pane selects them again afterwards (to turn them again at once)
   const texts = sel.filter(t => t.c.localName === 'sp' && kid(t.c, 'txBody', 'p'));
   const rtl = dir === 'rtl';
   for (const t of texts) for (const p of kids(kid(t.c, 'txBody', 'p'), 'p', 'a')) {

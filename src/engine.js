@@ -1645,7 +1645,7 @@ const WRAP = { note: 'note', quote: 'quote', formula: 'formula', activity: 'acti
 // the selected pictures (graphs …) give their place to the UULA empty grid, cut to each picture's size
 // (light lines D3D8E0 every two page-grid steps, running off the edges, the cut centred on the picture)
 function gridCutX(id, name, g) {
-  const w = Math.max(1, Math.round(g.w)), h = Math.max(1, Math.round(g.h)), step = ROW;
+  const w = Math.max(1, Math.round(g.w)), h = Math.max(1, Math.round(g.h)), step = ROW * 1.75;
   const ox = (w / 2) % step, oy = (h / 2) % step;
   let path = '';
   for (let x = ox; x <= w + 1; x += step) { const v = Math.min(w, Math.round(x)); path += '<a:moveTo><a:pt x="' + v + '" y="0"/></a:moveTo><a:lnTo><a:pt x="' + v + '" y="' + h + '"/></a:lnTo>'; }

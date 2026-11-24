@@ -125,7 +125,7 @@ function spec(id, W) {
       return { gap: 1, rows: [{ cells: [{ t: 'table', rows: [head, ans], o: { sol: true, name: 'UULA Solution Table', widths: [...Array(n).fill(0.8 / n), 0.2] } }] }] };
     }
     // the UULA empty graph grid (the same as a hidden solution graph): cells of two page-grid steps, light lines D3D8E0
-    case 'grid': return { gap: 1, rows: [{ cells: [{ t: 'grid', cols: 14, rows: 12 }] }] };
+    case 'grid': return { gap: 1, rows: [{ cells: [{ t: 'grid', cols: 8, rows: 7 }] }] };
     case 'practice': return { gap: 1, box: { grad: true, name: 'Practice', h: 68 * PT }, rows: [
       { side: true, cells: [
         { t: 'pic', key: 'trophy', w: 44.7 * PT, h: 44.7 * PT, x: W - M - 50 * PT, dy: 4 * PT, name: 'Trophy' },
@@ -169,10 +169,10 @@ function build(id, W, top, rels) {
 }
 // one shape drawing all the lines; they run half a cell past the outer lines, as a grid cut from a sheet
 function gridX(cols, rows) {
-  const w = (cols + 1) * ROW, h = (rows + 1) * ROW, half = ROW / 2;
+  const S = ROW * 1.75, w = (cols + 1) * S, h = (rows + 1) * S, half = S / 2;   // 75% wider than the page grid step: room to draw
   let path = '';
-  for (let k = 0; k <= cols; k++) { const x = Math.round(half + k * ROW); path += '<a:moveTo><a:pt x="' + x + '" y="0"/></a:moveTo><a:lnTo><a:pt x="' + x + '" y="' + h + '"/></a:lnTo>'; }
-  for (let k = 0; k <= rows; k++) { const y = Math.round(half + k * ROW); path += '<a:moveTo><a:pt x="0" y="' + y + '"/></a:moveTo><a:lnTo><a:pt x="' + w + '" y="' + y + '"/></a:lnTo>'; }
+  for (let k = 0; k <= cols; k++) { const x = Math.round(half + k * S); path += '<a:moveTo><a:pt x="' + x + '" y="0"/></a:moveTo><a:lnTo><a:pt x="' + x + '" y="' + h + '"/></a:lnTo>'; }
+  for (let k = 0; k <= rows; k++) { const y = Math.round(half + k * S); path += '<a:moveTo><a:pt x="0" y="' + y + '"/></a:moveTo><a:lnTo><a:pt x="' + w + '" y="' + y + '"/></a:lnTo>'; }
   return '<p:sp><p:nvSpPr><p:cNvPr id="' + nid() + '" name="UULA Graph Grid"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="' + w + '" cy="' + h + '"/></a:xfrm>'
     + '<a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="0" t="0" r="r" b="b"/><a:pathLst><a:path w="' + w + '" h="' + h + '" fill="none">' + path + '</a:path></a:pathLst></a:custGeom>'
     + '<a:noFill/><a:ln w="6350"><a:solidFill><a:srgbClr val="D3D8E0"/></a:solidFill></a:ln></p:spPr></p:sp>';

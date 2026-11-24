@@ -378,7 +378,7 @@ async function gridSelected(id) {
     const made = [], groups = [];
     try {
       for (const p of pics) {
-        const x0 = p.left, y0 = p.top, w = p.width, h = p.height, step = 13.39;
+        const x0 = p.left, y0 = p.top, w = p.width, h = p.height, step = 13.39 * 1.75;
         const lines = [];
         // each line a very thin filled rectangle (a zero-wide line is tilted by PowerPoint for Mac)
         const T = 0.5;
@@ -930,7 +930,7 @@ $('spD').addEventListener('click', () => spacingRun('d'));
 // an empty grid from a graph picture: the coloured drawing is removed and the grid lines / axes it covered are drawn again
 // the UULA empty grid (light lines D3D8E0 on a clear background, cells of two page-grid steps), cut to w×h points
 function gridPicture(wPt, hPt) {
-  const S = 4, cell = 13.39, cv = document.createElement('canvas');
+  const S = 4, cell = 13.39 * 1.75, cv = document.createElement('canvas');
   cv.width = Math.max(4, Math.round(wPt * S)); cv.height = Math.max(4, Math.round(hPt * S));
   const g = cv.getContext('2d');
   g.strokeStyle = '#D3D8E0'; g.lineWidth = 0.5 * S;

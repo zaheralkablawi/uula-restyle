@@ -567,13 +567,17 @@ function buildSolRoles() {
     host.appendChild(b);
   }
 }
-$('undoBtn').addEventListener('click', async () => {
-  if (busy || !supported || !undoStack.length) return;
+async function undoRedo(dir) {
+  if (busy || !supported || !(dir < 0 ? undoStack : redoStack).length) return;
   busy = true; lock();
-  try { const n = await undoMark(); say(n ? L('تم التراجع عن آخر تمييز.', 'The last mark was undone.') : L('لم أجد العنصر للتراجع عنه.', 'The object to undo was not found.')); }
-  catch (e) { say(L('تعذّر التراجع: ', 'Could not undo: ') + errText(e)); }
+  try {
+    const n = await stepMark(dir);
+    say(n ? (dir < 0 ? L('تم التراجع عن آخر تمييز.', 'The last mark was undone.') : L('تمت إعادة التمييز.', 'The mark was done again.')) : L('لم أجد العنصر.', 'The object was not found.'));
+  } catch (e) { say(L('تعذّر: ', 'Could not: ') + errText(e)); }
   finally { busy = false; lock(); }
-});
+}
+$('undoBtn').addEventListener('click', () => undoRedo(-1));
+$('redoBtn').addEventListener('click', () => undoRedo(1));
 $('solRoles').addEventListener('click', e => { const b = e.target.closest('.tbtn'); if (b) pinRole(b.dataset.role, true); });
 const rsay = m => say(m);
 async function clearSel(slideId) {
@@ -585,12 +589,26 @@ async function clearSel(slideId) {
 }
 // solution marks change only the selected objects, in place: no slide is rebuilt, nothing moves
 const QUIET = { answer: '1F71DE', correct: '2070DF', given: null };
-// «Undo»: the last marks given with the solution buttons go back (name, text colour, place), in place
-const undoStack = [];
-function undoPaint() { const b = $('undoBtn'); if (b) b.disabled = busy || !supported || !undoStack.length; }
-async function undoMark() {
-  const u = undoStack.pop(); undoPaint(); if (!u) return 0;
-  return run(async ctx => {
+// «Undo» / «Redo» of the marks given with the solution buttons (name, text colour, place), in place
+const undoStack = [], redoStack = [];
+function undoPaint() {
+  const u = $('undoBtn'), r = $('redoBtn');
+  if (u) u.disabled = busy || !supported || !undoStack.length;
+  if (r) r.disabled = busy || !supported || !redoStack.length;
+}
+// how the objects are now, to go back to it from the other side
+async function snapState(ctx, slide, ids) {
+  const sh = ctx.presentation.slides.getItem(slide).shapes; sh.load('items/id,items/name,items/left,items/type'); await ctx.sync();
+  const list = ids.map(id => sh.items.find(x => x.id === id)).filter(Boolean);
+  const fonts = list.map(x => { if (!['TextBox', 'GeometricShape'].includes(x.type)) return null; try { const f = x.textFrame.textRange.font; f.load('color,bold'); return f; } catch (e) { return null; } });
+  await ctx.sync();
+  return { slide, items: list.map((x, k) => ({ id: x.id, name: x.name, left: x.left, color: fonts[k] ? fonts[k].color : null, bold: fonts[k] ? fonts[k].bold : null })) };
+}
+async function stepMark(dir) {
+  const from = dir < 0 ? undoStack : redoStack, to = dir < 0 ? redoStack : undoStack;
+  const u = from.pop(); undoPaint(); if (!u) return 0;
+  const n = await run(async ctx => {
+    to.push(await snapState(ctx, u.slide, u.items.map(i => i.id)));
     const sh = ctx.presentation.slides.getItem(u.slide).shapes; sh.load('items/id'); await ctx.sync();
     let n = 0;
     for (const it of u.items) {
@@ -600,6 +618,7 @@ async function undoMark() {
     }
     await ctx.sync(); return n;
   });
+  undoPaint(); return n;
 }
 async function quietMark(role, keepColour) {
   const id = await currentId();
@@ -614,6 +633,7 @@ async function quietMark(role, keepColour) {
     sel.forEach(x => x.load('id')); await ctx.sync();
     undoStack.push({ slide: id, items: sel.map((x, k) => ({ id: x.id, name: x.name, left: x.left, color: fonts[k] ? fonts[k].color : null, bold: fonts[k] ? fonts[k].bold : null })) });
     if (undoStack.length > 30) undoStack.shift();
+    redoStack.length = 0;
     undoPaint();
     let all = null;
     if (hiddenNow) { all = ctx.presentation.slides.getItem(id).shapes; all.load('items/name,items/left'); await ctx.sync(); }

@@ -642,7 +642,16 @@ async function mergedPress(id) {
   }
   if (selNow && it.role) return pinRole(it.role);
   if (it.tpl) return insertTemplate(it.tpl);
-  say(L('حدّد في الشريحة المربع الذي تريد تحويله إلى «' + it.ar + '» أولًا.', 'Select the box to turn into «' + it.en + '» first.'));
+  needSel(it);
+}
+// a button that needs a selection, pressed with nothing selected: the line above the list says so, clearly, for a moment
+let needTimer = 0;
+function needSel(it) {
+  const msg = L('حدّد أولًا الكائن الذي تريد تحويله إلى «' + it.ar + '»', 'First select the object to turn into «' + it.en + '»');
+  say(msg + '.');
+  const h = $('selHint'); if (!h) return;
+  h.dataset.on = 'need'; h.innerHTML = '<b>!</b> ' + msg;
+  clearTimeout(needTimer); needTimer = setTimeout(selPaint, 3500);
 }
 $('roles').addEventListener('click', e => { const b = e.target.closest('.tbtn'); if (b) mergedPress(b.dataset.item); });
 // the same solution buttons beside «Hide solutions»
@@ -805,7 +814,7 @@ async function pinRole(role, keepColour) {
     try {
       const n = await quietMark(role, keepColour);
       if (n < 0) { rsay(L('عُلِّم كحل وأُخفي، لأن حلول الشريحة مخفية الآن. يظهر مع «إظهار الحلول».', 'Marked as a solution and hidden, since the slide\'s solutions are hidden now. «Show solutions» brings it back.')); return; }
-      rsay(!n ? L('حدّد مربعًا في الشريحة أولًا.', 'Select a box on the slide first.')
+      rsay(!n ? L('حدّد أولًا الكائن الذي تريد تمييزه.', 'First select the object to mark.')
         : role === 'given' ? L('عُلِّم كجزء من السؤال: يبقى ظاهرًا عند إخفاء الحلول.', 'Marked as part of the question: it stays when solutions are hidden.')
         : role === 'correct' ? (keepColour ? L('عُلِّم كخيار صحيح: يتحول للأسود عند إخفاء الحلول.', 'Marked as the correct choice: it turns black when solutions are hidden.') : L('عُلِّم كخيار صحيح (أزرق عريض): يتحول للأسود عند إخفاء الحلول.', 'Marked as the correct choice (bold blue): it turns black when solutions are hidden.'))
         : keepColour ? L('عُلِّم كحل: يُخفى عند إخفاء الحلول.', 'Marked as a solution: it is hidden when solutions are hidden.') : L('عُلِّم كحل (أزرق): يُخفى عند إخفاء الحلول.', 'Marked as a solution (blue): it is hidden when solutions are hidden.'));

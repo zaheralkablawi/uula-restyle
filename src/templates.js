@@ -91,7 +91,7 @@ function spec(id, W) {
     // the options one under the other: ⓐ on the first line … ⓓ on the fourth, each line its own text box
     case 'mcqV': {
       const L = ['ⓐ', 'ⓑ', 'ⓒ', 'ⓓ'], ltr = OPT.dirNow === 'ltr';
-      return { gap: 0, rows: L.map((l, k) => ({ gap: 0, cells: [txt(P.runs([T(l + ' '), T(ltr ? 'Option' : 'خيار')], { marL: 182880, ar: !ltr }))] })) };
+      return { gap: 0, snap: true, rows: L.map((l, k) => ({ gap: 0, cells: [txt(P.runs([T(l + ' '), T(ltr ? 'Option' : 'خيار')], { marL: 182880, ar: !ltr }))] })) };
     }
     case 'problem': return { gap: 1, rows: [
       { cells: [txt(P.q('اكتب نص المسألة هنا؟'))] },
@@ -204,12 +204,13 @@ function place(id, W, top, built, heights) {
   const box = s.box;
   const boxK = built.shapes.findIndex(x => x.role === 'box');
   let y = top + (box && !box.small && !box.exact ? ROW : 0);
+  if (s.snap) y = U.snapUp(y);
   if (box && box.small) y = top + 4 * PT;
   const x1 = box && box.icon && !box.small ? W - M - 15 * PT : W - M;
   let bottom = y;
   s.rows.forEach((r, ri) => {
     if (s.fixed) y = r.y;
-    else if (ri > 0) y = bottom + (r.gap != null ? r.gap : 1) * ROW;
+    else if (ri > 0) { y = bottom + (r.gap != null ? r.gap : 1) * ROW; if (s.snap) y = U.snapUp(y); }   // on the page grid, as the UULA spacing rules
     let rb = y;
     let pillW = 0;
     r.cells.forEach((c, ci) => {

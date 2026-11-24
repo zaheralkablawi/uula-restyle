@@ -567,8 +567,37 @@ function dirSeg() {
     const b = document.createElement('button'); b.type = 'button'; b.dataset.v = v; b.title = L(tip[v][0], tip[v][1]);
     b.setAttribute('aria-pressed', String(v === mcqDir)); b.innerHTML = ic[v]; d.appendChild(b);
   }
-  d.addEventListener('click', e => { e.stopPropagation(); const b = e.target.closest('button'); if (!b) return; setMcqDir(b.dataset.v, true); });
+  d.addEventListener('click', async e => {
+    e.stopPropagation(); const b = e.target.closest('button'); if (!b) return;
+    setMcqDir(b.dataset.v, true);
+    // options selected on the slide: they turn to this direction now (the same button for inserting and for formatting)
+    if (b.dataset.v !== 'auto') { await selCheck(); if (selNow) flipSelected(b.dataset.v); }
+  });
   return d;
+}
+async function flipSelected(dir) {
+  if (busy || !supported) return;
+  busy = true; lock();
+  let slideId = null;
+  try {
+    slideId = await run(async ctx => {
+      const slides = ctx.presentation.getSelectedSlides(); slides.load('items/id');
+      const shapes = ctx.presentation.getSelectedShapes(); shapes.load('items/name'); await ctx.sync();
+      if (!slides.items.length || !shapes.items.length) return null;
+      shapes.items.forEach(x => { x.name = (x.name || '').replace(/ #ursel$/, '') + ' #ursel'; });
+      await ctx.sync(); return slides.items[0].id;
+    });
+    if (!slideId) return;
+    const pkg = await UR.openPackage(await exportSlide(slideId));
+    const r = UR.flipChoices(pkg, dir);
+    if (!(await UQ.apply(slideId, pkg.files.slide, r.xml, exportSlide).catch(() => false))) {
+      await insertAfter(await UR.buildPackage(pkg, r.xml, null), slideId);
+      await deleteSlide(slideId);
+    }
+    await clearSel(slideId).catch(() => {});
+    say(dir === 'rtl' ? L('حُوِّلت الخيارات المحددة إلى الاتجاه من اليمين لليسار.', 'The selected options now run right-to-left.') : L('حُوِّلت الخيارات المحددة إلى الاتجاه من اليسار لليمين.', 'The selected options now run left-to-right.'));
+  } catch (e) { if (slideId) await clearSel(slideId); say(L('تعذّر تحويل الاتجاه: ', 'Could not change the direction: ') + errText(e)); }
+  finally { busy = false; lock(); }
 }
 function setMcqDir(v, store) {
   mcqDir = v; URT.setOpt({ mcqDir: v });
@@ -617,7 +646,7 @@ const MERGED = [
       { id: 'qqr', ar: 'سؤال مع QR', en: 'Question + QR', col: 'FF0000', tpl: 'qqr' },
       { id: 'answer', ar: 'حل السؤال', en: 'Solution', col: '1F71DE', role: 'answer', tpl: 'answer' }] },
     { label: 'اختياري', le: 'Choice', dir: true, items: [
-      { id: 'mcq', ar: 'اختيار متعدد', en: 'Multiple choice', col: 'FF0000', role: 'choice', tpl: 'mcq' },
+      { id: 'mcq', ar: 'خيارات أفقية', en: 'Options in a row', col: 'FF0000', role: 'choice', tpl: 'mcq' },
       { id: 'mcqV', ar: 'خيارات عمودية', en: 'Options in a column', col: 'FF0000', tpl: 'mcqV' },
       { id: 'correct', ar: 'الخيار الصحيح', en: 'Correct choice', col: '2070DF', role: 'correct' }] }] },
   { g: 'إطارات', ge: 'Frames', items: [
@@ -934,7 +963,7 @@ async function pinRole(role, keepColour) {
     await unmark(newId);
     rsay(role === 'given' ? L('عُلِّم كشكل من السؤال: يبقى ظاهرًا عند إخفاء الحلول.', 'Marked as part of the question: it stays when solutions are hidden.')
       : role === 'correct' ? L('عُلِّم كخيار صحيح (أزرق عريض): يتحول للأسود عند إخفاء الحلول.', 'Marked as the correct choice (bold blue): it turns black when solutions are hidden.')
-      : role === 'choice' ? L('حُوِّل إلى خيارات «اختيار متعدد».', 'Turned into multiple-choice options.')
+      : role === 'choice' ? L('حُوِّل إلى خيارات.', 'Turned into options.')
       : ITEM[role] ? L('حُوِّل إلى «' + ITEM[role].ar + '».', 'Turned into «' + ITEM[role].en + '».') : L('تم.', 'Done.'));
   } catch (e) { if (slideId) await clearSel(slideId); rsay(L('تعذّر التحويل: ', 'Could not restyle: ') + errText(e)); }
   finally { busy = false; lock(); }

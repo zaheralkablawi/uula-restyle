@@ -1684,6 +1684,32 @@ function gridOver(pkg) {
   }
   return { xml: serialize(doc), count: pics.length, sel: sel.length };
 }
+// the selected multiple-choice options turned to the other direction: every paragraph right-to-left (algn r) or
+// left-to-right (algn l), and options standing side by side swap places so ⓐ is on the right (rtl) or the left (ltr)
+function flipChoices(pkg, dir) {
+  const doc = parseXml(pkg.files.slide);
+  const items = topItems(doc).map(el => { const c = core(el), n = cnvOf(c); return { el, c, n, name: n ? n.getAttribute('name') || '' : '', g: geomOf(el, pkg), text: textOf(c).trim() }; });
+  const sel = items.filter(t => / #ursel$/.test(t.name));
+  for (const t of items) if (t.n) t.n.setAttribute('name', t.name.replace(/ #ursel$/, ''));
+  const texts = sel.filter(t => t.c.localName === 'sp' && kid(t.c, 'txBody', 'p'));
+  const rtl = dir === 'rtl';
+  for (const t of texts) for (const p of kids(kid(t.c, 'txBody', 'p'), 'p', 'a')) {
+    let pPr = kid(p, 'pPr', 'a'); if (!pPr) { pPr = mk(doc, 'a', 'pPr'); p.insertBefore(pPr, p.firstChild); }
+    pPr.setAttribute('algn', rtl ? 'r' : 'l'); pPr.setAttribute('rtl', rtl ? '1' : '0');
+  }
+  // side by side (the same line): the places are kept, the order of the options turns
+  const letter = t => { const m = t.text.match(/[ⓐ-ⓩⒶ-Ⓩ]|^\(?([A-Da-dأبجد])[).]/); if (!m) return null; const ch = m[1] || m[0]; return 'ⓐⓑⓒⓓⒶⒷⒸⒹabcdABCDأبجد'.indexOf(ch) % 4; };
+  const rows = [];
+  for (const t of texts.filter(t => t.g)) { const r = rows.find(r => Math.abs(r[0].g.y - t.g.y) < 4 * PT); if (r) r.push(t); else rows.push([t]); }
+  let moved = 0;
+  for (const r of rows.filter(r => r.length > 1)) {
+    const slots = r.map(t => t.g.x).sort((a, b) => a - b);
+    const known = r.every(t => letter(t) != null);
+    const order = known ? [...r].sort((a, b) => letter(a) - letter(b)) : [...r].sort((a, b) => b.g.x - a.g.x);
+    (rtl ? [...slots].reverse() : slots).forEach((x, k) => { const t = order[k]; if (t.g.x !== x) { setGeom(t.el, { x }); moved++; } });
+  }
+  return { xml: serialize(doc), count: texts.length, moved };
+}
 function wrapBox(pkg, type) {
   const W = pkg.slideW, H = pkg.slideH;
   const doc = parseXml(pkg.files.slide);
@@ -2083,9 +2109,9 @@ function splitPoint(plan, lay) {
 
 return {
   questionFlags,
-  NS, PT, ROW, M, FOOT, C, STY, BOX, openPackage, buildPackage, parseXml, serialize, restyle, layout, applyLayout, splitParts, splitPoint, markNames, MARK, applyRole, wrapBox, gridOver, WRAP, reflow, spacing, align, findSolutions, hideSolutions, showSolutions, hasSolutions, TEXT_ROLES, BOX_ROLES, G, Y0, snapUp, snapX,
+  NS, PT, ROW, M, FOOT, C, STY, BOX, openPackage, buildPackage, parseXml, serialize, restyle, layout, applyLayout, splitParts, splitPoint, markNames, MARK, applyRole, wrapBox, gridOver, flipChoices, WRAP, reflow, spacing, align, findSolutions, hideSolutions, showSolutions, hasSolutions, TEXT_ROLES, BOX_ROLES, G, Y0, snapUp, snapX,
   // used by the templates module
-  util: { pX, txX, boxX, gradBoxX, picX, pillX, pillW, lineX, tableX, makeRels, frag, topItems, core, cnvOf, maxId, spTreeOf, kid, kids, desc, xfrmOf, geomOf, setNext: n => { NEXT = n; }, yearText, pageNumX, estimateText, iconW, iconH }
+  util: { pX, txX, boxX, gradBoxX, picX, pillX, pillW, lineX, tableX, makeRels, frag, topItems, core, cnvOf, maxId, spTreeOf, kid, kids, desc, xfrmOf, geomOf, setNext: n => { NEXT = n; }, snapUp, yearText, pageNumX, estimateText, iconW, iconH }
 };
 })();
 if (typeof module !== 'undefined') module.exports = UR;

@@ -7,7 +7,8 @@ const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } cat
 const load = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
 let lang = load('ur-lang', 'ar');
 const L = (ar, en) => lang === 'en' ? en : ar;
-let scope = load('ur-scope', 'cur'); if (scope !== 'all') scope = 'cur';
+// the tool works on the current slide only (all slides at once was slow and risky)
+let scope = 'cur';
 let busy = false, supported = false;
 
 // ---------- status / results ----------
@@ -1753,9 +1754,7 @@ $('goBtn').addEventListener('click', async () => {
   catch (e) { prog(null); say(L('حدث خطأ: ', 'Error: ') + errText(e)); }
   finally { busy = false; lock(); }
 });
-function setScope(v) { scope = v; save('ur-scope', v); document.querySelectorAll('.scopeSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v))); }
-document.querySelectorAll('.scopeSeg').forEach(sg => sg.addEventListener('click', e => { const b = e.target.closest('button'); if (b) setScope(b.dataset.v); }));
-setScope(scope);
+
 // tabs
 function setTab(t) {
   document.querySelectorAll('#tabs button, #wtabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));

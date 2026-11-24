@@ -156,10 +156,6 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
 
 
   <section class="panel" data-pane="obj">
-    <div class="seg scopeSeg">
-      <button type="button" data-v="cur" aria-pressed="true" data-en="Current slide">الشريحة الحالية</button>
-      <button type="button" data-v="all" aria-pressed="false" data-en="All slides">كل الشرائح</button>
-    </div>
     <div class="sprow2" style="justify-content:space-between;grid-template-columns:auto auto"><span class="gt2" data-en="Restyle the slide">تحويل الشريحة لستايل علا</span><button type="button" class="big" id="goBtn" style="min-width:90px;padding:0 16px" data-en="Convert" data-ar-title="يحوّل الشريحة كلها إلى ستايل مذكرة علا: الخط والأحجام والألوان وترتيب المربعات." data-en-title="Restyles the whole slide to the UULA booklet: font, sizes, colours and the order of the boxes." title="يحوّل الشريحة كلها إلى ستايل مذكرة علا: الخط والأحجام والألوان وترتيب المربعات.">تحويل</button></div>
     <div class="sep"></div>
     <div style="display:flex;gap:6px;align-items:stretch"><div id="selHint" class="selhint" style="flex:1;min-width:0"></div><button type="button" class="ib" id="opUndo" style="flex:none;width:32px" data-ar-title="تراجع عن آخر عملية دفعة واحدة" data-en-title="Undo the last operation at once" title="تراجع عن آخر عملية دفعة واحدة"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 5L3.5 8.5 7 12"/><path d="M3.5 8.5H12a4.5 4.5 0 010 9H9"/></svg></button></div>
@@ -190,10 +186,6 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
   </section>
 
   <section class="panel" data-pane="set" hidden>
-    <div class="seg scopeSeg">
-      <button type="button" data-v="cur" aria-pressed="true" data-en="Current slide">الشريحة الحالية</button>
-      <button type="button" data-v="all" aria-pressed="false" data-en="All slides">كل الشرائح</button>
-    </div>
     <button type="button" class="sec" id="solBtn"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/><path id="solSlash" d="M2.5 13.5l11-11"/></svg><span id="solLbl">إخفاء الحلول</span></button>
     <div class="sprow2"><span class="splab" data-en="Solution space">مكان الحل</span><div class="seg" id="solLines" style="width:186px">
       <button type="button" data-v="0" aria-pressed="true" data-en="No lines">بدون سطور</button>
@@ -3685,7 +3677,8 @@ const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } cat
 const load = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
 let lang = load('ur-lang', 'ar');
 const L = (ar, en) => lang === 'en' ? en : ar;
-let scope = load('ur-scope', 'cur'); if (scope !== 'all') scope = 'cur';
+// the tool works on the current slide only (all slides at once was slow and risky)
+let scope = 'cur';
 let busy = false, supported = false;
 
 // ---------- status / results ----------
@@ -5431,9 +5424,7 @@ $('goBtn').addEventListener('click', async () => {
   catch (e) { prog(null); say(L('حدث خطأ: ', 'Error: ') + errText(e)); }
   finally { busy = false; lock(); }
 });
-function setScope(v) { scope = v; save('ur-scope', v); document.querySelectorAll('.scopeSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v))); }
-document.querySelectorAll('.scopeSeg').forEach(sg => sg.addEventListener('click', e => { const b = e.target.closest('button'); if (b) setScope(b.dataset.v); }));
-setScope(scope);
+
 // tabs
 function setTab(t) {
   document.querySelectorAll('#tabs button, #wtabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));

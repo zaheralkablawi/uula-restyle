@@ -583,7 +583,8 @@ function dirSeg() {
 }
 // how many text boxes are selected now (for the options buttons)
 async function selCount() {
-  return run(async ctx => { const s = ctx.presentation.getSelectedShapes(); s.load('items/type'); await ctx.sync(); return s.items.filter(x => x.type === 'TextBox' || x.type === 'GeometricShape').length; }).catch(() => 0);
+  // an equation box can be reported as another type: every selected object counts except pictures, tables, lines and groups
+  return run(async ctx => { const s = ctx.presentation.getSelectedShapes(); s.load('items/type'); await ctx.sync(); return s.items.filter(x => !['Image', 'Table', 'Line', 'Group', 'Chart', 'SmartArt', 'Media'].includes(x.type)).length; }).catch(() => 0);
 }
 // several selected text boxes become options: in one row, or one under the other; they stay selected afterwards
 async function arrangeSelected(layout) {

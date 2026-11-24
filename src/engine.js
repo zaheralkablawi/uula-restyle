@@ -1725,8 +1725,19 @@ function arrangeChoices(pkg, layout, dirOpt) {
     : [...sel].sort((a, b) => Math.abs(a.g.y - b.g.y) > 6 * PT ? a.g.y - b.g.y : (rtl ? b.g.x - a.g.x : a.g.x - b.g.x));
   // each gets its letter and the choice look
   order.forEach((t, k) => {
-    const tt = desc(t.c, 'a', 't').find(x => x.textContent.trim());
-    if (tt) { tt.textContent = tt.textContent.replace(/^\s*[ⓐ-ⓩ]‏?\s*/, ''); tt.textContent = L[k] + ' ' + tt.textContent; t.text = textOf(t.c).trim(); }
+    // the letter: in front of the first text; a box with only an equation gets a small run before the equation
+    // (outside it: the equation itself is not touched), in the equation shape and in its plain-text copy alike
+    for (const c of allCores(t.el)) {
+      const ps = kids(kid(c, 'txBody', 'p'), 'p', 'a');
+      const p0 = ps.find(p => textOf(p).trim()) || ps[0];
+      if (!p0) continue;
+      const first = [...p0.children].find(x => x.localName !== 'pPr');
+      const tt = first && first.localName === 'r' ? kid(first, 't', 'a') : null;
+      if (tt) { tt.textContent = L[k] + ' ' + tt.textContent.replace(/^\s*[ⓐ-ⓩ]‏?\s*/, ''); continue; }
+      const r = frag(doc, '<a:r><a:rPr lang="en-US" sz="1100" dirty="0"/><a:t>' + L[k] + ' </a:t></a:r>');
+      p0.insertBefore(r, first || null);
+    }
+    t.text = textOf(t.c).trim();
     ctx.choiceDir = dir;
     styleText(t, ctx, pkg, 'choice');
     plainShape(t.c); setBody(t.c, {});

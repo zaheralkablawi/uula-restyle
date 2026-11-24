@@ -1202,40 +1202,46 @@ async function spaceSlide(id, only) {
     return { moved, over: low > (H - 54) * PT + PT };
   });
 }
-// distribute: after the gaps are fixed, the free space at the bottom of the page is shared out under the questions
-// (room for the student to write), as long as there is room; the first question keeps its place
+// distribute: after the gaps are fixed, the whole page is used — the content is cut into bands (objects that overlap in
+// height stay together, so a box keeps its content and a figure stays beside its question), the first band goes up to the
+// top margin and the free space (top, middle, bottom) is shared out equally under every band, in whole page-grid lines.
+// Nothing is resized or restyled: whole bands only move down. With a selection only the selected objects move, inside the
+// room between the first of them and the next unselected object under them.
 async function distributeSlide(id, only) {
   await spaceSlide(id, only);
   const { W, H } = await getSize();
-  const flags = UR.questionFlags(await UR.openPackage(await exportSlide(id)));
   return run(async ctx => {
     const sh = ctx.presentation.slides.getItem(id).shapes;
     sh.load('items/id,items/name,items/left,items/top,items/width,items/height'); await ctx.sync();
-    const lim = H - 54, G2 = 13.39;
-    const free = sh.items.map((s, k) => ({ s, k, q: !!flags[k],
-      fixed: /^UULA (Footer|Watermark)|^CustomPageNumber_/.test(s.name || '') || s.top >= lim || s.left + s.width <= 0 || s.left >= W || s.top + s.height <= 0 || (s.width > W * 0.85 && s.height > H * 0.6) })).filter(o => !o.fixed && (!only || only.includes(o.s.id)));
+    const lim = H - 54, G2 = 13.39, Y0 = 22.58;
+    const isFixed = s => /^UULA (Footer|Watermark)|^CustomPageNumber_/.test(s.name || '') || s.top >= lim || s.left + s.width <= 0 || s.left >= W || s.top + s.height <= 0 || (s.width > W * 0.85 && s.height > H * 0.6);
+    const all = sh.items.filter(s => !isFixed(s));
+    const free = all.filter(s => !only || only.includes(s.id));
     if (!free.length) return { status: 'none' };
-    const bottom = Math.max(...free.map(o => o.s.top + o.s.height));
-    // the question starts (one per row)
-    const tops = [];
-    for (const o of free.filter(o => o.q).sort((a, b) => a.s.top - b.s.top)) {
-      // the row of the question starts with whatever sits beside it (its figure can begin a little higher)
-      const q0 = o.s.top, q1 = o.s.top + o.s.height;
-      const row = free.filter(x => x.s.top < q1 && x.s.top + x.s.height > q0 && x.s.top >= q0 - 3 * G2 && x.s.height < (lim - 30));
-      const t = Math.min(q0, ...row.map(x => x.s.top));
-      if (!tops.length || t - tops[tops.length - 1] > G2) tops.push(t);
+    // bands
+    const bands = [];
+    for (const s of free.slice().sort((a, b) => a.top - b.top)) {
+      const b = bands[bands.length - 1];
+      if (b && s.top < b.bottom - 0.5) { b.items.push(s); b.bottom = Math.max(b.bottom, s.top + s.height); }
+      else bands.push({ top: s.top, bottom: s.top + s.height, items: [s] });
     }
-    if (tops.length < 2) return { status: tops.length ? 'one' : 'noq' };
-    const room = lim - bottom - G2;
-    // each question gets the same extra room under it, in whole lines; the last one's share stays at the bottom of the page
-    const share = Math.floor(room / tops.length / G2) * G2;
-    if (share < G2) return { status: 'full' };
-    for (const o of free) {
-      const n = tops.slice(1).filter(t => o.s.top >= t - 0.5).length;
-      if (n) o.s.top = o.s.top + n * share;
+    // the room: from the top margin (or, with a selection, from the first selected object) down to the footer,
+    // or to the first unselected object that sits under the selection
+    let top = only ? bands[0].top : Math.min(bands[0].top, Y0), floor = lim - G2 / 2;
+    // something fixed at the top of the page (a header) keeps its place: the content starts under it
+    if (!only) for (const s of sh.items) if (isFixed(s) && s.top < bands[0].top && s.top + s.height > top && s.top + s.height <= bands[0].top && s.left < W && s.left + s.width > 0 && s.top < lim) top = s.top + s.height + G2;
+    if (only) {
+      const last = bands[bands.length - 1].bottom;
+      const under = all.filter(s => !only.includes(s.id) && s.top >= last - 0.5).map(s => s.top);
+      if (under.length) floor = Math.min(...under) - G2;
     }
+    const lift = Math.max(0, bands[0].top - top);
+    const room = floor - (bands[bands.length - 1].bottom - lift);
+    const share = Math.floor(room / bands.length / G2) * G2;
+    if (lift < 0.5 && share < G2) return { status: 'full' };
+    bands.forEach((b, k) => { const dy = k * Math.max(0, share) - lift; if (Math.abs(dy) > 0.2) b.items.forEach(s => { s.top = s.top + dy; }); });
     await ctx.sync();
-    return { status: 'ok', lines: Math.round(share / G2) };
+    return { status: 'ok', lines: Math.max(0, Math.round(share / G2)), bands: bands.length };
   });
 }
 // horizontal: to the right / left margin (selected objects only, if any are selected on the current slide)
@@ -1289,9 +1295,9 @@ async function spacingRun(kind) {
     if (over.length) { const all = await allIds(); line('warn', L('• المحتوى أطول من الصفحة: ', '• Longer than the page: ') + slideLinks(over, i => all.indexOf(i) + 1)); }
     if (kind === 'd') {
       const all = await allIds(), num = i => all.indexOf(i) + 1;
-      if (spread.length) line('ok', L('✓ وُزّعت المساحة تحت الأسئلة (' + Math.min(...spread) + (Math.max(...spread) !== Math.min(...spread) ? '–' + Math.max(...spread) : '') + ' سطر إضافي لكل سؤال).', '✓ The free space was shared under the questions (' + Math.min(...spread) + '+ extra lines each).'));
-      const why = { full: L('لا توجد مساحة كافية', 'no room left'), one: L('سؤال واحد فقط، والمساحة تحته أصلًا', 'only one question, the space is already under it'), noq: L('لا توجد أسئلة', 'no questions'), none: L('فارغة', 'empty') };
-      for (const w of ['full', 'one', 'noq', 'none']) { const list = skipped.filter(x => x.why === w).map(x => x.id); if (list.length) line('', '• ' + why[w] + ': ' + slideLinks(list, num)); }
+      if (spread.length) line('ok', L('✓ وُزّعت المساحة الفارغة بالتساوي على الشريحة (' + Math.min(...spread) + (Math.max(...spread) !== Math.min(...spread) ? '–' + Math.max(...spread) : '') + ' سطر إضافي تحت كل جزء).', '✓ The free space was shared out evenly over the slide (' + Math.min(...spread) + '+ extra lines under each part).'));
+      const why = { full: L('لا توجد مساحة فارغة', 'no free space'), none: L('فارغة', 'empty') };
+      for (const w of ['full', 'none']) { const list = skipped.filter(x => x.why === w).map(x => x.id); if (list.length) line('', '• ' + why[w] + ': ' + slideLinks(list, num)); }
     }
     say(sel ? L('تم تنسيق المسافات بين ' + sel.length + ' عناصر محددة فقط.', 'Spacing done between the ' + sel.length + ' selected objects only.') : L('تم تنسيق المسافات.', 'Spacing done.'));
   } catch (e) { prog(null); say(L('حدث خطأ: ', 'Error: ') + errText(e)); }

@@ -621,12 +621,15 @@ async function arrangeSelected(layout) {
       if (layout !== 'row' && sel.length > 1) {
         // each box as wide as its text and a little more (no wrapping; it grows when more is typed), on the right
         // edge of the page in right-to-left, on the left edge in left-to-right
-        sel.forEach(x => { try { const tf = x.textFrame; tf.wordWrap = false; tf.autoSizeSetting = 'AutoSizeShapeToFitText'; tf.leftMargin = 3; tf.rightMargin = 3; } catch (e) {} });
+        // the real widths of the texts (no wrapping), then all the boxes as wide as the widest and a little more
+        sel.forEach(x => { try { const tf = x.textFrame; tf.wordWrap = false; tf.autoSizeSetting = 'AutoSizeShapeToFitText'; } catch (e) {} });
         await ctx.sync();
         sel.forEach(x => x.load('left,top,width,height')); await ctx.sync();
         const { W: SW } = await getSize(), Mx = 36;
-        sel.forEach(x => { x.left = r.dir === 'rtl' ? SW - Mx - x.width : Mx; });
+        const bw = Math.min(SW - 2 * Mx, Math.max(...sel.map(x => x.width)) + 8);
+        sel.forEach(x => { try { x.textFrame.wordWrap = true; } catch (e) {} x.width = bw; x.left = r.dir === 'rtl' ? SW - Mx - bw : Mx; });
         await ctx.sync();
+        sel.forEach(x => x.load('top,height')); await ctx.sync();
         const Y0 = 22.58, G = 6.695, snap = y => Y0 + Math.max(0, Math.ceil((y - Y0 - 0.3) / G)) * G;
         const list = [...sel].sort((a, b) => a.top - b.top);
         let y = list[0].top;

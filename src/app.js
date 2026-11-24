@@ -469,6 +469,7 @@ async function wrapSelected(id, tid) {
 async function insertTemplate(tid) {
   if (busy || !supported) return;
   busy = true; lock(); tsay('');
+  await snapOp([await currentId().catch(() => null)].filter(Boolean));
   try {
     const id = await currentId();
     if (!id) { tsay(L('حدّد شريحة أولًا.', 'Select a slide first.')); return; }
@@ -590,6 +591,7 @@ async function selCount() {
 async function arrangeSelected(layout) {
   if (busy || !supported) return;
   busy = true; lock();
+  await snapOp([await currentId().catch(() => null)].filter(Boolean));
   let slideId = null;
   try {
     slideId = await run(async ctx => {
@@ -612,6 +614,18 @@ async function arrangeSelected(layout) {
       ctx.presentation.setSelectedSlides([newId]); await ctx.sync();
       const sh = ctx.presentation.slides.getItem(newId).shapes; sh.load('items/id,items/name'); await ctx.sync();
       const sel = sh.items.filter(x => / #ursel$/.test(x.name || ''));
+      // one under the other: by their real heights, each starting on the page grid right after the one above
+      // (the UULA rule for options that follow each other: no empty line between them)
+      if (layout !== 'row' && sel.length > 1) {
+        sel.forEach(x => { try { x.textFrame.autoSizeSetting = 'AutoSizeShapeToFitText'; } catch (e) {} });
+        await ctx.sync();
+        sel.forEach(x => x.load('top,height')); await ctx.sync();
+        const Y0 = 22.58, G = 6.695, snap = y => Y0 + Math.max(0, Math.ceil((y - Y0 - 0.3) / G)) * G;
+        const list = [...sel].sort((a, b) => a.top - b.top);
+        let y = list[0].top;
+        for (const x of list) { x.top = y; y = snap(y + x.height); }
+        await ctx.sync();
+      }
       sel.forEach(x => { x.name = x.name.replace(/ #ursel$/, ''); }); await ctx.sync();
       try { ctx.presentation.slides.getItem(newId).setSelectedShapes(sel.map(x => x.id)); await ctx.sync(); } catch (e) {}
     }).catch(() => {});
@@ -624,6 +638,7 @@ async function arrangeSelected(layout) {
 async function flipSelected(dir) {
   if (busy || !supported) return;
   busy = true; lock();
+  await snapOp([await currentId().catch(() => null)].filter(Boolean));
   let slideId = null;
   try {
     slideId = await run(async ctx => {
@@ -759,6 +774,7 @@ async function mergedPress(id) {
   if (id === 'mcqV' && selNow === 1) return pinRole('choice');
   if (id === 'cancelled') {
     if (busy) return; busy = true; lock();
+    await snapOp([await currentId().catch(() => null)].filter(Boolean));
     try { say(suspendSay(await suspendSelected())); } catch (e) { say(L('تعذّر: ', 'Could not: ') + errText(e)); }
     finally { busy = false; lock(); }
     return;
@@ -799,6 +815,7 @@ async function undoRedo(dir) {
   } catch (e) { say(L('تعذّر: ', 'Could not: ') + errText(e)); }
   finally { busy = false; lock(); }
 }
+$('opUndo').addEventListener('click', undoOp);
 $('undoBtn').addEventListener('click', () => undoRedo(-1));
 $('redoBtn').addEventListener('click', () => undoRedo(1));
 $('solRoles').addEventListener('click', e => { const b = e.target.closest('.tbtn'); if (b) pinRole(b.dataset.role, true); });
@@ -812,6 +829,40 @@ async function clearSel(slideId) {
 }
 // solution marks change only the selected objects, in place: no slide is rebuilt, nothing moves
 const QUIET = { answer: '1F71DE', correct: '2070DF', given: null, graph: null };
+// ---------- quick undo: the whole last operation at once ----------
+// before every operation of the tool the slides it may change are copied (by their place in the deck);
+// «تراجع» puts those copies back in their places, so one press undoes the whole operation (not step by step)
+const opStack = [];
+async function snapOp(ids) {
+  if (!ids || !ids.length || !supported || isWord || ids.length > 40) return;   // a very long deck: no copy (too heavy)
+  try {
+    const pos = await run(async ctx => { const sl = ctx.presentation.slides; sl.load('items/id'); await ctx.sync(); return ids.map(id => sl.items.findIndex(x => x.id === id)); });
+    const copies = [];
+    for (let k = 0; k < ids.length; k++) if (pos[k] >= 0) copies.push({ pos: pos[k], b64: await exportSlide(ids[k]) });
+    if (!copies.length) return;
+    opStack.push(copies); if (opStack.length > 10) opStack.shift();
+    opPaint();
+  } catch (e) {}
+}
+function opPaint() { const b = $('opUndo'); if (b) b.disabled = busy || !supported || !opStack.length; }
+async function undoOp() {
+  if (busy || !supported || !opStack.length) return;
+  busy = true; lock();
+  try {
+    const copies = opStack.pop();
+    let back = null;
+    for (const c of copies) {
+      const id = await run(async ctx => { const sl = ctx.presentation.slides; sl.load('items/id'); await ctx.sync(); return sl.items[c.pos] ? sl.items[c.pos].id : null; });
+      if (!id) continue;
+      back = await insertAfter(c.b64, id);
+      await deleteSlide(id);
+    }
+    if (back) await run(async ctx => { ctx.presentation.setSelectedSlides([back]); await ctx.sync(); }).catch(() => {});
+    solSlideId = null; await solLabel().catch(() => {});
+    say(L('رجعت الشريحة كما كانت قبل آخر عملية.', 'The slide is back as it was before the last operation.'));
+  } catch (e) { say(L('تعذّر التراجع: ', 'Could not undo: ') + errText(e)); }
+  finally { busy = false; lock(); }
+}
 // «Undo» / «Redo» of the marks given with the solution buttons (name, text colour, place), in place
 const undoStack = [], redoStack = [];
 function undoPaint() {
@@ -933,6 +984,7 @@ async function suspendSelected() {
 async function pinRole(role, keepColour) {
   if (busy || !supported) return;
   busy = true; lock(); rsay('');
+  await snapOp([await currentId().catch(() => null)].filter(Boolean));
   if (role === 'cancelled') {
     try { rsay(suspendSay(await suspendSelected())); }
     catch (e) { rsay(L('تعذّر: ', 'Could not: ') + errText(e)); }
@@ -1130,6 +1182,7 @@ async function alignSlide(id, mode, useSel) {
 async function spacingRun(kind) {
   if (busy || !supported) return;
   busy = true; lock(); res.innerHTML = '';
+  await snapOp(await targetIds().catch(() => []));
   try {
     const ids = await targetIds();
     if (!ids.length) { say(L('حدّد شريحة أولًا.', 'Select a slide first.')); return; }
@@ -1318,6 +1371,7 @@ async function solSlide(id, mode) {
 $('solBtn').addEventListener('click', async () => {
   if (busy || !supported) return;
   busy = true; lock(); res.innerHTML = '';
+  await snapOp(await targetIds().catch(() => []));
   solState = await slideSolHidden(await currentId().catch(() => null));
   const mode = solState ? 'show' : 'hide';
   try {
@@ -1688,12 +1742,13 @@ function lock() {
   $('solBtn').disabled = busy || !supported;
   $('spV').disabled = busy || !supported; $('spH').disabled = busy || !supported;
   document.querySelectorAll('.tbtn').forEach(b => { b.disabled = busy || !supported; });
-  undoPaint();
+  undoPaint(); opPaint();
   ['docxBtn', 'numDel', 'wAuto', 'wUntag', 'wClear', 'wMark', 'wUnmark'].forEach(k => { if ($(k)) $(k).disabled = busy || !supported; });
 }
 $('goBtn').addEventListener('click', async () => {
   if (busy || !supported) return;
   busy = true; lock(); res.innerHTML = '';
+  await snapOp(await targetIds().catch(() => []));
   try { await doConvert(); }
   catch (e) { prog(null); say(L('حدث خطأ: ', 'Error: ') + errText(e)); }
   finally { busy = false; lock(); }

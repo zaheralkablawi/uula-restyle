@@ -637,7 +637,7 @@ function styleText(it, ctx, pkg, forcedRole) {
     let ar = pr.text ? AR.test(pr.text) : arAll;
     if (pr.role === 'choice' && ctx.choiceDir) { ar = ctx.choiceDir === 'rtl'; choiceLetterDir(pr.p, ar); }
     // an equation line inside an Arabic box stays on the right with the text around it
-    if (!ar && arAll && pr.role !== 'question' && desc(pr.p, 'm', 'oMath').length && !desc(pr.p, 'a', 't').some(x => /[A-Za-z]{3,}/.test(x.textContent))) ar = true;
+    if (!ar && arAll && !(pr.role === 'choice' && ctx.choiceDir) && pr.role !== 'question' && desc(pr.p, 'm', 'oMath').length && !desc(pr.p, 'a', 't').some(x => /[A-Za-z]{3,}/.test(x.textContent))) ar = true;
     let bullet = null, marL = 0, indent = 0;
     if (st.q) {
       bullet = 'Q'; marL = 182880; indent = -182880;
@@ -1693,9 +1693,10 @@ function gridOver(pkg) {
 function choiceLetterDir(p, rtl) {
   const t = desc(p, 'a', 't').find(x => x.textContent.trim());
   if (!t) return;
-  const m = t.textContent.match(/^(\s*(?:[ⓐ-ⓩⒶ-Ⓩ]|\(?[A-Da-d][).]))‏?/);
+  const m = t.textContent.match(/^(\s*(?:[ⓐ-ⓩⒶ-Ⓩ]|\(?[A-Da-d][).]))[‎‏]?/);
   if (!m) return;
-  t.textContent = m[1] + (rtl ? '‏' : '') + t.textContent.slice(m[0].length);
+  // right-to-left: U+200F keeps the letter on the right; left-to-right: U+200E keeps it on the left, even before Arabic
+  t.textContent = m[1] + (rtl ? '‏' : '‎') + t.textContent.slice(m[0].length);
 }
 // several selected text boxes become multiple-choice options: in one row (each a quarter … of the width) or one under
 // the other on the page grid. The order: their letters if they have them, otherwise reading order. Each gets its letter
@@ -1741,6 +1742,10 @@ function arrangeChoices(pkg, layout, dirOpt) {
     ctx.choiceDir = dir;
     styleText(t, ctx, pkg, 'choice');
     plainShape(t.c); setBody(t.c, {});
+    for (const c of allCores(t.el)) if (c !== t.c) for (const p of kids(kid(c, 'txBody', 'p'), 'p', 'a')) {
+      let pPr = kid(p, 'pPr', 'a'); if (!pPr) { pPr = mk(doc, 'a', 'pPr'); p.insertBefore(pPr, p.firstChild); }
+      pPr.setAttribute('algn', dir === 'rtl' ? 'r' : 'l'); pPr.setAttribute('rtl', dir === 'rtl' ? '1' : '0'); choiceLetterDir(p, dir === 'rtl');
+    }
   });
   ctx.choiceDir = null;
   const y0 = snapUp(Math.min(...sel.map(t => t.g.y)));
@@ -1761,7 +1766,7 @@ function flipChoices(pkg, dir) {
   // the selected ones keep their mark: the pane selects them again afterwards (to turn them again at once)
   const texts = sel.filter(t => t.c.localName === 'sp' && kid(t.c, 'txBody', 'p'));
   const rtl = dir === 'rtl';
-  for (const t of texts) for (const p of kids(kid(t.c, 'txBody', 'p'), 'p', 'a')) {
+  for (const t of texts) for (const c of allCores(t.el)) for (const p of kids(kid(c, 'txBody', 'p'), 'p', 'a')) {
     let pPr = kid(p, 'pPr', 'a'); if (!pPr) { pPr = mk(doc, 'a', 'pPr'); p.insertBefore(pPr, p.firstChild); }
     pPr.setAttribute('algn', rtl ? 'r' : 'l'); pPr.setAttribute('rtl', rtl ? '1' : '0');
     choiceLetterDir(p, rtl);

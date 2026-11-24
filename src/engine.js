@@ -1697,6 +1697,50 @@ function choiceLetterDir(p, rtl) {
   if (!m) return;
   t.textContent = m[1] + (rtl ? '‏' : '') + t.textContent.slice(m[0].length);
 }
+// several selected text boxes become multiple-choice options: in one row (each a quarter … of the width) or one under
+// the other on the page grid. The order: their letters if they have them, otherwise reading order. Each gets its letter
+// (ⓐ ⓑ …) and the choice style; the direction: as chosen, or «auto» (Arabic text or an Arabic question above → right-to-left)
+function arrangeChoices(pkg, layout, dirOpt) {
+  const W = pkg.slideW, CW = W - 2 * M;
+  const doc = parseXml(pkg.files.slide);
+  const ctx = { scheme: readTheme(pkg.files), bodySz: 1100 };
+  const items = topItems(doc).map((el, i) => { const c = core(el), n = cnvOf(c); return { i, el, c, n, name: n ? n.getAttribute('name') || '' : '', g: geomOf(el, pkg) || { x: 0, y: 0, w: 0, h: 0 }, kind: c.localName === 'sp' && kid(c, 'txBody', 'p') ? 'text' : c.localName, text: textOf(c).trim() }; });
+  const sel = items.filter(t => / #ursel$/.test(t.name) && t.kind === 'text');
+  if (sel.length < 2) return { count: 0 };
+  const L = 'ⓐⓑⓒⓓⓔⓕⓖⓗ';
+  const letterOf = t => { const m = t.text.match(/^\s*([ⓐ-ⓩ])/); return m ? L.indexOf(m[1]) : -1; };
+  let dir = dirOpt || 'auto';
+  if (dir === 'auto') {
+    if (sel.some(t => AR.test(t.text.replace(/[ⓐ-ⓩ]/g, '')))) dir = 'rtl';
+    else {
+      const top = Math.min(...sel.map(t => t.g.y));
+      const above = items.filter(o => !sel.includes(o) && o.kind === 'text' && o.text && o.g.y + o.g.h <= top + 2 * PT).sort((a, b) => (b.g.y + b.g.h) - (a.g.y + a.g.h))[0];
+      dir = above ? (AR.test(above.text) ? 'rtl' : 'ltr') : 'rtl';
+    }
+  }
+  const rtl = dir === 'rtl';
+  // the order
+  const known = sel.every(t => letterOf(t) >= 0);
+  const order = known ? [...sel].sort((a, b) => letterOf(a) - letterOf(b))
+    : [...sel].sort((a, b) => Math.abs(a.g.y - b.g.y) > 6 * PT ? a.g.y - b.g.y : (rtl ? b.g.x - a.g.x : a.g.x - b.g.x));
+  // each gets its letter and the choice look
+  order.forEach((t, k) => {
+    const tt = desc(t.c, 'a', 't').find(x => x.textContent.trim());
+    if (tt) { tt.textContent = tt.textContent.replace(/^\s*[ⓐ-ⓩ]‏?\s*/, ''); tt.textContent = L[k] + ' ' + tt.textContent; t.text = textOf(t.c).trim(); }
+    ctx.choiceDir = dir;
+    styleText(t, ctx, pkg, 'choice');
+    plainShape(t.c); setBody(t.c, {});
+  });
+  ctx.choiceDir = null;
+  const y0 = snapUp(Math.min(...sel.map(t => t.g.y)));
+  if (layout === 'row') {
+    const w = Math.round(CW / order.length);
+    order.forEach((t, k) => setGeom(t.el, { x: rtl ? M + CW - (k + 1) * w : M + k * w, y: y0, w, h: ROW }));
+  } else {
+    order.forEach((t, k) => setGeom(t.el, { x: M, y: y0 + k * ROW, w: CW, h: ROW }));
+  }
+  return { xml: serialize(doc), count: order.length, dir };
+}
 // the selected multiple-choice options turned to the other direction: every paragraph right-to-left (algn r) or
 // left-to-right (algn l), and options standing side by side swap places so ⓐ is on the right (rtl) or the left (ltr)
 function flipChoices(pkg, dir) {
@@ -2131,7 +2175,7 @@ function splitPoint(plan, lay) {
 
 return {
   questionFlags,
-  NS, PT, ROW, M, FOOT, C, STY, BOX, openPackage, buildPackage, parseXml, serialize, restyle, layout, applyLayout, splitParts, splitPoint, markNames, MARK, applyRole, wrapBox, gridOver, flipChoices, WRAP, reflow, spacing, align, findSolutions, hideSolutions, showSolutions, hasSolutions, TEXT_ROLES, BOX_ROLES, G, Y0, snapUp, snapX,
+  NS, PT, ROW, M, FOOT, C, STY, BOX, openPackage, buildPackage, parseXml, serialize, restyle, layout, applyLayout, splitParts, splitPoint, markNames, MARK, applyRole, wrapBox, gridOver, flipChoices, arrangeChoices, WRAP, reflow, spacing, align, findSolutions, hideSolutions, showSolutions, hasSolutions, TEXT_ROLES, BOX_ROLES, G, Y0, snapUp, snapX,
   // used by the templates module
   util: { pX, txX, boxX, gradBoxX, picX, pillX, pillW, lineX, tableX, makeRels, frag, topItems, core, cnvOf, maxId, spTreeOf, kid, kids, desc, xfrmOf, geomOf, setNext: n => { NEXT = n; }, snapUp, yearText, pageNumX, estimateText, iconW, iconH }
 };

@@ -581,6 +581,45 @@ function dirSeg() {
   });
   return d;
 }
+// how many text boxes are selected now (for the options buttons)
+async function selCount() {
+  return run(async ctx => { const s = ctx.presentation.getSelectedShapes(); s.load('items/type'); await ctx.sync(); return s.items.filter(x => x.type === 'TextBox' || x.type === 'GeometricShape').length; }).catch(() => 0);
+}
+// several selected text boxes become options: in one row, or one under the other; they stay selected afterwards
+async function arrangeSelected(layout) {
+  if (busy || !supported) return;
+  busy = true; lock();
+  let slideId = null;
+  try {
+    slideId = await run(async ctx => {
+      const slides = ctx.presentation.getSelectedSlides(); slides.load('items/id');
+      const shapes = ctx.presentation.getSelectedShapes(); shapes.load('items/name'); await ctx.sync();
+      if (!slides.items.length || !shapes.items.length) return null;
+      shapes.items.forEach(x => { x.name = (x.name || '').replace(/ #ursel$/, '') + ' #ursel'; });
+      await ctx.sync(); return slides.items[0].id;
+    });
+    if (!slideId) return;
+    const pkg = await UR.openPackage(await exportSlide(slideId));
+    const r = UR.arrangeChoices(pkg, layout, mcqDir);
+    if (!r.count) { await clearSel(slideId); say(L('حدّد مربعَي نص أو أكثر.', 'Select two or more text boxes.')); return; }
+    let newId = slideId;
+    if (!(await UQ.apply(slideId, pkg.files.slide, r.xml, exportSlide).catch(() => false))) {
+      newId = await insertAfter(await UR.buildPackage(pkg, r.xml, null), slideId);
+      await deleteSlide(slideId);
+    }
+    await run(async ctx => {
+      ctx.presentation.setSelectedSlides([newId]); await ctx.sync();
+      const sh = ctx.presentation.slides.getItem(newId).shapes; sh.load('items/id,items/name'); await ctx.sync();
+      const sel = sh.items.filter(x => / #ursel$/.test(x.name || ''));
+      sel.forEach(x => { x.name = x.name.replace(/ #ursel$/, ''); }); await ctx.sync();
+      try { ctx.presentation.slides.getItem(newId).setSelectedShapes(sel.map(x => x.id)); await ctx.sync(); } catch (e) {}
+    }).catch(() => {});
+    slideId = null;
+    say((layout === 'row' ? L('رُتّبت ' + r.count + ' خيارات أفقيًا', r.count + ' options arranged in a row') : L('رُتّبت ' + r.count + ' خيارات عموديًا', r.count + ' options arranged in a column'))
+      + (r.dir === 'rtl' ? L('، من اليمين لليسار.', ', right-to-left.') : L('، من اليسار لليمين.', ', left-to-right.')));
+  } catch (e) { if (slideId) await clearSel(slideId); say(L('تعذّر ترتيب الخيارات: ', 'Could not arrange the options: ') + errText(e)); }
+  finally { busy = false; lock(); }
+}
 async function flipSelected(dir) {
   if (busy || !supported) return;
   busy = true; lock();
@@ -689,7 +728,8 @@ function tplName(tid) { const it = ALL_ITEMS.find(x => x.tpl === tid); return it
 function mergedTip(it) {
   const own = ROLE_TIP[it.role || it.id];
   const parts = [];
-  if (it.role && own) parts.push(L('مع تحديد: ', 'With a selection: ') + L(own[0], own[1]));
+  if (it.id === 'mcq' || it.id === 'mcqV') parts.push(L('مع تحديد مربعَي نص أو أكثر: تُرتَّب خيارات ' + (it.id === 'mcq' ? 'في صف واحد' : 'بعضها تحت بعض') + ' بحروفها ⓐ ⓑ … وباتجاه زر الاتجاه.', 'With two or more text boxes selected: they become options ' + (it.id === 'mcq' ? 'in one row' : 'one under the other') + ', lettered ⓐ ⓑ … in the chosen direction.'));
+  else if (it.role && own) parts.push(L('مع تحديد: ', 'With a selection: ') + L(own[0], own[1]));
   else if (it.role) parts.push(L('حدّد مربعًا ثم اضغط ليتحوّل إلى «' + it.ar + '».', 'Select a box, then press to turn it into «' + it.en + '».'));
   if (it.tpl === 'grid') parts.push(L('مع تحديد صور: توضع الشبكة مكان كل صورة وبمقاسها. بدون تحديد: تُضاف شبكة جديدة في الأسفل.', 'With pictures selected: the grid takes each picture\'s place and size. Nothing selected: a new grid is added at the bottom.'));
   else if (it.tpl && it.role) parts.push(L('بدون تحديد: يُضاف «' + it.ar + '» جديد في الأسفل.', 'Nothing selected: a new «' + it.en + '» is added at the bottom.'));
@@ -714,6 +754,8 @@ async function selCheck() {
 async function mergedPress(id) {
   const it = ITEM[id]; if (!it || busy || !supported) return;
   await selCheck();
+  if ((id === 'mcq' || id === 'mcqV') && (await selCount()) > 1) return arrangeSelected(id === 'mcq' ? 'row' : 'column');
+  if (id === 'mcqV' && selNow === 1) return pinRole('choice');
   if (id === 'cancelled') {
     if (busy) return; busy = true; lock();
     try { say(suspendSay(await suspendSelected())); } catch (e) { say(L('تعذّر: ', 'Could not: ') + errText(e)); }

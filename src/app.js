@@ -288,6 +288,14 @@ $('numAll').addEventListener('click', async () => {
 // ---------- templates ----------
 const SW = { header: '1F71DD', topic: '000000', body: 'FFFFFF', bullets: 'FFFFFF', cols: 'FFFFFF', pill: '1F71DC', qhead: 'FF0000', question: 'FF0000', qa: '1F71DE', answer: '1F71DE', qqr: 'FF0000', mcq: 'FF0000', problem: '00B050', other: 'FBEBD3',
   note: 'FBEBD3', quote: 'E2F0D9', formula: 'D3E4F5', activity: 'F1F1F1', mars: 'F1F1F1', cancelled: 'FFC000', table: 'CAD0D8', tableMain: 'DAE0E9', solTable: 'CAD0D8', grid: 'D3D8E0', practice: 'EBE6FE' };
+// frame buttons wear the frame's own colours, as it looks in the booklet
+const TINT = { note: ['FBEBD3', 'E9C79A'], quote: ['E2F0D9', '2AB672'], def: ['E2F0D9', '2AB672'], formula: ['D3E4F5', '9DC3E6'], other: ['FBEBD3', 'E9C79A'],
+  activity: ['F1F1F1', 'C9CDD2'], mars: ['F1F1F1', 'C9CDD2'], cancelled: ['FFFFFF', 'FFC000'], practice: ['F2F2F2', 'C9BFF5'] };
+function tint(b, id) {
+  const t = TINT[id]; if (!t) return;
+  b.style.background = id === 'practice' ? 'radial-gradient(circle, #F2F2F2, #EBE6FE)' : '#' + t[0];
+  b.style.borderColor = '#' + t[1];
+}
 // a small sign on every button, like the booklet's own: the red Q of a question, the bulb of a note …
 function iconHtml(id, col) {
   const img = k => typeof UR_ASSETS !== 'undefined' && UR_ASSETS[k] ? '<i class="ic"><img alt="" src="data:image/png;base64,' + UR_ASSETS[k] + '"></i>' : null;
@@ -344,7 +352,7 @@ function buildTemplateList() {
     const { d, grid } = groupCard('ins', g.name, L(g.name, URT.GROUP_EN[g.name] || g.name));
     for (const t of g.items) {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'tbtn'; b.dataset.id = t.id;
-      b.title = L(t.full || t.name, t.en); b.innerHTML = iconHtml(t.id, SW[t.id]) + '<span>' + L(t.name, t.en) + '</span>';
+      b.title = L(t.full || t.name, t.en); b.innerHTML = iconHtml(t.id, SW[t.id]) + '<span>' + L(t.name, t.en) + '</span>'; tint(b, t.id);
       grid.appendChild(b);
     }
     d.appendChild(grid); host.appendChild(d);
@@ -542,7 +550,7 @@ function buildRoleList() {
     for (const [id, nameAr, col] of g.items) {
       const name = L(nameAr, ROLE_EN[id]);
       const b = document.createElement('button'); b.type = 'button'; b.className = 'tbtn'; b.dataset.role = id;
-      b.title = ROLE_TIP[id] ? L(ROLE_TIP[id][0], ROLE_TIP[id][1]) : name; b.innerHTML = iconHtml(id, col) + '<span>' + name + '</span>';
+      b.title = ROLE_TIP[id] ? L(ROLE_TIP[id][0], ROLE_TIP[id][1]) : name; b.innerHTML = iconHtml(id, col) + '<span>' + name + '</span>'; tint(b, id);
       grid.appendChild(b);
     }
     d.appendChild(grid); host.appendChild(d);
@@ -555,7 +563,7 @@ function buildSolRoles() {
   for (const [id, nameAr, col] of [['answer', 'حل السؤال', '1F71DE'], ['correct', 'الخيار الصحيح', '2070DF'], ['given', 'جزء من السؤال', 'A6A6A6']]) {
     const name = L(nameAr, ROLE_EN[id]);
     const b = document.createElement('button'); b.type = 'button'; b.className = 'tbtn'; b.dataset.role = id;
-    b.title = L(SOL_TIP[id][0], SOL_TIP[id][1]); b.innerHTML = iconHtml(id, col) + '<span>' + name + '</span>';
+    b.title = L(SOL_TIP[id][0], SOL_TIP[id][1]); b.innerHTML = iconHtml(id, col) + '<span>' + name + '</span>'; tint(b, id);
     host.appendChild(b);
   }
 }
@@ -1117,7 +1125,7 @@ function buildWordRoles() {
     const { d, grid } = groupCard('word', g.g, L(g.g, g.ge));
     for (const [id, ar, en, col] of g.items) {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'tbtn'; b.dataset.wrole = id;
-      b.title = L(ar, en); b.innerHTML = iconHtml(id, col) + '<span>' + L(ar, en) + '</span>';
+      b.title = L(ar, en); b.innerHTML = iconHtml(id, col) + '<span>' + L(ar, en) + '</span>'; tint(b, id);
       grid.appendChild(b);
     }
     d.appendChild(grid); host.appendChild(d);

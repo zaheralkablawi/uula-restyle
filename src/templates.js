@@ -138,7 +138,7 @@ function spec(id, W) {
       const ans = Array.from({ length: n }, () => 'ⓐ'); ans.push('الحل');
       return { gap: 1, rows: [{ cells: [{ t: 'table', rows: [head, ans], o: { sol: true, name: 'UULA Solution Table', widths: [...Array(n).fill(0.8 / n), 0.2] } }] }] };
     }
-    // the UULA empty graph grid (the same as a hidden solution graph): cells of two page-grid steps, light lines D3D8E0
+    // the UULA empty graph grid (the same as a hidden solution graph): cells of two page-grid steps, lines A0A8B4 0.75pt (clear in print)
     case 'grid': return { gap: 1, rows: [{ cells: [{ t: 'grid', cols: 8, rows: 7 }] }] };
     // the same as in the booklet: box 75pt, the tall trophy rising above the box on the right, the title and the line
     // close together, the QR on the left (measured from the booklet page)
@@ -191,7 +191,7 @@ function gridX(cols, rows) {
   for (let k = 0; k <= rows; k++) { const y = Math.round(half + k * S); path += '<a:moveTo><a:pt x="0" y="' + y + '"/></a:moveTo><a:lnTo><a:pt x="' + w + '" y="' + y + '"/></a:lnTo>'; }
   return '<p:sp><p:nvSpPr><p:cNvPr id="' + nid() + '" name="UULA Graph Grid"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="' + w + '" cy="' + h + '"/></a:xfrm>'
     + '<a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="0" t="0" r="r" b="b"/><a:pathLst><a:path w="' + w + '" h="' + h + '" fill="none">' + path + '</a:path></a:pathLst></a:custGeom>'
-    + '<a:noFill/><a:ln w="6350"><a:solidFill><a:srgbClr val="D3D8E0"/></a:solidFill></a:ln></p:spPr></p:sp>';
+    + '<a:noFill/><a:ln w="9525"><a:solidFill><a:srgbClr val="A0A8B4"/></a:solidFill></a:ln></p:spPr></p:sp>';
 }
 let NID = 5000;
 function nid() { return String(NID++); }

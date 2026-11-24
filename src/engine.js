@@ -1659,7 +1659,7 @@ function align(rects, W, mode, only) {
 // above and two below the content, the icon on the right and the content kept clear of it. Their text keeps its roles.
 const WRAP = { note: 'note', quote: 'quote', formula: 'formula', activity: 'activity', mars: 'mars', other: 'other', cancelled: 'cancelled' };   // «Practice» is the end of the lesson: always its own box under the last object
 // the selected pictures (graphs …) give their place to the UULA empty grid, cut to each picture's size
-// (light lines D3D8E0 every two page-grid steps, running off the edges, the cut centred on the picture)
+// (lines A0A8B4, 0.75pt, clear in print, every two page-grid steps, running off the edges, the cut centred on the picture)
 function gridCutX(id, name, g) {
   const w = Math.max(1, Math.round(g.w)), h = Math.max(1, Math.round(g.h)), step = ROW * 1.75;
   const ox = (w / 2) % step, oy = (h / 2) % step;
@@ -1668,7 +1668,7 @@ function gridCutX(id, name, g) {
   for (let y = oy; y <= h + 1; y += step) { const v = Math.min(h, Math.round(y)); path += '<a:moveTo><a:pt x="0" y="' + v + '"/></a:moveTo><a:lnTo><a:pt x="' + w + '" y="' + v + '"/></a:lnTo>'; }
   return '<p:sp><p:nvSpPr><p:cNvPr id="' + id + '" name="' + name + '"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="' + Math.round(g.x) + '" y="' + Math.round(g.y) + '"/><a:ext cx="' + w + '" cy="' + h + '"/></a:xfrm>'
     + '<a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="0" t="0" r="r" b="b"/><a:pathLst><a:path w="' + w + '" h="' + h + '" fill="none">' + path + '</a:path></a:pathLst></a:custGeom>'
-    + '<a:noFill/><a:ln w="6350"><a:solidFill><a:srgbClr val="D3D8E0"/></a:solidFill></a:ln></p:spPr></p:sp>';
+    + '<a:noFill/><a:ln w="9525"><a:solidFill><a:srgbClr val="A0A8B4"/></a:solidFill></a:ln></p:spPr></p:sp>';
 }
 function gridOver(pkg) {
   const doc = parseXml(pkg.files.slide);

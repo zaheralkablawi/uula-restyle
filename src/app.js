@@ -382,8 +382,8 @@ async function gridSelected(id) {
         const x0 = p.left, y0 = p.top, w = p.width, h = p.height, step = 13.39 * 1.75;
         const lines = [];
         // each line a very thin filled rectangle (a zero-wide line is tilted by PowerPoint for Mac)
-        const T = 0.5;
-        const add = (l, t, ww, hh) => { const ln = sh.addGeometricShape('Rectangle', { left: l, top: t, width: ww, height: hh }); ln.fill.setSolidColor('#D3D8E0'); ln.lineFormat.visible = false; ln.name = 'UULA Graph Grid Line'; lines.push(ln); made.push(ln); };
+        const T = 0.75;
+        const add = (l, t, ww, hh) => { const ln = sh.addGeometricShape('Rectangle', { left: l, top: t, width: ww, height: hh }); ln.fill.setSolidColor('#A0A8B4'); ln.lineFormat.visible = false; ln.name = 'UULA Graph Grid Line'; lines.push(ln); made.push(ln); };
         for (let x = (w / 2) % step; x <= w + 0.01; x += step) add(x0 + Math.min(x, w - T), y0, T, h);
         for (let y = (h / 2) % step; y <= h + 0.01; y += step) add(x0, y0 + Math.min(y, h - T), w, T);
         lines.forEach(l => l.load('id'));
@@ -1106,12 +1106,12 @@ $('spD').addEventListener('click', () => spacingRun('d'));
 
 // ---------- hide / show the solutions ----------
 // an empty grid from a graph picture: the coloured drawing is removed and the grid lines / axes it covered are drawn again
-// the UULA empty grid (light lines D3D8E0 on a clear background, cells of two page-grid steps), cut to w×h points
+// the UULA empty grid (lines A0A8B4, clear in print, on a clear background, cells of two page-grid steps), cut to w×h points
 function gridPicture(wPt, hPt) {
   const S = 4, cell = 13.39 * 1.75, cv = document.createElement('canvas');
   cv.width = Math.max(4, Math.round(wPt * S)); cv.height = Math.max(4, Math.round(hPt * S));
   const g = cv.getContext('2d');
-  g.strokeStyle = '#D3D8E0'; g.lineWidth = 0.5 * S;
+  g.strokeStyle = '#A0A8B4'; g.lineWidth = 0.75 * S;
   const step = cell * S;
   // the lines run off the edges, as a grid cut out of a bigger sheet; the cut is centred on the picture
   const ox = ((cv.width / 2) % step), oy = ((cv.height / 2) % step);

@@ -39,6 +39,7 @@ const LIST = [
   { g: 'أسئلة', id: 'other', name: 'صيغة أخرى', en: 'Other form', full: 'السؤال بصيغة أخرى' },
   { g: 'إطارات', id: 'note', name: 'ملاحظة', en: 'Note', full: 'ملاحظة مهمة' },
   { g: 'إطارات', id: 'quote', name: 'نص مقتطف', en: 'Quote' },
+  { g: 'إطارات', id: 'def', name: 'تعريف', en: 'Definition' },
   { g: 'إطارات', id: 'formula', name: 'قوانين', en: 'Formulas', full: 'معادلات وقوانين' },
   { g: 'إطارات', id: 'activity', name: 'نشاط', en: 'Activity' },
   { g: 'إطارات', id: 'mars', name: 'من المريخ', en: 'From Mars', full: 'أسئلة من المريخ' },
@@ -99,6 +100,11 @@ function spec(id, W) {
     case 'quote': return { gap: 1, box: { fill: 'E2F0D9', icon: 'book', line: '2AB672', name: 'Quote' }, rows: [
       { cells: [txt(P.body('اكتب النص المقتطف هنا (آية، حديث، بيت شعر، اقتباس من كتاب).') + P.body('السطر الثاني من النص.') + P.body('السطر الثالث من النص.'), { w: CW - 15 * PT })] },
       { gap: 0, cells: [txt(P.src('المصدر'), { w: CW - 15 * PT })] }
+    ] };
+    // a definition: the same green box, book and line as a quote; the term in bold, then its meaning
+    case 'def': return { gap: 1, box: { fill: 'E2F0D9', icon: 'book', line: '2AB672', name: 'Definition' }, rows: [
+      { cells: [txt(P.bold('المصطلح'), { w: CW - 15 * PT })] },
+      { gap: 0, cells: [txt(P.body('اكتب نص التعريف هنا.'), { w: CW - 15 * PT })] }
     ] };
     case 'formula': return { gap: 1, box: { fill: 'D3E4F5', name: 'Formula' }, rows: [
       { side: true, cells: [{ t: 'pill', term: 'اسم القانون' }, txt(P.body(''), { pillText: true })] },

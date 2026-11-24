@@ -586,7 +586,7 @@ const MERGED = [
   { g: 'إطارات', ge: 'Frames', items: [
     { id: 'note', ar: 'ملاحظة', en: 'Note', role: 'note', tpl: 'note' },
     { id: 'quote', ar: 'نص مقتطف', en: 'Quote', role: 'quote', tpl: 'quote' },
-    { id: 'def', ar: 'تعريف', en: 'Definition', role: 'def' },
+    { id: 'def', ar: 'تعريف', en: 'Definition', role: 'def', tpl: 'def' },
     { id: 'formula', ar: 'قوانين', en: 'Formulas', role: 'formula', tpl: 'formula' },
     { id: 'other', ar: 'صيغة أخرى', en: 'Other form', role: 'other', tpl: 'other' },
     { id: 'activity', ar: 'نشاط', en: 'Activity', role: 'activity', tpl: 'activity' },

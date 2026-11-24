@@ -91,7 +91,9 @@ function spec(id, W) {
     // the options one under the other: ⓐ on the first line … ⓓ on the fourth, each line its own text box
     case 'mcqV': {
       const L = ['ⓐ', 'ⓑ', 'ⓒ', 'ⓓ'], ltr = OPT.dirNow === 'ltr';
-      return { gap: 0, snap: true, rows: L.map((l, k) => ({ gap: 0, cells: [txt(P.runs([T(l + ' '), T(ltr ? 'Option' : 'خيار')], { marL: 182880, ar: !ltr }))] })) };
+      // each box as wide as its text and a little more, growing as the answer is typed (no wrapping)
+      const bw = 72 * PT;
+      return { gap: 0, snap: true, rows: L.map((l, k) => ({ gap: 0, cells: [txt(P.runs([T(l + ' '), T(ltr ? 'Option' : 'خيار')], { marL: 182880, ar: !ltr }), { x: ltr ? M : R - bw, w: bw, nowrap: true })] })) };
     }
     case 'problem': return { gap: 1, rows: [
       { cells: [txt(P.q('اكتب نص المسألة هنا؟'))] },
@@ -175,7 +177,11 @@ function build(id, W, top, rels) {
   }
   s.rows.forEach((r, ri) => r.cells.forEach((c, ci) => {
     const meta = { role: 'cell', row: ri, cell: ci, t: c.t };
-    if (c.t === 'text') add(U.txX('UULA ' + id, c.x != null ? c.x : M, 0, c.w != null ? c.w : CW, ROW, c.xml), meta);
+    if (c.t === 'text') {
+      let x = U.txX('UULA ' + id, c.x != null ? c.x : M, 0, c.w != null ? c.w : CW, ROW, c.xml);
+      if (c.nowrap) x = /wrap="[a-z]+"/.test(x) ? x.replace(/wrap="[a-z]+"/, 'wrap="none"') : x.replace('<a:bodyPr', '<a:bodyPr wrap="none"');   // grows with its text
+      add(x, meta);
+    }
     else if (c.t === 'pic') add(U.picX('UULA ' + (c.name || c.key), rels.image(c.key), c.x != null ? c.x : M, 0, c.w, c.h), meta);
     else if (c.t === 'pill') add(U.pillX(c.term, 0, 0, U.pillW(c.term)), meta);
     else if (c.t === 'table') add(U.tableX(c.rows, W, c.o), meta);

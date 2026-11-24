@@ -489,7 +489,8 @@ async function insertTemplate(tid) {
       const { map } = await shapesByMark(ctx, newId);
       const idx = Array.from({ length: r.count }, (_, k) => r.first + k);
       const texts = idx.filter((i, k) => r.built.shapes[k].t === 'text' && map[i]);
-      texts.forEach(i => { try { map[i].textFrame.autoSizeSetting = 'AutoSizeShapeToFitText'; map[i].textFrame.wordWrap = true; } catch (e) {} });
+      // (vertical options keep «no wrapping»: each box grows with its own answer)
+      texts.forEach(i => { try { map[i].textFrame.autoSizeSetting = 'AutoSizeShapeToFitText'; if (tid !== 'mcqV') map[i].textFrame.wordWrap = true; } catch (e) {} });
       await ctx.sync();
       texts.forEach(i => map[i].load('height'));
       await ctx.sync();
@@ -618,9 +619,14 @@ async function arrangeSelected(layout) {
       // one under the other: by their real heights, each starting on the page grid right after the one above
       // (the UULA rule for options that follow each other: no empty line between them)
       if (layout !== 'row' && sel.length > 1) {
-        sel.forEach(x => { try { x.textFrame.autoSizeSetting = 'AutoSizeShapeToFitText'; } catch (e) {} });
+        // each box as wide as its text and a little more (no wrapping; it grows when more is typed), on the right
+        // edge of the page in right-to-left, on the left edge in left-to-right
+        sel.forEach(x => { try { const tf = x.textFrame; tf.wordWrap = false; tf.autoSizeSetting = 'AutoSizeShapeToFitText'; tf.leftMargin = 3; tf.rightMargin = 3; } catch (e) {} });
         await ctx.sync();
-        sel.forEach(x => x.load('top,height')); await ctx.sync();
+        sel.forEach(x => x.load('left,top,width,height')); await ctx.sync();
+        const { W: SW } = await getSize(), Mx = 36;
+        sel.forEach(x => { x.left = r.dir === 'rtl' ? SW - Mx - x.width : Mx; });
+        await ctx.sync();
         const Y0 = 22.58, G = 6.695, snap = y => Y0 + Math.max(0, Math.ceil((y - Y0 - 0.3) / G)) * G;
         const list = [...sel].sort((a, b) => a.top - b.top);
         let y = list[0].top;

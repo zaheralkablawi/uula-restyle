@@ -1753,7 +1753,15 @@ function arrangeChoices(pkg, layout, dirOpt) {
     const w = Math.round(CW / order.length);
     order.forEach((t, k) => setGeom(t.el, { x: rtl ? M + CW - (k + 1) * w : M + k * w, y: y0, w, h: ROW }));
   } else {
-    order.forEach((t, k) => setGeom(t.el, { x: M, y: y0 + k * ROW, w: CW, h: ROW }));
+    // each box as wide as its text and a little more (no wrapping), on the right edge (rtl) or the left edge (ltr)
+    order.forEach((t, k) => {
+      const full = estimateText(t.c, CW);
+      let lo = 20 * PT, hi = CW;
+      for (let n = 0; n < 14; n++) { const mid = (lo + hi) / 2; if (estimateText(t.c, mid) <= full + PT) hi = mid; else lo = mid; }
+      const w = Math.min(CW, Math.round(hi + 6 * PT));
+      for (const c of allCores(t.el)) { const bp = kid(kid(c, 'txBody', 'p'), 'bodyPr', 'a'); if (bp) bp.setAttribute('wrap', 'none'); }
+      setGeom(t.el, { x: rtl ? M + CW - w : M, y: y0 + k * ROW, w, h: ROW });
+    });
   }
   return { xml: serialize(doc), count: order.length, dir };
 }

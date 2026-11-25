@@ -226,6 +226,66 @@ async function buildPackage(pkg, slideXml, rels) {
   return pkg.zip.generateAsync({ type: 'base64', compression: 'DEFLATE' });
 }
 
+// ---------- QR picture + its link ----------
+// a QR picture with its address written beside it: the picture becomes the small QR of the page (1.42 × 1.65 cm, at
+// 1.27 cm / 0.76 cm from the top left corner), it opens the address when clicked, and the written address goes.
+// With a selection (#ursel) only the selected pictures / addresses count; the missing half is the nearest one.
+const URL_RE = /(https?:\/\/[^\s<>"]+|www\.[^\s<>"]+)/i;
+const CM = 360000;
+function qrLink(pkg) {
+  const doc = parseXml(pkg.files.slide);
+  const rels = makeRels(pkg);
+  const items = topItems(doc).map(el => {
+    const c = core(el), n = cnvOf(c);
+    const g = geomOf(el, pkg) || { x: 0, y: 0, w: 0, h: 0 };
+    const txt = c.localName === 'sp' && kid(c, 'txBody', 'p') ? textOf(c).trim() : '';
+    return { el, c, n, name: n ? n.getAttribute('name') || '' : '', g, pic: c.localName === 'pic', txt };
+  });
+  const isSel = t => / #ursel$/.test(t.name);
+  const anySel = items.some(isSel);
+  const pics = items.filter(t => t.pic && t.g.w > 0 && t.g.h / t.g.w > 0.7 && t.g.h / t.g.w < 1.5);
+  const urls = items.filter(t => t.txt && URL_RE.test(t.txt));
+  const dist = (a, b) => Math.hypot(a.g.x + a.g.w / 2 - b.g.x - b.g.w / 2, a.g.y + a.g.h / 2 - b.g.y - b.g.h / 2);
+  const pairs = [], usedP = new Set(), usedU = new Set();
+  const selU = urls.filter(isSel), selP = pics.filter(isSel);
+  // addresses first (each picks the nearest picture), then selected pictures without an address pick the nearest one
+  const uList = anySel ? (selU.length ? selU : []) : urls;
+  for (const u of uList) {
+    const pool = (anySel && selP.length ? selP : pics).filter(p => !usedP.has(p));
+    if (!pool.length) break;
+    const p = pool.sort((a, b) => dist(a, u) - dist(b, u))[0];
+    usedP.add(p); usedU.add(u); pairs.push({ p, u });
+  }
+  if (anySel) for (const p of selP) {
+    if (usedP.has(p)) continue;
+    const pool = urls.filter(u => !usedU.has(u)); if (!pool.length) break;
+    const u = pool.sort((a, b) => dist(p, a) - dist(p, b))[0];
+    usedP.add(p); usedU.add(u); pairs.push({ p, u });
+  }
+  pairs.forEach(({ p, u }, k) => {
+    const url0 = URL_RE.exec(u.txt)[1].replace(/[.,;:)\]]+$/, '');
+    const url = /^https?:/i.test(url0) ? url0 : 'https://' + url0;
+    // the size and place of the page's QR (the first one; any other keeps its top left corner)
+    const x = kid(kid(p.c, 'spPr', 'p'), 'xfrm', 'a');
+    if (x) {
+      const off = kid(x, 'off', 'a'), ext = kid(x, 'ext', 'a');
+      if (k === 0) { off.setAttribute('x', String(Math.round(1.27 * CM))); off.setAttribute('y', String(Math.round(0.76 * CM))); }
+      ext.setAttribute('cx', String(Math.round(1.42 * CM))); ext.setAttribute('cy', String(Math.round(1.65 * CM)));
+    }
+    // the click: an external link on the picture itself
+    for (const h of [...kids(p.n, 'hlinkClick', 'a')]) p.n.removeChild(h);
+    const h = doc.createElementNS(NS.a, 'a:hlinkClick');
+    h.setAttributeNS(NS.r, 'r:id', rels.link(url));
+    p.n.insertBefore(h, p.n.firstChild);
+    p.n.setAttribute('descr', url);
+    // the written address goes (a box that holds more than the address keeps the rest of its text)
+    const rest = u.txt.replace(URL_RE, '').trim();
+    if (!rest) u.el.parentNode.removeChild(u.el);
+    else for (const t of desc(u.c, 'a', 't')) t.textContent = t.textContent.replace(URL_RE, '');
+  });
+  return { xml: serialize(doc), rels, count: pairs.length, pics: pics.length, urls: urls.length };
+}
+
 // ---------- shapes ----------
 const SHAPE_TAGS = ['sp', 'pic', 'cxnSp', 'graphicFrame', 'grpSp', 'AlternateContent', 'contentPart'];
 const spTreeOf = doc => desc(doc, 'p', 'spTree')[0];
@@ -2232,7 +2292,7 @@ function splitPoint(plan, lay) {
 
 return {
   questionFlags,
-  NS, PT, ROW, M, FOOT, C, STY, BOX, openPackage, buildPackage, parseXml, serialize, restyle, layout, applyLayout, splitParts, splitPoint, markNames, MARK, applyRole, wrapBox, gridOver, flipChoices, arrangeChoices, WRAP, reflow, spacing, align, findSolutions, hideSolutions, showSolutions, hasSolutions, TEXT_ROLES, BOX_ROLES, G, Y0, snapUp, snapX,
+  NS, PT, ROW, M, FOOT, C, STY, BOX, openPackage, buildPackage, parseXml, serialize, restyle, layout, applyLayout, splitParts, splitPoint, markNames, MARK, applyRole, wrapBox, gridOver, flipChoices, arrangeChoices, qrLink, WRAP, reflow, spacing, align, findSolutions, hideSolutions, showSolutions, hasSolutions, TEXT_ROLES, BOX_ROLES, G, Y0, snapUp, snapX,
   // used by the templates module
   util: { pX, txX, boxX, gradBoxX, picX, pillX, pillW, lineX, tableX, makeRels, frag, topItems, core, cnvOf, maxId, spTreeOf, kid, kids, desc, xfrmOf, geomOf, setNext: n => { NEXT = n; }, snapUp, yearText, pageNumX, estimateText, iconW, iconH }
 };

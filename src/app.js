@@ -359,6 +359,7 @@ function iconHtml(id, col) {
     case 'tablePlain': return tbl(null);
     case 'solTable': return tbl('CAD0D8', null);
     case 'ab': return '';   // the name itself is the sign: «ⓐ ⓑ»
+    case 'qrlink': return '<i class="ic"><svg viewBox="0 0 14 14" width="14" height="14"><rect x=".5" y=".5" width="13" height="13" rx="2.5" fill="#1F71DE"/><rect x="2.5" y="2.5" width="9" height="7.5" rx="1" fill="#fff"/><path d="M3.5 3.5h2v2h-2zM8.5 3.5h2v2h-2zM3.5 7h2v2h-2zM7 6.8h1v1h-1zM9 8h1.5v1H9z" fill="#222"/><path d="M3 11.6h8" stroke="#fff" stroke-width=".9"/></svg></i>';
     case 'graph': return '<i class="ic"><svg viewBox="0 0 14 12" width="14" height="12"><path d="M1 0v12M4.5 0v12M8 0v12M11.5 0v12M0 1.5h14M0 5h14M0 8.5h14M0 11.5h14" stroke="#c5ccd6" stroke-width=".6"/><path d="M1 10.5C4 10 5 2 8 2s3.5 5 5 6" fill="none" stroke="#1F71DE" stroke-width="1.4" stroke-linecap="round"/></svg></i>';
     case 'grid': return '<i class="ic"><svg viewBox="0 0 14 12" width="14" height="12"><path d="M1 0v12M4.5 0v12M8 0v12M11.5 0v12M0 1.5h14M0 5h14M0 8.5h14M0 11.5h14" stroke="#9aa3ad" stroke-width=".7"/><path d="M8 0v12M0 5h14" stroke="#333" stroke-width=".9"/></svg></i>';
   }
@@ -691,6 +692,34 @@ async function abPress() {
   } catch (e) { say(L('تعذّر: ', 'Could not: ') + errText(e)); }
   finally { busy = false; lock(); }
 }
+// «QR برابط»: the QR picture becomes the page's small QR and opens the address written beside it; the address goes
+async function qrPress() {
+  if (busy || !supported) return;
+  busy = true; lock();
+  const id = await currentId().catch(() => null);
+  await snapOp(id ? [id] : []);
+  try {
+    if (!id) { say(L('حدّد شريحة أولًا.', 'Select a slide first.')); return; }
+    await run(async ctx => {
+      const ss = ctx.presentation.getSelectedShapes(); ss.load('items/name'); await ctx.sync();
+      ss.items.forEach(x => { x.name = (x.name || '').replace(/ #ursel$/, '') + ' #ursel'; }); await ctx.sync();
+    }).catch(() => {});
+    const pkg = await UR.openPackage(await exportSlide(id));
+    const r = UR.qrLink(pkg);
+    if (!r.count) {
+      await clearSel(id);
+      say(!r.urls ? L('لم أجد رابطًا مكتوبًا في الشريحة (يبدأ بـ https:// أو www).', 'No written address on the slide (starting with https:// or www).')
+        : L('لم أجد صورة QR بجانب الرابط.', 'No QR picture beside the address.'));
+      return;
+    }
+    const newId = await insertAfter(await UR.buildPackage(pkg, r.xml, r.rels), id);
+    await deleteSlide(id);
+    await clearSel(newId); await unmark(newId);
+    say(r.count > 1 ? L('رُبطت ' + r.count + ' صور QR بروابطها وحُذفت الروابط المكتوبة.', r.count + ' QR pictures were linked and the written addresses removed.')
+      : L('صُغّرت صورة الـQR ووُضعت في مكانها، وصارت تفتح الرابط عند الضغط عليها، وحُذف الرابط المكتوب.', 'The QR picture was resized into its place; a click on it opens the address, and the written address was removed.'));
+  } catch (e) { say(L('تعذّر: ', 'Could not: ') + errText(e)); }
+  finally { busy = false; lock(); }
+}
 // how many text boxes are selected now (for the options buttons)
 async function selCount() {
   // an equation box can be reported as another type: every selected object counts except pictures, tables, lines and groups
@@ -854,7 +883,8 @@ const MERGED = [
     { id: 'solTable', ar: 'جدول الحل', en: 'Answer table', col: 'CAD0D8', tpl: 'solTable' },
     { id: 'grid', ar: 'شبكة بيانية', en: 'Graph grid', col: 'D3D8E0', tpl: 'grid' }] },
   { g: 'نهاية الدرس', ge: 'End of lesson', items: [
-    { id: 'practice', ar: 'تدرب وتفوق', en: 'Practice & excel', col: 'EBE6FE', tpl: 'practice' }] }
+    { id: 'practice', ar: 'تدرب وتفوق', en: 'Practice & excel', col: 'EBE6FE', tpl: 'practice' },
+    { id: 'qrlink', ar: 'QR برابط', en: 'Linked QR', col: '1F71DE' }] }
 ];
 const ALL_ITEMS = MERGED.flatMap(g => g.items || g.rows.flatMap(r => r.items));
 const ITEM = Object.fromEntries(ALL_ITEMS.map(x => [x.id, x]));
@@ -862,7 +892,8 @@ function tplName(tid) { const it = ALL_ITEMS.find(x => x.tpl === tid); return it
 function mergedTip(it) {
   const own = ROLE_TIP[it.role || it.id];
   const parts = [];
-  if (it.id === 'ab') parts.push(L('بدون تحديد: يُدرج مربعي نص، «ⓐ» و«ⓑ»، بينهما مسافة أربع فراغات. مع تحديد أشكال مرسومة (دوائر الإجابة): تُستبدل بهما في مكانها، ولكل زوج مربعان.', 'Nothing selected: inserts two text boxes, «ⓐ» and «ⓑ», four spaces apart. With drawn shapes selected (answer circles): they are replaced by them in their place, two boxes per pair.'));
+  if (it.id === 'qrlink') parts.push(L('يصغّر صورة الـQR إلى مقاس QR الصفحة (1.42 × 1.65 سم) ويضعها في مكانه أعلى اليسار، ثم يربطها بالرابط المكتوب بجانبها فتفتحه عند الضغط عليها، ويُحذف الرابط المكتوب. بدون تحديد: كل رابط مع أقرب صورة إليه. مع التحديد: الصورة أو الرابط المحدد فقط.', 'Shrinks the QR picture to the page QR size (1.42 × 1.65 cm) in its top left place, links it to the address written beside it (a click opens it) and removes the written address. Nothing selected: each address with its nearest picture. With a selection: only the selected picture or address.'));
+  else if (it.id === 'ab') parts.push(L('بدون تحديد: يُدرج مربعي نص، «ⓐ» و«ⓑ»، بينهما مسافة أربع فراغات. مع تحديد أشكال مرسومة (دوائر الإجابة): تُستبدل بهما في مكانها، ولكل زوج مربعان.', 'Nothing selected: inserts two text boxes, «ⓐ» and «ⓑ», four spaces apart. With drawn shapes selected (answer circles): they are replaced by them in their place, two boxes per pair.'));
   else   if (it.id === 'mcq' || it.id === 'mcqV') parts.push(L('مع تحديد مربعَي نص أو أكثر: تُرتَّب خيارات ' + (it.id === 'mcq' ? 'في صف واحد' : 'بعضها تحت بعض') + ' بحروفها ⓐ ⓑ … وباتجاه زر الاتجاه.', 'With two or more text boxes selected: they become options ' + (it.id === 'mcq' ? 'in one row' : 'one under the other') + ', lettered ⓐ ⓑ … in the chosen direction.'));
   else if (it.role && own) parts.push(L('مع تحديد: ', 'With a selection: ') + L(own[0], own[1]));
   else if (it.role) parts.push(L('حدّد مربعًا ثم اضغط ليتحوّل إلى «' + it.ar + '».', 'Select a box, then press to turn it into «' + it.en + '».'));
@@ -890,6 +921,7 @@ async function mergedPress(id) {
   const it = ITEM[id]; if (!it || busy || !supported) return;
   await selCheck();
   if (id === 'ab') return abPress();
+  if (id === 'qrlink') return qrPress();
   if ((id === 'mcq' || id === 'mcqV') && (await selCount()) > 1) return arrangeSelected(id === 'mcq' ? 'row' : 'column');
   if (id === 'mcqV' && selNow === 1) return pinRole('choice');
   if (id === 'cancelled') {

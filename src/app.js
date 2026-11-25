@@ -1076,9 +1076,12 @@ async function stepMark(dir) {
   const from = dir < 0 ? undoStack : redoStack, to = dir < 0 ? redoStack : undoStack;
   const u = from.pop(); undoPaint(); if (!u) return 0;
   const n = await run(async ctx => {
+    // a correct choice grouped with its circle: the group is opened first (undo), and made again after (redo)
+    if (u.group) { const sh0 = ctx.presentation.slides.getItem(u.slide).shapes; sh0.load('items/id'); await ctx.sync(); const g = sh0.items.find(x => x.id === u.group); if (g) { try { g.group.ungroup(); await ctx.sync(); } catch (e) {} } }
     const snap = await snapState(ctx, u.slide, u.items.map(i => i.id));
     const sh = ctx.presentation.slides.getItem(u.slide).shapes; sh.load('items/id'); await ctx.sync();
     let n = 0;
+    if (u.group) snap.regroup = true;
     // the filled circles of a correct choice: undo takes them away, redo draws them again
     if (u.added) { for (const a of u.added) { const c = sh.items.find(x => x.id === a.id); if (c) c.delete(); } snap.redraw = u.added.map(a => a.d); }
     to.push(snap);
@@ -1089,7 +1092,12 @@ async function stepMark(dir) {
       if (it.color || it.bold != null) { try { const f = s.textFrame.textRange.font; if (it.color) f.color = it.color; if (it.bold != null) f.bold = it.bold; } catch (e) {} }
       if (it.cells) { try { const t = s.getTable(); for (const c of it.cells) if (c.color) t.getCellOrNullObject(c.r, c.c).font.color = c.color; } catch (e) {} }
     }
-    await ctx.sync(); return n;
+    await ctx.sync();
+    if (u.regroup && snap.added && snap.added.length && u.items.length === 1) {
+      const gid = await groupDot(ctx, sh, u.items[0].id, snap.added[0].id);
+      if (gid) { snap.group = gid; snap.items = snap.items; }
+    }
+    return n;
   });
   undoPaint(); return n;
 }
@@ -1097,6 +1105,13 @@ async function stepMark(dir) {
 // the plain letter in white (the circled letter under it turns white). On «Hide solutions» the circle goes (it is a
 // solution) and the letter comes back black, like the other options.
 const DOT_FILL = '#1F71DE';
+// the box and its circle as one group (so they move together); «Show / Hide solutions» handle the group as one choice
+async function groupDot(ctx, shapes, boxId, dotId) {
+  try {
+    const g = shapes.addGroup([boxId, dotId]); g.name = 'UULA:correct UULA CorrectGroup'; g.load('id'); await ctx.sync();
+    return g.id;
+  } catch (e) { return null; }
+}
 function makeDot(ctx, shapes, d) {
   const c = shapes.addGeometricShape(((PowerPoint.GeometricShapeType || {}).ellipse) || 'Ellipse', { left: d.left, top: d.top, width: d.size, height: d.size });
   c.name = 'UULA:answer UULA CorrectDot';
@@ -1250,7 +1265,11 @@ async function quietMark(role, keepColour) {
       if (role === 'correct' && ['TextBox', 'GeometricShape'].includes(s.type)) {
         await ctx.sync();
         const dot = await dotCorrect(ctx, ctx.presentation.slides.getItem(id).shapes, s, id).catch(e => { dotMeasure = (dotMeasure ? dotMeasure + ' ' : '') + 'err: ' + errText(e); return null; });
-        if (dot && dot.id) (undoStack[undoStack.length - 1].added = undoStack[undoStack.length - 1].added || []).push(dot);
+        if (dot && dot.id) {
+          const u = undoStack[undoStack.length - 1];
+          (u.added = u.added || []).push(dot);
+          if (sel.length === 1) { const gid = await groupDot(ctx, ctx.presentation.slides.getItem(id).shapes, s.id, dot.id); if (gid) u.group = gid; }
+        }
         // the place could not be measured: the letter is highlighted in the text instead (see fillSlide)
         if (!dot) { s.name = s.name + ' #urfill'; fillAfter = true; }
       }

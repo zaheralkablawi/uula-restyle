@@ -2214,6 +2214,29 @@ function hideSolutions(pkg, grids, opts) {
     if (!view) continue;
     for (const c of allCores(view)) { const nv = cnvOf(c); if (nv) { nv.setAttribute('id', String(NEXT++)); nv.setAttribute('name', 'UULA SolView ' + (nv.getAttribute('name') || '')); nv.removeAttribute('hidden'); } }
     const vt = { c: core(view), el: view, text: t.text, g: t.g, box: null, ph: null };
+    // a correct choice grouped with its filled circle: the student's copy is the box alone (out of the group), its
+    // letter black again; «Show solutions» brings the group back as it was
+    if (f.correct && vt.c.localName === 'grpSp' && desc(vt.c, 'p', 'cNvPr').some(n => /UULA CorrectDot/.test(n.getAttribute('name') || ''))) {
+      const box = [...vt.c.children].map(core).find(c => c.localName === 'sp' && kid(c, 'txBody', 'p') && !/UULA CorrectDot/.test((cnvOf(c) || { getAttribute: () => '' }).getAttribute('name') || ''));
+      if (box) {
+        const one = box.cloneNode(true);
+        // the box's place on the page (its group may scale / move its children)
+        const gx = kid(kid(vt.c, 'grpSpPr', 'p'), 'xfrm', 'a'), bx = kid(kid(one, 'spPr', 'p'), 'xfrm', 'a');
+        if (gx && bx) {
+          const n = (el, a) => +(el && el.getAttribute(a) || 0);
+          const off = kid(gx, 'off', 'a'), ext = kid(gx, 'ext', 'a'), cho = kid(gx, 'chOff', 'a'), che = kid(gx, 'chExt', 'a');
+          const sx = n(che, 'cx') ? n(ext, 'cx') / n(che, 'cx') : 1, sy = n(che, 'cy') ? n(ext, 'cy') / n(che, 'cy') : 1;
+          const bo = kid(bx, 'off', 'a'), be = kid(bx, 'ext', 'a');
+          bo.setAttribute('x', String(Math.round(n(off, 'x') + (n(bo, 'x') - n(cho, 'x')) * sx))); bo.setAttribute('y', String(Math.round(n(off, 'y') + (n(bo, 'y') - n(cho, 'y')) * sy)));
+          be.setAttribute('cx', String(Math.round(n(be, 'cx') * sx))); be.setAttribute('cy', String(Math.round(n(be, 'cy') * sy)));
+        }
+        const nv = cnvOf(one); if (nv) { nv.setAttribute('id', String(NEXT++)); nv.setAttribute('name', 'UULA SolView ' + (nv.getAttribute('name') || '')); }
+        for (const pr of desc(one, 'a', 'rPr')) { removeKids(pr, FILLS); removeKids(pr, ['highlight']); placeChild(pr, solid(doc, '000000'), RPR_ORDER); pr.setAttribute('b', '0'); if (/^UULA:fill/.test(pr.getAttribute('bmk') || '')) pr.removeAttribute('bmk'); }
+        for (const tn of desc(one, 'a', 't')) tn.textContent = [...tn.textContent].map(FILLED_BACK).join('');
+        t.el.parentNode.insertBefore(one, t.el.nextSibling);
+        continue;
+      }
+    }
     if (f.dots) {
       // the coloured-in circles lose their colour (the circle, its outline and its letter stay)
       for (const sp of blueDots(view, ctx)) { const spPr = kid(sp, 'spPr', 'p'); removeKids(spPr, FILLS); placeChild(spPr, mk(doc, 'a', 'noFill'), SPPR_ORDER); for (const pr of desc(sp, 'a', 'rPr')) { removeKids(pr, FILLS); placeChild(pr, solid(doc, '000000'), RPR_ORDER); } }

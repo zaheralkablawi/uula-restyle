@@ -569,7 +569,7 @@ const ROLES = [
 // the same buttons beside «Hide solutions» only mark: the colour stays as it is (colours are set in «Format»)
 const SOL_TIP = {
   answer: ['يعلّم المحدد كحل فيُخفى عند «إخفاء الحلول». لا يغيّر اللون ولا يتحرك شيء، إلا الجدول: تصير كتابته زرقاء مباشرة.', 'Marks the selection as a solution, so «Hide solutions» hides it. The colour stays and nothing moves — except a table: its text turns blue at once.'],
-  correct: ['حرف الخيار الصحيح يصير مملوءًا في مكانه 🅑 (واضح حتى في الطباعة بالأبيض والأسود)، ويعود حرفًا عاديًا عند «إخفاء الحلول». مع تحديد مربع: هذا المربع فقط. بدون تحديد: كل الخيارات المميزة سابقًا كصحيحة (أو حرفها أزرق) في الشرائح المحددة دفعة واحدة.', 'The correct choice\'s letter becomes filled in place, 🅑 (clear even in black-and-white print) and turns back to a plain letter when solutions are hidden. With a box selected: that box only. Nothing selected: every choice marked correct before (or with a blue letter) on the selected slides, at once.'],
+  correct: ['حرف الخيار الصحيح يصير أبيض على تظليل أزرق في مكانه (واضح حتى في الطباعة بالأبيض والأسود)، ويعود حرفًا عاديًا عند «إخفاء الحلول». مع تحديد مربع: هذا المربع فقط. بدون تحديد: كل الخيارات المميزة سابقًا كصحيحة (أو حرفها أزرق) في الشرائح المحددة دفعة واحدة.', 'The correct choice\'s letter turns white on a blue highlight in place (clear even in black-and-white print) and turns back to a plain letter when solutions are hidden. With a box selected: that box only. Nothing selected: every choice marked correct before (or with a blue letter) on the selected slides, at once.'],
   given: ['شكل أو نص من السؤال نفسه: يبقى ظاهرًا عند «إخفاء الحلول» حتى لو كان أزرق.', 'A shape or text that belongs to the question: it stays when solutions are hidden, even if blue.'],
   graph: ['تمثيل بياني هو حل: عند «إخفاء الحلول» تحل مكانه شبكة بيانية فارغة بنفس مقاسه، ويرجع عند «إظهار الحلول». (أي رسم آخر كالمثلث ميّزه «حل السؤال» فيُخفى بلا شبكة)', 'A graph that is a solution: on «Hide solutions» an empty graph grid of the same size takes its place; it comes back on «Show solutions». (Other drawings, like a triangle: mark them «Solution» to hide them without a grid)']
 };
@@ -584,7 +584,7 @@ const ROLE_TIP = {
   question: ['نص السؤال مع علامة السؤال الحمراء', 'Question text with the red question mark'],
   choice: ['يحوّل المحدد إلى خيارات سؤال اختيار من متعدد (ⓐ ⓑ ⓒ ⓓ)', 'Turns the selection into the options of a multiple-choice question (ⓐ ⓑ ⓒ ⓓ)'],
   answer: ['يعلّم المحدد كحل ويلوّن نصه بالأزرق، فيُخفى عند «إخفاء الحلول». لا يتحرك شيء في الشريحة.', 'Marks the selection as a solution and colours its text blue, so «Hide solutions» hides it. Nothing on the slide moves.'],
-  correct: ['حرف الخيار الصحيح يصير مملوءًا في مكانه 🅑 (واضح حتى في الطباعة بالأبيض والأسود)، ويعود حرفًا عاديًا عند «إخفاء الحلول». مع تحديد مربع: هذا المربع فقط. بدون تحديد: كل الخيارات المميزة سابقًا كصحيحة (أو حرفها أزرق) في الشرائح المحددة دفعة واحدة.', 'The correct choice\'s letter becomes filled in place, 🅑 (clear even in black-and-white print) and turns back to a plain letter when solutions are hidden. With a box selected: that box only. Nothing selected: every choice marked correct before (or with a blue letter) on the selected slides, at once.'],
+  correct: ['حرف الخيار الصحيح يصير أبيض على تظليل أزرق في مكانه (واضح حتى في الطباعة بالأبيض والأسود)، ويعود حرفًا عاديًا عند «إخفاء الحلول». مع تحديد مربع: هذا المربع فقط. بدون تحديد: كل الخيارات المميزة سابقًا كصحيحة (أو حرفها أزرق) في الشرائح المحددة دفعة واحدة.', 'The correct choice\'s letter turns white on a blue highlight in place (clear even in black-and-white print) and turns back to a plain letter when solutions are hidden. With a box selected: that box only. Nothing selected: every choice marked correct before (or with a blue letter) on the selected slides, at once.'],
   given: ['شكل أو نص من السؤال نفسه: يبقى ظاهرًا عند «إخفاء الحلول» حتى لو كان أزرق', 'A shape or text that belongs to the question: it stays when solutions are hidden, even if blue'],
   note: ['إطار ملاحظة حول ما حددته (مربع أو أكثر)', 'A note frame around the selection'],
   quote: ['إطار نص مقتطف حول ما حددته', 'A quote frame around the selection'],
@@ -1232,11 +1232,10 @@ async function fillSlide(id, all) {
   const pkg = await UR.openPackage(await exportSlide(id));
   const r = UR.fillCorrect(pkg, all);
   if (!r.count && !r.dots && !/ #urfill/.test(pkg.files.slide)) return Object.assign(r, { id });
-  let newId = id;
-  if (!(await UQ.apply(id, pkg.files.slide, r.xml, exportSlide).catch(() => false))) {
-    newId = await insertAfter(await UR.buildPackage(pkg, r.xml, null), id);
-    await deleteSlide(id);
-  }
+  // the highlight behind a letter can't be set in place by the PowerPoint API: the slide is rebuilt
+  const newId = await insertAfter(await UR.buildPackage(pkg, r.xml, null), id);
+  await deleteSlide(id);
+  await run(async ctx => { ctx.presentation.setSelectedSlides([newId]); await ctx.sync(); }).catch(() => {});
   return Object.assign(r, { id: newId });
 }
 // «الخيار الصحيح» with nothing selected: every choice marked correct before (or whose circled letter is blue) on the
@@ -1260,8 +1259,8 @@ async function correctAll() {
     await run(async ctx => { ctx.presentation.setSelectedSlides(keep); await ctx.sync(); }).catch(() => {});
     if (skipped) line('warn', L('• خيارات مميزة كصحيحة لم أعرف أي حرف فيها هو الصحيح (أكثر من حرف بنفس اللون): ', '• Choices marked correct where the right letter is unclear (several letters of one colour): ') + skipped + '.');
     const q = done === 1 ? 'سؤال واحد' : done === 2 ? 'سؤالين' : done <= 10 ? done + ' أسئلة' : done + ' سؤالًا';
-    say(done ? L('مُلئ حرف الإجابة الصحيحة في ' + q + (ids.length > 1 ? '، في ' + (slides === 2 ? 'شريحتين' : cnt(slides)) : '') + '.', 'The correct letter was filled in ' + done + ' questions' + (ids.length > 1 ? ', in ' + cnt(slides) : '') + '.')
-      : L('لم أجد خيارات مميزة كصحيحة (أو حرفها أزرق) بحرف غير مملوء. لتمييز خيار: حدّده ثم اضغط الزر.', 'No choice marked correct (or with a blue letter) left unfilled. To mark one: select it, then press the button.'));
+    say(done ? L('ظُلّل حرف الإجابة الصحيحة في ' + q + (ids.length > 1 ? '، في ' + (slides === 2 ? 'شريحتين' : cnt(slides)) : '') + '.', 'The correct letter was highlighted in ' + done + ' questions' + (ids.length > 1 ? ', in ' + cnt(slides) : '') + '.')
+      : L('لم أجد خيارات مميزة كصحيحة (أو حرفها أزرق) بحرف غير مظلّل. لتمييز خيار: حدّده ثم اضغط الزر.', 'No choice marked correct (or with a blue letter) left unhighlighted. To mark one: select it, then press the button.'));
   } catch (e) { say(L('تعذّر: ', 'Could not: ') + errText(e)); }
   finally { busy = false; lock(); }
 }
@@ -1287,7 +1286,7 @@ async function pinRole(role, keepColour) {
       if (n < 0) { rsay(L('عُلِّم كحل وأُخفي، لأن حلول الشريحة مخفية الآن. يظهر مع «إظهار الحلول».', 'Marked as a solution and hidden, since the slide\'s solutions are hidden now. «Show solutions» brings it back.')); return; }
       rsay(!n ? L('حدّد أولًا الكائن الذي تريد تمييزه.', 'First select the object to mark.')
         : role === 'given' ? L('عُلِّم كجزء من السؤال: يبقى ظاهرًا عند إخفاء الحلول.', 'Marked as part of the question: it stays when solutions are hidden.')
-        : role === 'correct' ? L('عُلِّم كخيار صحيح: صار حرفه مملوءًا (🅑) فيظهر حتى في الطباعة بالأبيض والأسود، ويعود حرفًا عاديًا (ⓑ) عند إخفاء الحلول.', 'Marked as the correct choice: its letter is now filled (🅑), clear even in black-and-white print; it turns back to a plain letter (ⓑ) when solutions are hidden.')
+        : role === 'correct' ? L('عُلِّم كخيار صحيح: صار حرفه أبيض على تظليل أزرق، فيظهر حتى في الطباعة بالأبيض والأسود، ويعود حرفًا عاديًا عند إخفاء الحلول.', 'Marked as the correct choice: its letter is now white on a blue highlight, clear even in black-and-white print; it turns back to a plain letter when solutions are hidden.')
         : role === 'graph' ? L('عُلِّم كحل بياني: تحل مكانه شبكة فارغة عند إخفاء الحلول.', 'Marked as a graph solution: an empty grid takes its place when solutions are hidden.')
         : keepColour ? L('عُلِّم كحل: يُخفى عند إخفاء الحلول.', 'Marked as a solution: it is hidden when solutions are hidden.') : L('عُلِّم كحل (أزرق): يُخفى عند إخفاء الحلول.', 'Marked as a solution (blue): it is hidden when solutions are hidden.'));
     } catch (e) { rsay(L('تعذّر التمييز: ', 'Could not mark: ') + errText(e)); }

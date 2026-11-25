@@ -119,8 +119,8 @@ async function frameTop(slideId) {
   return run(async ctx => {
     const sh = ctx.presentation.slides.getItem(slideId).shapes;
     sh.load('items/id,items/name,items/type,items/left,items/top,items/width,items/height'); await ctx.sync();
-    const fixed = x => /^UULA (Footer|Watermark)|^CustomPageNumber_/.test(x.name || '') || x.top >= H - 54 || x.left + x.width <= 0 || x.left >= W || (x.width > W * 0.85 && x.height > H * 0.6);
-    const cand = sh.items.filter(x => x.type === 'GeometricShape' && x.width >= W * 0.85 && x.top > 0.3 && x.top <= 50 && !fixed(x) && !/Line$/.test(x.name || ''));
+    const fixed = x => /^UULA (Footer|Watermark)|^CustomPageNumber_/.test(x.name || '') || x.top >= H - 54 || x.left + x.width <= 0 || x.left >= W || (x.width > W * 0.85 && x.height > H * 0.9);
+    const cand = sh.items.filter(x => x.type === 'GeometricShape' && x.width >= W * 0.85 && x.top > 0.3 && x.top <= 80 && !fixed(x) && !/Line$/.test(x.name || ''));
     if (!cand.length) return;
     const fills = cand.map(x => { try { x.fill.load('type'); return x.fill; } catch (e) { return null; } });
     await ctx.sync();
@@ -1239,7 +1239,7 @@ async function spaceSlide(id, only) {
       return { key: k, x: s.left * PT, y: s.top * PT, w: s.width * PT, h: s.height * PT, fixed, box };
     });
     const mine = only ? rects.filter(r => only.includes(sh.items[r.key].id)) : rects;
-    const mv = UR.spacing(mine, W * PT, H * PT);
+    const mv = UR.spacing(mine, W * PT, H * PT, !only);
     // with a selection, the others stay where they are but still count: a selected object that would land on one of
     // them goes under it (one grid row lower, on the page grid), and the selected ones after it follow by as much
     if (only) {
@@ -1257,16 +1257,18 @@ async function spaceSlide(id, only) {
         mv[p.r.key] = Object.assign(mv[p.r.key] || {}, { y: p.y });
       }
     }
-    let moved = 0, low = 0;
+    // the rule: the content must fit between the top of the page and its bottom limit — if it can't, nothing moves
+    let low = 0;
+    for (const r of mine) if (!r.fixed) { const m = mv[r.key] || {}; low = Math.max(low, (m.y != null ? m.y : r.y) + (m.h != null ? m.h : r.h)); }
+    if (low > (H - 54) * PT + PT) return { status: 'big', moved: 0 };
+    let moved = 0;
     for (const [k, m] of Object.entries(mv)) {
       const s = sh.items[+k];
       if (m.y != null && Math.abs(m.y / PT - s.top) > 0.2) { s.top = m.y / PT; moved++; }
       if (m.h != null) s.height = m.h / PT;
-      const rk = rects.find(r => r.key === +k) || { y: 0, h: 0 };
-      low = Math.max(low, (m.y != null ? m.y : rk.y) + (m.h != null ? m.h : rk.h));
     }
     await ctx.sync();
-    return { moved, over: low > (H - 54) * PT + PT };
+    return { status: 'ok', moved };
   }).then(async r => { await frameTop(id); return r; });
 }
 // distribute: after the gaps are fixed, the whole page is used — the content is cut into bands (objects that overlap in
@@ -1275,7 +1277,7 @@ async function spaceSlide(id, only) {
 // Nothing is resized or restyled: whole bands only move down. With a selection only the selected objects move, inside the
 // room between the first of them and the next unselected object under them.
 async function distributeSlide(id, only) {
-  await spaceSlide(id, only);
+  if ((await spaceSlide(id, only)).status === 'big') return { status: 'big' };
   const { W, H } = await getSize();
   return run(async ctx => {
     const sh = ctx.presentation.slides.getItem(id).shapes;
@@ -1354,7 +1356,7 @@ async function alignSlide(id, mode, useSel) {
     for (const [k, m] of Object.entries(mv)) { if (m.w != null) sh.items[+k].width = m.w / PT; if (m.x != null) sh.items[+k].left = m.x / PT; }
     await ctx.sync();
     return Object.keys(mv).length;
-  });
+  }).then(async r => { await frameTop(id); return r; });
 }
 async function spacingRun(kind) {
   if (busy || !supported) return;
@@ -1370,13 +1372,15 @@ async function spacingRun(kind) {
     for (let k = 0; k < ids.length; k++) {
       prog(k / ids.length); say(L('تنسيق المسافات ', 'Spacing ') + (k + 1) + L(' من ', ' of ') + ids.length + '…');
       try {
-        if (kind === 'v') { const r = await spaceSlide(ids[k], sel); if (r.over) over.push(ids[k]); }
-        else if (kind === 'd') { const r = await distributeSlide(ids[k], sel); if (r.status !== 'ok') skipped.push({ id: ids[k], why: r.status }); else spread.push(r.pts); }
+        if (kind === 'v') { const r = await spaceSlide(ids[k], sel); if (r.status === 'big') over.push(ids[k]); }
+        else if (kind === 'd') { const r = await distributeSlide(ids[k], sel); if (r.status === 'big') over.push(ids[k]); else if (r.status !== 'ok') skipped.push({ id: ids[k], why: r.status }); else spread.push(r.pts); }
         else await alignSlide(ids[k], hMode, scope === 'cur');
       } catch (e) { line('err', '✗ ' + esc(errText(e))); }
     }
     prog(null);
-    if (over.length) { const all = await allIds(); line('warn', L('• المحتوى أطول من الصفحة: ', '• Longer than the page: ') + slideLinks(over, i => all.indexOf(i) + 1)); }
+    const BIG = L('كمية المحتوى أكبر من حجم الشريحة، فلم يتحرك شيء', 'There is more content than the slide can hold, so nothing moved');
+    if (over.length && ids.length > 1) { const all = await allIds(); line('warn', '• ' + BIG + ': ' + slideLinks(over, i => all.indexOf(i) + 1)); }
+    if (over.length && over.length === ids.length) { say(BIG + '.'); return; }
     if (kind === 'd') {
       const all = await allIds(), num = i => all.indexOf(i) + 1;
       if (spread.length) line('ok', L('✓ وُزّعت المساحة الفارغة بالتساوي على المسافات بين أجزاء الشريحة.', '✓ The free space was shared out evenly between the parts of the slide.'));

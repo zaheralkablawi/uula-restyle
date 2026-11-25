@@ -1539,7 +1539,7 @@ function questionFlags(pkg) {
   });
 }
 
-function spacing(rects, W, H) {
+function spacing(rects, W, H, toTop) {
   const free = rects.filter(r => !r.fixed);
   const inside = (o, b) => { const cx = o.x + o.w / 2, cy = o.y + o.h / 2; return cx >= b.x && cx <= b.x + b.w && cy >= b.y && cy <= b.y + b.h; };
   const boxes = free.filter(b => b.box && free.some(o => o !== b && !o.box && inside(o, b)));
@@ -1593,7 +1593,8 @@ function spacing(rects, W, H) {
   if (!top.length) return out;
   const first = Math.min(...top.map(o => o.y));
   // a container touching the top of the page stays there; otherwise the content starts on a grid line
-  level(top, first <= 2 * PT ? first : Math.max(Y0, snapNear(first)), first <= 2 * PT);
+  // the whole slide: the first object goes up to the top of the page (a frame touching the top edge stays there)
+  level(top, first <= 2 * PT ? first : toTop ? Y0 : Math.max(Y0, snapNear(first)), first <= 2 * PT);
   return out;
 }
 // ---------- horizontal alignment only ----------

@@ -226,6 +226,49 @@ async function buildPackage(pkg, slideXml, rels) {
   return pkg.zip.generateAsync({ type: 'base64', compression: 'DEFLATE' });
 }
 
+// ---------- the correct choice, filled ----------
+// the circled letter of the correct choice (ⓐ…ⓩ) becomes the filled one (🅐…🅩) in the text itself, so it stays exactly
+// where it was and reads even in black-and-white print; its run is tagged (bmk="UULA:fill") so that «Hide solutions»
+// gives the plain ⓐ back. Targets: the objects named with " #urfill" (just marked), or — all = true — every choice
+// marked correct before, or whose circled letter is blue. A box with several circled letters fills the blue one only.
+const FILLED = c => { const p = c.codePointAt(0); return p >= 0x24D0 && p <= 0x24E9 ? String.fromCodePoint(0x1F150 + p - 0x24D0) : c; };
+const FILLED_BACK = c => { const p = c.codePointAt(0); return p >= 0x1F150 && p <= 0x1F169 ? String.fromCodePoint(0x24D0 + p - 0x1F150) : c; };
+function fillCorrect(pkg, all) {
+  const doc = parseXml(pkg.files.slide);
+  const ctx = { scheme: readTheme(pkg.files), bodySz: 1100 };
+  let n = 0, skipped = 0, dots = 0;
+  // the drawn circles of the first try go (their letters come back from white)
+  for (const el of topItems(doc)) { const nv = cnvOf(core(el)); if (nv && /UULA CorrectDot/.test(nv.getAttribute('name') || '') && !/^UULA Sol(Hidden|View)/.test(nv.getAttribute('name') || '')) { el.parentNode.removeChild(el); dots++; } }
+  for (const el of topItems(doc)) {
+    const c = core(el), nv = cnvOf(c); if (!nv || c.localName !== 'sp' || !kid(c, 'txBody', 'p')) continue;
+    const name = nv.getAttribute('name') || '';
+    if (/^UULA Sol(Hidden|View)/.test(name)) continue;
+    const tagged = / #urfill$/.test(name);
+    if (tagged) for (const x of allCores(el)) { const v = cnvOf(x); if (v) v.setAttribute('name', (v.getAttribute('name') || '').replace(/ #urfill$/, '')); }
+    if (!all && !tagged) continue;
+    const pinned = /^UULA:correct/.test(name);
+    const runs = desc(c, 'a', 'r').filter(r => /[ⓐ-ⓩ]/.test(desc(r, 'a', 't').map(t => t.textContent).join('')));
+    if (!runs.length) continue;
+    const colour = r => { const pr = kid(r, 'rPr', 'a'); return pr ? colorOf(kid(pr, 'solidFill', 'a'), ctx) : null; };
+    const white = runs.filter(r => { const k = colour(r); return k && lum(k) > 240; });
+    const blue = runs.filter(r => { const k = colour(r); return k && isBlue(rgb(k)); });
+    let pick = white.length ? white : blue.length ? blue : (pinned || tagged) && runs.length === 1 ? runs : [];
+    // one letter per box: the blue / white one; a single-letter run list with several letters in one run is ambiguous
+    pick = pick.filter(r => [...desc(r, 'a', 't').map(t => t.textContent).join('')].filter(ch => /[ⓐ-ⓩ]/.test(ch)).length === 1);
+    if (!pick.length) { if (pinned || tagged) skipped++; continue; }
+    for (const r of pick.slice(0, 1)) {
+      for (const t of desc(r, 'a', 't')) t.textContent = [...t.textContent].map(FILLED).join('');
+      const pr = kid(r, 'rPr', 'a') || r.insertBefore(mk(doc, 'a', 'rPr'), r.firstChild);
+      pr.setAttribute('bmk', 'UULA:fill');
+      const k = colour(r);
+      if (!k || lum(k) > 240) { removeKids(pr, FILLS); placeChild(pr, solid(doc, C.answerOk || '2070DF'), RPR_ORDER); }
+    }
+    if (!pinned) for (const x of allCores(el)) { const v = cnvOf(x); if (v) v.setAttribute('name', 'UULA:correct ' + (v.getAttribute('name') || '').replace(/^UULA:[a-z]+\s*/, '')); }
+    n++;
+  }
+  return { xml: serialize(doc), count: n, skipped, dots };
+}
+
 // ---------- QR picture + its link ----------
 // a QR picture with its address written beside it: the picture becomes the small QR of the page (1.42 × 1.65 cm, 1.27 cm
 // from the left edge, its top edge where it was), it opens the address when clicked, and the written address goes.
@@ -2180,6 +2223,12 @@ function hideSolutions(pkg, grids, opts) {
         if (m[1] === 'answer') placeChild(pr, frag(doc, '<a:solidFill><a:srgbClr val="FFFFFF"><a:alpha val="0"/></a:srgbClr></a:solidFill>'), RPR_ORDER);
         else { placeChild(pr, solid(doc, '000000'), RPR_ORDER); pr.setAttribute('b', '0'); }
       }
+      // a correct choice filled by the tool (🅐…): back to the plain circled letter of the other options (ⓐ…)
+      for (const r of desc(view, 'a', 'r')) {
+        const pr = kid(r, 'rPr', 'a'); if (!pr || pr.getAttribute('bmk') !== 'UULA:fill') continue;
+        pr.removeAttribute('bmk'); removeKids(pr, FILLS); placeChild(pr, solid(doc, '000000'), RPR_ORDER); pr.setAttribute('b', '0');
+        for (const tn of desc(r, 'a', 't')) tn.textContent = [...tn.textContent].map(FILLED_BACK).join('');
+      }
       for (const tn of [...desc(view, 'a', 't'), ...desc(view, 'm', 't')]) tn.textContent = [...tn.textContent].map(NEG).join('');
       // a grey line under every line that disappeared (whole answer paragraphs)
       if (opts.lines && !f.correct) {
@@ -2293,7 +2342,7 @@ function splitPoint(plan, lay) {
 
 return {
   questionFlags,
-  NS, PT, ROW, M, FOOT, C, STY, BOX, openPackage, buildPackage, parseXml, serialize, restyle, layout, applyLayout, splitParts, splitPoint, markNames, MARK, applyRole, wrapBox, gridOver, flipChoices, arrangeChoices, qrLink, WRAP, reflow, spacing, align, findSolutions, hideSolutions, showSolutions, hasSolutions, TEXT_ROLES, BOX_ROLES, G, Y0, snapUp, snapX,
+  NS, PT, ROW, M, FOOT, C, STY, BOX, openPackage, buildPackage, parseXml, serialize, restyle, layout, applyLayout, splitParts, splitPoint, markNames, MARK, applyRole, wrapBox, gridOver, flipChoices, arrangeChoices, qrLink, fillCorrect, WRAP, reflow, spacing, align, findSolutions, hideSolutions, showSolutions, hasSolutions, TEXT_ROLES, BOX_ROLES, G, Y0, snapUp, snapX,
   // used by the templates module
   util: { pX, txX, boxX, gradBoxX, picX, pillX, pillW, lineX, tableX, makeRels, frag, topItems, core, cnvOf, maxId, spTreeOf, kid, kids, desc, xfrmOf, geomOf, setNext: n => { NEXT = n; }, snapUp, yearText, pageNumX, estimateText, iconW, iconH }
 };

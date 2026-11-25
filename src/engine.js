@@ -1576,7 +1576,9 @@ function spacing(rects, W, H) {
         if (boxes.includes(u)) {
           const ks = kidsOf(u);
           if (ks.length) {
-            const inner = level(ks, snapUp(ny) + ROW, false);
+            // a frame stretched up to the top edge of the page: its content still starts where a frame on the
+            // first grid line would have it
+            const inner = level(ks, ny <= 2 * PT ? snapUp(Y0) + ROW : snapUp(ny) + ROW, false);
             const nh = snapUp(inner) + ROW - ny;
             out[u.key].h = Math.round(nh); ub = ny + nh;
           }

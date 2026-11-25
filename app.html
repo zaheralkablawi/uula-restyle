@@ -1820,7 +1820,9 @@ function spacing(rects, W, H) {
         if (boxes.includes(u)) {
           const ks = kidsOf(u);
           if (ks.length) {
-            const inner = level(ks, snapUp(ny) + ROW, false);
+            // a frame stretched up to the top edge of the page: its content still starts where a frame on the
+            // first grid line would have it
+            const inner = level(ks, ny <= 2 * PT ? snapUp(Y0) + ROW : snapUp(ny) + ROW, false);
             const nh = snapUp(inner) + ROW - ny;
             out[u.key].h = Math.round(nh); ub = ny + nh;
           }
@@ -3817,10 +3819,35 @@ async function refine(slideId, plan) {
 }
 // remove the " #ur<n>" marks
 async function unmark(slideId) {
-  return run(async ctx => {
+  await run(async ctx => {
     const shapes = ctx.presentation.slides.getItem(slideId).shapes;
     shapes.load('items/name'); await ctx.sync();
     for (const s of shapes.items) if (/ #ur\d+$/.test(s.name || '')) s.name = s.name.replace(/ #ur\d+$/, '');
+    await ctx.sync();
+  }).catch(() => {});
+  await frameTop(slideId);
+}
+// a frame (note, formulas, definition…) that is the first thing on the page, near the top: its top edge goes up to the
+// top edge of the slide (its bottom and everything inside it stay where they are)
+async function frameTop(slideId) {
+  const { W, H } = await getSize().catch(() => ({ W: 0, H: 0 }));
+  if (!W) return;
+  return run(async ctx => {
+    const sh = ctx.presentation.slides.getItem(slideId).shapes;
+    sh.load('items/id,items/name,items/type,items/left,items/top,items/width,items/height'); await ctx.sync();
+    const fixed = x => /^UULA (Footer|Watermark)|^CustomPageNumber_/.test(x.name || '') || x.top >= H - 54 || x.left + x.width <= 0 || x.left >= W || (x.width > W * 0.85 && x.height > H * 0.6);
+    const cand = sh.items.filter(x => x.type === 'GeometricShape' && x.width >= W * 0.85 && x.top > 0.3 && x.top <= 50 && !fixed(x) && !/Line$/.test(x.name || ''));
+    if (!cand.length) return;
+    const fills = cand.map(x => { try { x.fill.load('type'); return x.fill; } catch (e) { return null; } });
+    await ctx.sync();
+    cand.forEach((b, k) => {
+      let solid = false; try { solid = fills[k] && (fills[k].type === 'Solid' || fills[k].type === 'Gradient'); } catch (e) {}
+      if (!solid && !/Container$/.test(b.name || '')) return;
+      // nothing above it (its own content sits inside it, below its top)
+      const above = sh.items.some(o => o !== b && !fixed(o) && o.top + o.height <= b.top + 1 && o.height > 1);
+      if (above) return;
+      const bottom = b.top + b.height; b.top = 0; b.height = bottom;
+    });
     await ctx.sync();
   }).catch(() => {});
 }
@@ -4956,7 +4983,7 @@ async function spaceSlide(id, only) {
     }
     await ctx.sync();
     return { moved, over: low > (H - 54) * PT + PT };
-  });
+  }).then(async r => { await frameTop(id); return r; });
 }
 // distribute: after the gaps are fixed, the whole page is used — the content is cut into bands (objects that overlap in
 // height stay together, so a box keeps its content and a figure stays beside its question), the first band goes up to the
@@ -5015,7 +5042,7 @@ async function distributeSlide(id, only) {
     bands.forEach((b, k) => { if (Math.abs(dy) > 0.2) b.items.forEach(s => { s.top = s.top + dy; }); dy += add[k] * G * step; });
     await ctx.sync();
     return { status: 'ok', pts: Math.round(units * G), gaps: cand.length };
-  });
+  }).then(async r => { await frameTop(id); return r; });
 }
 // horizontal: to the right / left margin (selected objects only, if any are selected on the current slide)
 let hMode = load('ur-halign', 'auto');

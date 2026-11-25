@@ -227,8 +227,8 @@ async function buildPackage(pkg, slideXml, rels) {
 }
 
 // ---------- QR picture + its link ----------
-// a QR picture with its address written beside it: the picture becomes the small QR of the page (1.42 × 1.65 cm, at
-// 1.27 cm / 0.76 cm from the top left corner), it opens the address when clicked, and the written address goes.
+// a QR picture with its address written beside it: the picture becomes the small QR of the page (1.42 × 1.65 cm, 1.27 cm
+// from the left edge, its top edge where it was), it opens the address when clicked, and the written address goes.
 // With a selection (#ursel) only the selected pictures / addresses count; the missing half is the nearest one.
 const URL_RE = /(https?:\/\/[^\s<>"]+|www\.[^\s<>"]+)/i;
 const CM = 360000;
@@ -265,11 +265,12 @@ function qrLink(pkg) {
   pairs.forEach(({ p, u }, k) => {
     const url0 = URL_RE.exec(u.txt)[1].replace(/[.,;:)\]]+$/, '');
     const url = /^https?:/i.test(url0) ? url0 : 'https://' + url0;
-    // the size and place of the page's QR (the first one; any other keeps its top left corner)
+    // the size of the page's QR, 1.27 cm from the left edge
     const x = kid(kid(p.c, 'spPr', 'p'), 'xfrm', 'a');
     if (x) {
       const off = kid(x, 'off', 'a'), ext = kid(x, 'ext', 'a');
-      if (k === 0) { off.setAttribute('x', String(Math.round(1.27 * CM))); off.setAttribute('y', String(Math.round(0.76 * CM))); }
+      // the horizontal place is fixed; the top edge stays where it was (only the bottom edge moves with the new size)
+      off.setAttribute('x', String(Math.round(1.27 * CM)));
       ext.setAttribute('cx', String(Math.round(1.42 * CM))); ext.setAttribute('cy', String(Math.round(1.65 * CM)));
     }
     // the click: an external link on the picture itself

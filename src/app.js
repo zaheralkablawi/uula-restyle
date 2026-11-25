@@ -716,7 +716,7 @@ async function qrPress() {
     await deleteSlide(id);
     await clearSel(newId); await unmark(newId);
     say(r.count > 1 ? L('رُبطت ' + r.count + ' صور QR بروابطها وحُذفت الروابط المكتوبة.', r.count + ' QR pictures were linked and the written addresses removed.')
-      : L('صُغّرت صورة الـQR ووُضعت في مكانها، وصارت تفتح الرابط عند الضغط عليها، وحُذف الرابط المكتوب.', 'The QR picture was resized into its place; a click on it opens the address, and the written address was removed.'));
+      : L('صُغّرت صورة الـQR ونُقلت إلى الهامش الأيسر وحافتها العلوية في مكانها، وصارت تفتح الرابط عند الضغط عليها، وحُذف الرابط المكتوب.', 'The QR picture was resized into its place; a click on it opens the address, and the written address was removed.'));
   } catch (e) { say(L('تعذّر: ', 'Could not: ') + errText(e)); }
   finally { busy = false; lock(); }
 }
@@ -892,7 +892,7 @@ function tplName(tid) { const it = ALL_ITEMS.find(x => x.tpl === tid); return it
 function mergedTip(it) {
   const own = ROLE_TIP[it.role || it.id];
   const parts = [];
-  if (it.id === 'qrlink') parts.push(L('يصغّر صورة الـQR إلى مقاس QR الصفحة (1.42 × 1.65 سم) ويضعها في مكانه أعلى اليسار، ثم يربطها بالرابط المكتوب بجانبها فتفتحه عند الضغط عليها، ويُحذف الرابط المكتوب. بدون تحديد: كل رابط مع أقرب صورة إليه. مع التحديد: الصورة أو الرابط المحدد فقط.', 'Shrinks the QR picture to the page QR size (1.42 × 1.65 cm) in its top left place, links it to the address written beside it (a click opens it) and removes the written address. Nothing selected: each address with its nearest picture. With a selection: only the selected picture or address.'));
+  if (it.id === 'qrlink') parts.push(L('يصغّر صورة الـQR إلى مقاس QR الصفحة (1.42 × 1.65 سم) ويضعها على بعد 1.27 سم من الحافة اليسرى، وحافتها العلوية تبقى مكانها، ثم يربطها بالرابط المكتوب بجانبها فتفتحه عند الضغط عليها، ويُحذف الرابط المكتوب. بدون تحديد: كل رابط مع أقرب صورة إليه. مع التحديد: الصورة أو الرابط المحدد فقط.', 'Shrinks the QR picture to the page QR size (1.42 × 1.65 cm), 1.27 cm from the left edge with its top edge kept, links it to the address written beside it (a click opens it) and removes the written address. Nothing selected: each address with its nearest picture. With a selection: only the selected picture or address.'));
   else if (it.id === 'ab') parts.push(L('بدون تحديد: يُدرج مربعي نص، «ⓐ» و«ⓑ»، بينهما مسافة أربع فراغات. مع تحديد أشكال مرسومة (دوائر الإجابة): تُستبدل بهما في مكانها، ولكل زوج مربعان.', 'Nothing selected: inserts two text boxes, «ⓐ» and «ⓑ», four spaces apart. With drawn shapes selected (answer circles): they are replaced by them in their place, two boxes per pair.'));
   else   if (it.id === 'mcq' || it.id === 'mcqV') parts.push(L('مع تحديد مربعَي نص أو أكثر: تُرتَّب خيارات ' + (it.id === 'mcq' ? 'في صف واحد' : 'بعضها تحت بعض') + ' بحروفها ⓐ ⓑ … وباتجاه زر الاتجاه.', 'With two or more text boxes selected: they become options ' + (it.id === 'mcq' ? 'in one row' : 'one under the other') + ', lettered ⓐ ⓑ … in the chosen direction.'));
   else if (it.role && own) parts.push(L('مع تحديد: ', 'With a selection: ') + L(own[0], own[1]));

@@ -568,10 +568,10 @@ const ROLES = [
 ];
 // the same buttons beside «Hide solutions» only mark: the colour stays as it is (colours are set in «Format»)
 const SOL_TIP = {
-  answer: ['يعلّم المحدد كحل فيُخفى عند «إخفاء الحلول». لا يغيّر اللون ولا يتحرك شيء، إلا الجدول: تصير كتابته زرقاء مباشرة.', 'Marks the selection as a solution, so «Hide solutions» hides it. The colour stays and nothing moves — except a table: its text turns blue at once.'],
-  correct: ['حرف الخيار الصحيح يصير أبيض على تظليل أزرق في مكانه (واضح حتى في الطباعة بالأبيض والأسود)، ويعود حرفًا عاديًا عند «إخفاء الحلول». مع تحديد مربع: هذا المربع فقط. بدون تحديد: كل الخيارات المميزة سابقًا كصحيحة (أو حرفها أزرق) في الشرائح المحددة دفعة واحدة.', 'The correct choice\'s letter turns white on a blue highlight in place (clear even in black-and-white print) and turns back to a plain letter when solutions are hidden. With a box selected: that box only. Nothing selected: every choice marked correct before (or with a blue letter) on the selected slides, at once.'],
-  given: ['شكل أو نص من السؤال نفسه: يبقى ظاهرًا عند «إخفاء الحلول» حتى لو كان أزرق.', 'A shape or text that belongs to the question: it stays when solutions are hidden, even if blue.'],
-  graph: ['تمثيل بياني هو حل: عند «إخفاء الحلول» تحل مكانه شبكة بيانية فارغة بنفس مقاسه، ويرجع عند «إظهار الحلول». (أي رسم آخر كالمثلث ميّزه «حل السؤال» فيُخفى بلا شبكة)', 'A graph that is a solution: on «Hide solutions» an empty graph grid of the same size takes its place; it comes back on «Show solutions». (Other drawings, like a triangle: mark them «Solution» to hide them without a grid)']
+  answer: ['● ← حل يُخفى مع «إخفاء الحلول» · الجدول يصير أزرق', '● → a solution hidden by «Hide solutions» · a table turns blue'],
+  correct: ['● ← حرف الإجابة مظلّل ⓑ · ○ ← كل الصحيحة دفعة واحدة', '● → answer letter highlighted ⓑ · ○ → every correct one at once'],
+  given: ['● ← جزء من السؤال: يبقى ظاهرًا', '● → part of the question: stays visible'],
+  graph: ['● ← حل بياني: شبكة فارغة مكانه عند الإخفاء', '● → graph solution: an empty grid in its place when hidden']
 };
 // what each button does (shown when the pointer rests on it)
 const ROLE_TIP = {
@@ -904,19 +904,23 @@ const MERGED = [
 const ALL_ITEMS = MERGED.flatMap(g => g.items || g.rows.flatMap(r => r.items));
 const ITEM = Object.fromEntries(ALL_ITEMS.map(x => [x.id, x]));
 function tplName(tid) { const it = ALL_ITEMS.find(x => x.tpl === tid); return it ? [it.ar, it.en] : ['قالب', 'block']; }
+// the tip of a button: one short line (● = something selected, ○ = nothing selected)
+const SHORT_TIP = {
+  qrlink: ['QR ← 1.42×1.65 سم عند الهامش الأيسر + رابط بالضغط · يُحذف النص', 'QR → 1.42×1.65 cm at the left margin + click link · text removed'],
+  ab: ['○ ← مربعا ⓐ ⓑ · ● دوائر مرسومة ← تُستبدل في مكانها', '○ → ⓐ ⓑ boxes · ● drawn circles → replaced in place'],
+  mcq: ['● مربعات ← خيارات في صف (حسب الاتجاه) · ○ ← قالب جديد', '● boxes → options in a row (by direction) · ○ → new block'],
+  mcqV: ['● مربعات ← خيارات عمودية (حسب الاتجاه) · ○ ← قالب جديد', '● boxes → options in a column (by direction) · ○ → new block'],
+  correct: SOL_TIP.correct, answer: SOL_TIP.answer, given: SOL_TIP.given, graph: SOL_TIP.graph,
+  grid: ['● صور ← شبكة بمقاسها · ○ ← شبكة جديدة', '● pictures → grid at their size · ○ → new grid'],
+  cancelled: ['● ← إطار معلّق فوقه · ○ ← إطار بعرض الصفحة', '● → suspended frame over it · ○ → page-wide frame'],
+  practice: ['＋ «تدرب وتفوق» بعد آخر عنصر', '＋ «Practice & excel» after the last object']
+};
 function mergedTip(it) {
-  const own = ROLE_TIP[it.role || it.id];
-  const parts = [];
-  if (it.id === 'qrlink') parts.push(L('يصغّر صورة الـQR إلى مقاس QR الصفحة (1.42 × 1.65 سم) ويضعها على بعد 1.27 سم من الحافة اليسرى، وحافتها العلوية تبقى مكانها، ثم يربطها بالرابط المكتوب بجانبها فتفتحه عند الضغط عليها، ويُحذف الرابط المكتوب. بدون تحديد: كل رابط مع أقرب صورة إليه. مع التحديد: الصورة أو الرابط المحدد فقط.', 'Shrinks the QR picture to the page QR size (1.42 × 1.65 cm), 1.27 cm from the left edge with its top edge kept, links it to the address written beside it (a click opens it) and removes the written address. Nothing selected: each address with its nearest picture. With a selection: only the selected picture or address.'));
-  else if (it.id === 'ab') parts.push(L('بدون تحديد: يُدرج مربعي نص، «ⓐ» و«ⓑ»، بينهما مسافة أربع فراغات. مع تحديد أشكال مرسومة (دوائر الإجابة): تُستبدل بهما في مكانها، ولكل زوج مربعان.', 'Nothing selected: inserts two text boxes, «ⓐ» and «ⓑ», four spaces apart. With drawn shapes selected (answer circles): they are replaced by them in their place, two boxes per pair.'));
-  else   if (it.id === 'mcq' || it.id === 'mcqV') parts.push(L('مع تحديد مربعَي نص أو أكثر: تُرتَّب خيارات ' + (it.id === 'mcq' ? 'في صف واحد' : 'بعضها تحت بعض') + ' بحروفها ⓐ ⓑ … وباتجاه زر الاتجاه.', 'With two or more text boxes selected: they become options ' + (it.id === 'mcq' ? 'in one row' : 'one under the other') + ', lettered ⓐ ⓑ … in the chosen direction.'));
-  else if (it.role && own) parts.push(L('مع تحديد: ', 'With a selection: ') + L(own[0], own[1]));
-  else if (it.role) parts.push(L('حدّد مربعًا ثم اضغط ليتحوّل إلى «' + it.ar + '».', 'Select a box, then press to turn it into «' + it.en + '».'));
-  if (it.tpl === 'grid') parts.push(L('مع تحديد صور: توضع الشبكة مكان كل صورة وبمقاسها. بدون تحديد: تُضاف شبكة جديدة في الأسفل.', 'With pictures selected: the grid takes each picture\'s place and size. Nothing selected: a new grid is added at the bottom.'));
-  else if (it.tpl && it.role) parts.push(L('بدون تحديد: يُضاف «' + it.ar + '» جديد في الأسفل.', 'Nothing selected: a new «' + it.en + '» is added at the bottom.'));
-  else if (it.tpl) parts.push(L('يُضاف «' + it.ar + '» جديد في الأسفل.', 'A new «' + it.en + '» is added at the bottom.'));
-  else parts.push(L('يحتاج تحديد مربع أولًا.', 'Needs a selected box first.'));
-  return parts.join('\n');
+  const t = SHORT_TIP[it.id];
+  if (t) return L(t[0], t[1]);
+  if (it.role && it.tpl) return L('● ← يتحوّل إلى «' + it.ar + '» · ○ ← يُضاف جديد', '● → turned into «' + it.en + '» · ○ → a new one is added');
+  if (it.role) return L('● حدّد ثم اضغط ← «' + it.ar + '»', '● Select, then press → «' + it.en + '»');
+  return L('＋ «' + it.ar + '» تحت آخر عنصر', '＋ «' + it.en + '» under the last object');
 }
 // what is selected now, shown above the list: the next press converts it, or adds a new one
 let selNow = 0;

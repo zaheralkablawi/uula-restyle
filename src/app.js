@@ -964,7 +964,7 @@ function needSel(it) {
   const msg = L('حدّد أولًا الكائن الذي تريد تحويله إلى «' + it.ar + '»', 'First select the object to turn into «' + it.en + '»');
   say(msg + '.');
   const h = $('selHint'); if (!h) return;
-  h.dataset.on = 'need'; h.innerHTML = '<b>!</b> ' + msg;
+  h.dataset.on = 'need'; h.innerHTML = msg + ' <b>!</b>';
   clearTimeout(needTimer); needTimer = setTimeout(selPaint, 3500);
 }
 $('roles').addEventListener('click', e => { const b = e.target.closest('.tbtn'); if (b) mergedPress(b.dataset.item); });
@@ -1247,7 +1247,7 @@ function needCorrect() {
   const msg = L('حدّد الخيار الصحيح أولًا', 'Select the correct choice first');
   say(msg + '.');
   const h = $('selHint'); if (!h) return;
-  h.dataset.on = 'need'; h.innerHTML = '<b>!</b> ' + msg;
+  h.dataset.on = 'need'; h.innerHTML = msg + ' <b>!</b>';
   clearTimeout(needTimer); needTimer = setTimeout(selPaint, 3500);
 }
 // (kept, not on a button now) every choice marked correct before (or whose circled letter is blue) on the

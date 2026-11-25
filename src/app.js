@@ -1299,7 +1299,7 @@ async function alignSlide(id, mode, useSel) {
     });
     const only = selIds.length ? sh.items.map((s, k) => selIds.includes(s.id) ? k : -1).filter(k => k >= 0) : null;
     const mv = UR.align(rects, W * PT, mode, only);
-    for (const [k, m] of Object.entries(mv)) sh.items[+k].left = m.x / PT;
+    for (const [k, m] of Object.entries(mv)) { if (m.w != null) sh.items[+k].width = m.w / PT; if (m.x != null) sh.items[+k].left = m.x / PT; }
     await ctx.sync();
     return Object.keys(mv).length;
   });
